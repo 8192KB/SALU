@@ -2,7 +2,8 @@
 
 - `~/.agents/AI_INSTRUCTIONS.md`, `~/.agents/HOST.md`, Codex의 `~/.codex/AGENTS.md`를 먼저 확인
 - 작업 전 `docs/development-contract.md`와 해당 기능의 검증 기록 확인
-- 현재 범위는 공통 기반과 로컬 로그인·세션 조회·로그아웃. 회원가입·기록·사진·디자이너·상담·후기·커뮤니티 구현은 별도 요청 후 진행
+- 현재 승인 범위는 초기 React 화면과 후속 개발 계획. docs/prototype-plan.md 기준으로 메모리 기록·경과·디자이너·선택 자료·상담 미리보기 구현. 서버 API 호출·DB 변경·실제 전송은 후속 단계
+- 기존 인증 backend와 검증 기록 보존. 초기 화면 테스트를 기존 DB·인증 기능의 검증으로 주장하지 않음
 - Controller는 입력/응답, Service는 업무·소유권·트랜잭션, Mapper는 SQL 담당
 - URL 인증/역할 규칙은 SecurityConfig에 집중. 자원 소유권·상담 참여자 검사는 해당 Service에서 수행
 - Security filter 오류는 SecurityConfig, MVC 오류는 GlobalExceptionHandler에서 처리. 같은 ApiError JSON 사용, Controller별 try-catch·redirect·오류 형식 추가 금지

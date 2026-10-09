@@ -1,10 +1,10 @@
 # SALU 개발 기준
 
-준비 단계: 별도 저장소·Spring Boot·React·독립 MySQL·Flyway·권한 기반. 로컬 로그인·세션 조회·로그아웃까지 구현. 회원가입과 기록 기능은 다음 단계.
+현재 작업: PPT 기준 초기 React 화면과 후속 개발 계획. 초기 화면은 메모리 가상 데이터만 사용하며 서버에 요청하지 않음. 기존 로컬 로그인·세션·MySQL 기반은 별도 구현. 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
 
 ## 기술과 코드 구조
 
-Java 17, Spring Boot 4.1.1, MyBatis Starter 4.1.0, MySQL 8.4 LTS. React 19, Vite 8, TypeScript 7. Maven Wrapper와 npm lockfile로 빌드 기준 고정.
+Java 17, Spring Boot 4.1.1, MyBatis Starter 4.1.0, MySQL 8.4 LTS. React 19, Vite 8, TypeScript 7, React Router 8.4.0. Maven Wrapper와 npm lockfile로 빌드 기준 고정.
 
 하나의 Spring Boot 서버에서 `kr.salu` 아래 기능별 패키지 사용. 현재 `config`, `auth`, `member` 인증 조회, `health`, `common.error` 구현. 다음 단계에 `record`, `designer`, `consultation`, `review`, `community`, `photo` 추가. 각 기능 안에 controller·service·mapper·요청/응답 DTO 배치. 기능 코드 없이 빈 클래스를 먼저 만들지 않음.
 
@@ -44,7 +44,7 @@ Salon의 `CLAUDE.md:47-48`, `docs/발표.md:575-591`, `docs/websocket.md:263`에
 
 지금 필수: 서버·React 빌드, MySQL 연결, Flyway 최초/재실행, 기본 오류의 실제 HTTP 상태/JSON, 세션·CSRF, MyBatis 변경의 실제 커밋/롤백, DB 중단/복구와 브라우저 상태·재시도, 일반 jar에서 테스트 코드 제외 확인.
 
-현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 다음 단계: 회원가입과 실제 다중 변경 회원 Service 검증. 이후 기록·사진·디자이너·상담·후기·커뮤니티를 원래 순서대로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
+현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 이번 초기 화면은 독립 메모리 구현. 이후 회원·기록 연결 → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
 
 
 ## 계정과 데이터 관계
@@ -80,7 +80,7 @@ erDiagram
 | 경과·사진 | 커트 ID, 사진의 선택적 경과 ID | 경과 사진의 커트 ID가 경과의 커트 ID와 같아야 함. 날짜 순서·사진 삭제 정책은 기록 단계에서 확정 |
 | 상담 | 고객 member ID·디자이너 ID | 양쪽 참여자만 조회/발송 가능. 고객이 소유한 자료 중 명시적으로 고른 항목만 첨부 |
 | 상담 선택 자료 | 상담 ID + 원본 참조 + 선택 내용 snapshot | 문장·사진의 선택 범위를 서버에서 확인. 원본 전체 목록이나 나머지 사진으로 이동할 권한 부여 금지 |
-| 개인 후기 | 작성 member ID·대상 디자이너 개인 ID | 소속 변경 후 대상 유지. 상담 후기/시술 후기 구분, 작성 자격·증빙·중복·수정/삭제 정책은 구현 전 결정. 현 단계 DDL 작성 금지 |
+| 개인 후기 | 작성 member ID·대상 디자이너 개인 ID | 소속 변경 후 대상 유지. 첫 버전은 답변 받은 고객의 상담 후기. 작성·중복·수정/삭제 제안은 아래 계약 참고. 실제 DDL은 해당 기능 단계에 작성 |
 | 커뮤니티 공개 자료 | 게시글 ID + 공개 선택본 | 원본은 비공개 유지. 공개 사진은 별도 저장본/식별자로 관리. 원본의 private URL 재사용 금지 |
 
 처음 적용할 `V1__create_members.sql`은 ID·email·password_hash·display_name·status·생성/수정 시각만 정의. OAuth, 관리자, 휴면/탈퇴 개인정보 처리, 디자이너 검증은 필요 시 새 migration으로 추가. 이미 적용한 migration은 수정하지 않고 다음 버전으로 변경. 이메일은 MySQL unique constraint로 중복 방지하며 애플리케이션 정규화 정책과 함께 사용.
@@ -92,7 +92,7 @@ erDiagram
 | 요청자 | 개인 기록·원본 사진 | 상담·선택 첨부 | 커뮤니티 공개본 | 프로필·후기 |
 |---|---|---|---|---|
 | 비로그인 | 불가 | 불가 | 공개 상태만 읽기 | 공개 상태만 읽기, 기능 구현 후 적용 |
-| 기록 소유 회원 | 자신의 것만 읽기/수정/삭제 | 자신이 고객인 상담만 접근 | 자신의 게시글 작성/공개/철회 | 자기 프로필 관리, 후기 작성 조건은 미확정 |
+| 기록 소유 회원 | 자신의 것만 읽기/수정/삭제 | 자신이 고객인 상담만 접근 | 자신의 게시글 작성/공개/철회 | 자기 프로필 관리, 답변 받은 상담의 후기 작성 예정 |
 | 상담 대상 디자이너 | 자신의 개인 기록만 접근 | 참여 상담과 선택본만 읽기/답변 | 일반 회원과 동일 | 자신의 디자이너 프로필 관리 |
 | 다른 회원/디자이너 | 불가 | 불가 | 공개 상태만 읽기 | 공개 상태만 읽기 |
 
@@ -140,14 +140,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 ## 이후 순서와 검증
 
-1. 회원·권한: 가입/로그인/로그아웃 화면과 API, BCrypt 저장, 중복 가입, 세션 ID 변경, CSRF 재발급 검증
-2. 커트·경과·사진: 기록 화면과 API, 다른 고객의 ID/사진 접근 차단, 소유권 위조·파일 검증
-3. 디자이너·소속: 고정 개인 ID, 개인 기록 사용, 소속 이력과 검증 정책 확정
-4. 선택 자료 상담: 고객·디자이너 화면, HTTP/STOMP 참여자 검사, 선택하지 않은 원본 노출 차단
-5. 개인 후기: 작성 자격 확정 후 DDL·화면·API, 소속 변경 후 후기 유지 검증
-6. 커뮤니티: 공개/철회·검색·댓글 화면과 API, 비공개 원본 노출 차단
-
-매 단계에서 화면과 백엔드를 연결한 실제 요구 검증으로 완료 판단. 준비 단계의 테스트는 인프라·오류 처리·CSRF·연결 표시 범위.
+아래 후속 업무 구현 계약의 단계·완료 기준 사용. 실제 서버 기반 검증과 초기 화면 검증은 분리. 업무 기능은 DB·권한·브라우저 연결을 확인한 뒤 완료 표시.
 
 ## 확인한 공식 기준
 
@@ -157,3 +150,118 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 - [Spring Security CSRF](https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html): 세션·masked token, 인증 후 token 갱신
 - [Vite 시작하기](https://vite.dev/guide/): 지원 Node 버전
 - [MySQL 일반 바이너리 설치](https://dev.mysql.com/doc/refman/8.4/en/binary-installation.html): 별도 datadir와 시스템 라이브러리
+
+## 후속 업무 구현 계약
+
+아래 내용은 실제 저장·전송 단계의 제안 설계. 현재 `members` 외 업무 테이블·아래 API는 미구현. 초기 화면 계약은 [prototype-plan.md](prototype-plan.md)에 분리.
+
+### 단계와 완료 기준
+
+| 단계 | 구현 | 완료 기준 |
+|---|---|---|
+| 1. 회원·기록 연결 | 가입, 기존 로그인 연결, 커트·경과·사진 | 재접속 후 보존, 다른 회원의 ID/파일 접근 차단 |
+| 2. 디자이너·상담 | 프로필·현재 소속, 명시적 첨부, 요청·HTTP 답변·이력 | 두 실제 계정이 선택한 자료로 상담, 제3자 접근 차단 |
+| 3. 상담 후속 | WebSocket/STOMP, 소속 이력, 상담 후기 | 메시지 저장 후 전송, 이동 후 개인 ID·후기 유지 |
+| 4. 공개 사례 | 선택 공개 게시글·댓글·검색 | 비공개 원본 분리, 공개 철회·삭제 확인 |
+| 5. 통합·배포 | 실제 사용자 흐름·오류 개선·시연 | 기능별 증거, 백업·배포·복구 절차 검증 |
+
+주차를 채우려고 미구현 기능을 완료로 표시하지 않음. 각 단계는 화면+서버+DB를 함께 연결. 계획 변경은 PR에서 문서와 함께 기록.
+
+### 후속 DB 초안
+
+실행 SQL이 아닌 논리 필드 계약. V1 수정 없이 단계마다 새 Flyway migration 작성. 공통 ID는 BIGINT, 공개 JSON에서는 문자열로 전달해 JavaScript 정수 범위 문제 방지. 날짜는 DATE/ISO 날짜, 생성·변경 시각은 UTC로 저장.
+
+| 대상 | 주요 필드·관계 | 제약 |
+|---|---|---|
+| `members` 추가 | 기존 id/email/hash/name/status + 후속 가입 처리 | 인증 주체는 세션 principal. client memberId/role 신뢰 금지 |
+| `cut_records` | id, owner_member_id, cut_date, service, good_note, optional salon/designer/price, timestamps | 날짜 오늘 이하, 가격 nonnegative, 삭제·변경 소유자 검사 |
+| `cut_record_areas` | cut_id, area | cut+area unique, 정해진 부위 code |
+| `progress_entries` | id, cut_id, observed_on, discomfort, styling, question, timestamps | 커트일 이상·오늘 이하, 소유자는 cut에서 도출 |
+| `progress_areas` | progress_id, area | 중복 부위 방지 |
+| `record_photos` | id, cut_id, nullable progress_id, storage_key, MIME, bytes, status | 경과와 커트 일치, storage key 외부 비노출 |
+| `designer_profiles` | id, unique member_id, name, introduction, specialties, visibility | 소속과 독립한 개인 ID 유지. 본인만 수정 |
+| `designer_affiliations` | id, designer_id, salon_name, location, starts_on, ends_on | 현재 소속 하나, 변경 시 이전 기간 종료. 첫 단계는 직접 등록·미인증 표시 |
+| `consultations` | id, customer_member_id, designer_id, source_cut_id, status, created_at | 프로필 활성 상태 확인, 고객·디자이너만 접근 |
+| `consultation_materials` | id, consultation_id, kind, source_id, snapshot_json, photo_copy_key | 명시적 선택 범위 검증. 원본 기록 전체 반환 금지 |
+| `consultation_requests` | id, consultation_id, area, intent, content, sort_order | KEEP/CHANGE/ASK 중 하나, 내용 필수 |
+| `consultation_messages` | id, consultation_id, sender_member_id, content, client_message_id, sent_at | 참여자 검사, consultation+sender+clientMessageId unique |
+| `designer_reviews` | id, consultation_id unique, designer_id, author_member_id, content, status | 첫 버전은 답변 받은 고객의 상담 후기. 시술 후기·랭킹 제외 |
+| 공개 게시글·댓글 | owner, 공개 선택 snapshot, 공개 상태, timestamps | 상담 내용 자동 공개 금지. 원본 private 파일 URL 재사용 금지 |
+
+사진의 cut_id/progress_id 일치는 Service 검사와 복합 FK 가능한 구조로 확인. 디자이너가 일반 개인 기록도 남길 수 있으므로 회원을 고객/디자이너 배타적 종류로 나누지 않음.
+
+### 화면 타입과 서버 요청
+
+초기 화면의 `RecordPhoto.url`은 로컬 파일/임시 blob 주소. 후속 서버는 사진 ID·서버 제공 접근 경로·caption·date만 반환. blob URL과 가상 ID는 서버 저장 데이터가 아님. `DesignerProfile`의 가상 후기는 서버 후기 응답으로 교체.
+
+| 예정 경로 | 입력·응답 | 검사 |
+|---|---|---|
+| POST `/api/members` | email/password/displayName → 공개 회원 DTO, 201 | 이메일 정규화·중복·입력 검증·CSRF |
+| GET/POST `/api/records` | 페이지 목록 / cutDate·service·areas·goodNote·선택 정보 → 기록 DTO | owner는 principal, client owner 무시 |
+| GET/PATCH/DELETE `/api/records/{id}` | 상세+경과 / 변경 필드 / 삭제 | 매 요청 소유자 검사 |
+| POST `/api/records/{id}/progress` | observedOn·areas·discomfort·styling·question → 경과 DTO, 201 | 소유자·날짜·한 내용 이상 |
+| POST `/api/records/{id}/photos` | multipart file·caption·optional progressId → photo DTO, 201 | 소유자·크기·signature·경과 연결 |
+| GET/DELETE `/api/records/{id}/photos/{photoId}` | 인증 파일 전달 / 삭제 | 사진과 커트 연결·소유자 검사 |
+| GET `/api/designers`, GET `/api/designers/{id}` | 공개 프로필·현재 소속·상담 후기 | 비공개/탈퇴 프로필 제외, 민감 회원 정보 제외 |
+| POST/PATCH `/api/designers/me` | 소개·분야·소속 → 본인 프로필 | principal→프로필 연결, 본인만 변경 |
+| POST `/api/consultations` | designerId·cutId·선택 ID·부위별 요청·손질/질문 → 상담 DTO, 201 | 모든 source ID 소유권·같은 cut, 선택본 복사 |
+| GET `/api/consultations`, GET `/api/consultations/{id}` | 참여 상담 목록 / 선택 자료·요청·메시지 | 양쪽 참여자. designer role만으로 허용 금지 |
+| POST `/api/consultations/{id}/messages` | content·clientMessageId → 저장된 message DTO | 참여자·중복 전송 확인·저장 성공 후 알림 |
+| POST `/api/consultations/{id}/reviews` | content → 상담 후기, 201 | 고객 principal, 디자이너 답변 존재, 상담당 한 후기 |
+
+목록 조회는 기본 page=0,size=20,max=50, 최신 순. 표의 API는 외부 제공 목적이 아니라 React 화면이 Spring 서버에 저장·조회·전송을 요청하는 내부 인터페이스.
+
+상담 요청 예시:
+
+```json
+{
+  "designerId": "42",
+  "cutId": "105",
+  "materials": { "includeGoodNote": true, "progressIds": ["207"], "photoIds": ["310"] },
+  "requests": [{ "area": "SIDE", "intent": "ASK", "content": "옆머리 아래와 위 길이를 어떻게 나누면 좋을까요?" }],
+  "homeStyling": "드라이만 합니다",
+  "additionalQuestion": ""
+}
+```
+
+서버에서 memberId, source 원문, 공개용 URL을 받아 그대로 저장하지 않음. 선택 ID를 검사하고 해당 시점 내용으로 snapshot 생성. 오류는 기존 ApiError 계약 사용. 존재하지 않거나 본인 소유가 아닌 비공개 자원은 404로 응답하고 원본 존재 노출 제한.
+
+### 사진·snapshot·철회
+
+- 첫 사진 범위: JPEG/PNG/WebP, 장당 5 MiB, 한 기록/경과 생성 요청당 최대 6장. MIME·magic bytes·실제 decode 결과 함께 검사. 서버가 브라우저 검사를 반복
+- 저장 key UUID, private 디렉터리와 DB 상태 `PENDING/READY/DELETING`로 실패 정리. 원본 파일명·EXIF를 공개하지 않고 업로드 때 메타데이터 제거
+- 파일은 staging에 먼저 기록. DB 작업 실패 시 staging 정리, DB commit 후 확정 이동. 이동 실패 시 READY로 표시하지 않고 재처리. 재처리 작업과 고아 파일 정리는 사진 단계 완료 조건
+- 커트와 경과 원문 수정은 이미 만든 상담 snapshot을 변경하지 않음. 선택 사진은 상담 전용 비공개 사본으로 보관하고 원본 파일 삭제와 독립
+- 공유 철회는 해당 선택 자료·사진의 접근을 종료하고 `철회된 자료` 상태만 남김. 고객 원본은 유지. 활성 공유 링크가 있다면 revoke 즉시 신규 조회 차단
+- 공개 사례는 별도 동의와 공개 사본 사용. 상담 참여 허용이 커뮤니티 공개 동의가 되지 않음
+- 보관 기간·탈퇴·개인정보 삭제는 실제 공개 배포 전 확정·문서화할 운영 조건. 초기 화면 완료로 처리하지 않음
+
+### 프로필·후기·실시간 대화
+
+소속은 디자이너가 직접 등록. 매장 인증 완료로 표현하지 않음. 소속이 바뀌어도 프로필·상담·후기의 designer ID 유지. 기본 프로필과 상담을 먼저 연결한 뒤 소속 이력과 후기를 구현.
+
+첫 후기 범위는 상담 답변을 받은 고객의 텍스트 후기. 상담당 하나, 본인 후기 수정·삭제 가능. 예약 없는 서비스이므로 방문·시술을 인증한 후기라고 주장하지 않음. 평점 순위·추천 알고리즘·시술 인증은 후속 검토.
+
+첫 상담은 HTTP로 저장·조회하고 WebSocket은 후속 추가. STOMP CONNECT에 세션·CSRF, SUBSCRIBE·SEND에 상담 참여자 검사. 메시지를 DB에 확정한 뒤 이벤트 발행. DB rollback으로 전송이 취소된다고 가정하지 않음. 재연결은 마지막 message ID 이후 조회, 전송 중복은 clientMessageId로 방지. HTTP와 STOMP가 같은 Service 규칙 사용.
+
+### 단계별 검증·이전
+
+1. 가상 repository 계약을 HTTP adapter에 연결. 응답 로딩·실패·재시도 추가. 메모리 가상 기록 자동 업로드 금지
+2. `salu_test` fixture에서 Flyway 최초 적용/재실행, unique/FK/date, 저장 후 재조회와 트랜잭션 실패 확인
+3. 실제 고객 두 명·디자이너 한 명으로 타인 ID·사진·상담·메시지 접근 차단. 소속 변경 후 후기 대상 유지 확인
+4. 기록/선택 자료/후기 수정·삭제·공유 철회와 파일 실패 복구 확인. 기존 세션·CSRF 기준 유지
+5. 모바일에서 로그인부터 상담 답변·후기까지 실제 저장 흐름 확인. 이때 초안 캡처와 구현 결과를 구분해 발표
+
+### Git·CI·배포 준비
+
+- 원격 기본안: 비공개 `8192KB/SALU`, main 보호와 PR 검토. 박도율·장용찬의 GitHub 계정을 확인한 뒤 최소 권한 초대
+- 기능 단위 브랜치와 작업 범위 합의. 같은 화면/Service를 동시 수정하지 않고 타입·인터페이스를 먼저 PR에서 합의
+- PR 기본 gate: frontend npm ci/build/초기 화면 E2E. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
+- `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
+- 컨테이너는 후속 단계에 web(Nginx+React dist), backend(JRE17+jar), MySQL 구성. 개발도 같은 Docker Compose 경로를 마련하고 호스트별 MySQL 스크립트는 대체 경로로 정리
+- 배포 기본안: cwsn NAS, `salu.doyul.dev`, 기존 Nginx Proxy Manager 사용. 실제 확인한 proxy network `nginx-proxy-manager_default`에 SALU web만 연결. backend/DB는 SALU 전용 내부 network
+- GHCR 이미지에 commit SHA 태그. CI 이미지 생성과 실제 배포 분리, 첫 배포는 검토 후 수동. 같은 origin `/api` proxy, HTTPS cookie Secure, STOMP 연결 추가 때 Upgrade header 적용
+- SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
+- 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
+
+현재 완료는 로컬 초기 화면과 계획 문서까지. 원격 생성·초대·CI·Docker 앱 구성·DNS·실제 배포는 각 단계에서 실행·검증한 뒤 완료로 기록.

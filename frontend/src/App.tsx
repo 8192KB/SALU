@@ -1,22 +1,26 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router';
+import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { Icon, Missing, PageHeading } from './components';
+import { PrototypeProvider, usePrototype } from './prototype/context';
+import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 
 function Layout() {
   const location = useLocation();
-  useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
+  const navigate = useNavigate();
+  const { reset } = usePrototype();
+  useEffect(() => { window.scrollTo(0, 0); document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true }); }, [location.pathname]);
   return <div className="app-shell">
     <header className="app-header"><div className="header-inner">
       <Link className="brand" to="/" aria-label="SALU 홈">salu<span>.</span></Link>
       <nav aria-label="주 메뉴"><NavLink to="/" end><Icon name="cut"/>내 기록</NavLink><NavLink to="/designers"><Icon name="user"/>디자이너</NavLink></nav>
       <span className="member-label">나의 헤어 기록</span>
     </div></header>
-    <div className="prototype-notice"><div><span className="demo-badge">초기 화면 · 가상 데이터</span><span>새로고침하면 작성한 내용이 초기화됩니다.</span></div></div>
+    <div className="prototype-notice"><div><span className="demo-badge">초기 화면 · 가상 데이터</span><span>새로고침하면 작성한 내용이 초기화됩니다.</span><button className="reset-button" onClick={() => { reset(); navigate('/'); }}><Icon name="reset" size={14}/>초기화</button></div></div>
     <main id="main-content"><Routes>
-      <Route path="/" element={<Placeholder title="나의 커트 기록" description="커트한 날부터 집에서 느낀 변화까지, 하나의 기록에."/>}/>
-      <Route path="/records/new" element={<Placeholder title="이번 머리 남기기"/>}/>
-      <Route path="/records/:id" element={<Placeholder title="커트 기록 · 경과"/>}/>
-      <Route path="/records/:id/progress/new" element={<Placeholder title="시간이 지난 뒤 남기기"/>}/>
+      <Route path="/" element={<RecordList/>}/>
+      <Route path="/records/new" element={<CutForm/>}/>
+      <Route path="/records/:id" element={<RecordDetail/>}/>
+      <Route path="/records/:id/progress/new" element={<ProgressForm/>}/>
       <Route path="/designers" element={<Placeholder title="디자이너 찾기"/>}/>
       <Route path="/designers/:id" element={<Placeholder title="디자이너 프로필"/>}/>
       <Route path="/consultations/materials" element={<Placeholder title="상담 자료 선택"/>}/>
@@ -32,4 +36,4 @@ function Placeholder({ title, description }: { title: string; description?: stri
   return <><PageHeading eyebrow="MY HAIR JOURNAL" title={title} description={description}/><section className="panel empty-state"><p>화면 구성 중</p><Link className="button primary" to="/records/new">커트 기록 작성<Icon name="plus"/></Link></section></>;
 }
 
-export default function App() { return <BrowserRouter><Layout/></BrowserRouter>; }
+export default function App() { return <BrowserRouter><PrototypeProvider><Layout/></PrototypeProvider></BrowserRouter>; }

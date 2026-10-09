@@ -133,7 +133,7 @@ test('자료 미선택·빈 요청 차단, 부위별 요청 추가', async ({ pa
   await withinViewport(page);
 });
 
-test('앞뒤 이동 시 초안 유지, 기준 커트 변경 시 선택·요청 초기화', async ({ page }) => {
+test('커트·디자이너별 초안 분리 보관, 재방문 복원과 초기화', async ({ page }) => {
   await page.goto('/consultations/materials?designer=designer-jiu&record=cut-september');
   await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
   await page.getByRole('button', { name: '요청 작성', exact: true }).click();
@@ -155,6 +155,90 @@ test('앞뒤 이동 시 초안 유지, 기준 커트 변경 시 선택·요청 �
   await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
   await page.getByRole('button', { name: '요청 작성', exact: true }).click();
   await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue('');
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('8월 커트에만 쓸 요청');
+  await page.getByRole('link', { name: '자료 다시 고르기', exact: true }).click();
+  await page.getByLabel('기준 커트', { exact: true }).selectOption('cut-september');
+  await expect(
+    page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
+  ).toBeChecked();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '돌아와도 남아 있을 요청',
+  );
+
+  await page.getByRole('link', { name: '디자이너', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '민서 디자이너' }).click();
+  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue('');
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('민서에게만 쓸 요청');
+  await page.getByRole('link', { name: '디자이너', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
+  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '돌아와도 남아 있을 요청',
+  );
+  await page.getByRole('button', { name: '초기화', exact: true }).click();
+  await page.getByRole('link', { name: '디자이너', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
+  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue('');
+});
+
+test('요청 작성 중 선택한 경과·사진만 확인, 모바일 다음 버튼 노출', async ({ page }, testInfo) => {
+  await page.goto('/records/cut-september/progress/new');
+  await page.getByLabel('관찰 날짜', { exact: true }).fill('2026-09-16');
+  await page.getByRole('checkbox', { name: '옆머리', exact: true }).check();
+  await page.getByLabel('불편한 점').fill('며칠 지나니 옆머리가 더 떠요');
+  await page.getByLabel('평소 손질').fill('아침에 드라이를 하고 있어요');
+  await page.getByLabel('물어볼 점').fill('어느 방향으로 말리면 좋을까요?');
+  await page
+    .getByLabel('사진 추가', { exact: true })
+    .setInputFiles(resolve('public/images/sample-cut.jpg'));
+  await page.getByRole('button', { name: '경과 저장', exact: true }).click();
+  await chooseDesigner(page);
+  await expect(page.getByText('경과 D+15 · 2026. 09. 16', { exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: '경과 2026-09-16 선택', exact: true }).check();
+  await page.getByRole('checkbox', { name: '사진 2 선택', exact: true }).check();
+  if (testInfo.project.name === 'mobile') {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.getByRole('button', { name: '요청 작성', exact: true })).toBeInViewport({
+      ratio: 1,
+    });
+  }
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  const reference = page.getByRole('complementary', { name: '요청에 첨부할 자료', exact: true });
+  if ((await reference.locator('details').getAttribute('open')) === null)
+    await reference.locator('summary').click();
+  await expect(reference.getByText('며칠 지나니 옆머리가 더 떠요', { exact: true })).toBeVisible();
+  await expect(reference.getByText('아침에 드라이를 하고 있어요', { exact: true })).toBeVisible();
+  await expect(
+    reference.getByText('어느 방향으로 말리면 좋을까요?', { exact: true }),
+  ).toBeVisible();
+  await expect(reference.getByText('경과 D+15', { exact: true })).toBeVisible();
+  await expect(reference.getByRole('img')).toHaveCount(1);
+  await expect(reference.getByText('앞머리 길이가 마음에 듦', { exact: true })).toHaveCount(0);
+  await expect(reference.getByText('옆머리가 금방 떠요', { exact: true })).toHaveCount(0);
+  await expect(reference.getByText('커트 당일 · 예시 사진', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('집에서 손질', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('추가 질문', { exact: true })).toHaveValue('');
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('손질 방법을 알고 싶어요');
+  await page.getByRole('link', { name: '자료 다시 고르기', exact: true }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '손질 방법을 알고 싶어요',
+  );
+  await withinViewport(page);
 });
 
 test('초기화와 새로고침은 신규 기록·초안을 없애고 샘플을 복원', async ({ page }) => {
@@ -247,6 +331,9 @@ test('선택 시점 미리보기는 이후 경과 추가와 요청 편집에 영
   await expect(page.getByText('확인 시점에 남긴 요청', { exact: true })).toBeVisible();
   await expect(page.getByText('나중에 수정한 초안', { exact: true })).toHaveCount(0);
   await page.getByRole('link', { name: '원본 기록 보기', exact: true }).click();
+  await expect(
+    page.getByRole('link', { name: '상담 미리보기로 돌아가기', exact: true }),
+  ).toHaveAttribute('href', new URL(previewURL).pathname);
   await page.getByRole('link', { name: '경과 추가', exact: true }).click();
   await page.getByRole('checkbox', { name: '옆머리', exact: true }).check();
   await page.getByLabel('불편한 점').fill('미리보기 확인 후 새로 남긴 경과');

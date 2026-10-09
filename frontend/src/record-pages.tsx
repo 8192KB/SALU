@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Alert, Icon, Missing, PageHeading } from './components';
 import { AreaChoices, Field, PhotoList, PhotoPicker } from './fields';
 import { useProgressDraft, usePrototype } from './prototype/context';
@@ -292,8 +292,12 @@ export function ProgressBlock({
 
 export function RecordDetail() {
   const { id } = useParams();
+  const [search] = useSearchParams();
   const { state } = usePrototype();
   const cut = state.cuts.find((value) => value.id === id);
+  const preview = state.previews.find(
+    (value) => value.id === search.get('preview') && value.cut.id === id,
+  );
   if (!cut) return <Missing />;
   const entries = state.progress
     .filter((entry) => entry.cutId === id)
@@ -304,6 +308,11 @@ export function RecordDetail() {
       <Link className="back-link" to="/">
         ← 내 기록
       </Link>
+      {preview && (
+        <Link className="preview-return-link" to={`/consultations/previews/${preview.id}`}>
+          상담 미리보기로 돌아가기 <Icon name="arrow" size={17} />
+        </Link>
+      )}
       <PageHeading
         eyebrow="CUT & AFTER"
         title="커트 기록 · 경과"

@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createMemoryRepository, newCutDraft, newProgressDraft } from './memory-repository';
 import type {
@@ -18,16 +25,46 @@ type PrototypeContextValue = {
   setProgressDrafts: Dispatch<SetStateAction<Record<string, ProgressDraft>>>;
   consultationDraft: ConsultationDraft | null;
   setConsultationDraft: Dispatch<SetStateAction<ConsultationDraft | null>>;
+  resumeConsultationDraft: (initial: ConsultationDraft) => void;
   reset: () => void;
 };
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
+type ConsultationDraftState = {
+  current: ConsultationDraft | null;
+  saved: Record<string, ConsultationDraft>;
+};
+const draftKey = (draft: ConsultationDraft) => JSON.stringify([draft.designerId, draft.cutId]);
 
 export function PrototypeProvider({ children }: { children: ReactNode }) {
   const [repository] = useState(createMemoryRepository);
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot);
   const [cutDraft, setCutDraft] = useState(newCutDraft);
   const [progressDrafts, setProgressDrafts] = useState<Record<string, ProgressDraft>>({});
-  const [consultationDraft, setConsultationDraft] = useState<ConsultationDraft | null>(null);
+  const [consultationDrafts, setConsultationDrafts] = useState<ConsultationDraftState>({
+    current: null,
+    saved: {},
+  });
+  const consultationDraft = consultationDrafts.current;
+  const setConsultationDraft = useCallback<Dispatch<SetStateAction<ConsultationDraft | null>>>(
+    (action) =>
+      setConsultationDrafts((previous) => {
+        const next = typeof action === 'function' ? action(previous.current) : action;
+        if (next === previous.current) return previous;
+        return {
+          current: next,
+          saved: next ? { ...previous.saved, [draftKey(next)]: next } : previous.saved,
+        };
+      }),
+    [],
+  );
+  const resumeConsultationDraft = useCallback((initial: ConsultationDraft) => {
+    setConsultationDrafts((previous) => {
+      const key = draftKey(initial);
+      const next = previous.saved[key] ?? initial;
+      if (previous.current === next) return previous;
+      return { current: next, saved: { ...previous.saved, [key]: next } };
+    });
+  }, []);
   useEffect(() => {
     void repository.load();
     return () => repository.dispose();
@@ -36,7 +73,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
     repository.reset();
     setCutDraft(newCutDraft());
     setProgressDrafts({});
-    setConsultationDraft(null);
+    setConsultationDrafts({ current: null, saved: {} });
   };
   return (
     <PrototypeContext.Provider
@@ -49,6 +86,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         setProgressDrafts,
         consultationDraft,
         setConsultationDraft,
+        resumeConsultationDraft,
         reset,
       }}
     >

@@ -12,6 +12,7 @@ import type {
   DesignerProfile,
   Intent,
   RequestItem,
+  RecordPhoto,
 } from './prototype/types';
 import { cutTitle, daysAfter, displayDate } from './prototype/dates';
 
@@ -35,6 +36,9 @@ function newDraft(designerId: string, cutId: string): ConsultationDraft {
 }
 function selectedCount(draft: ConsultationDraft) {
   return Number(draft.includeGoodNote) + draft.progressIds.length + draft.photoIds.length;
+}
+function photoOrigin(photo: RecordPhoto, cutDate: string) {
+  return photo.progressId ? `경과 D+${daysAfter(cutDate, photo.date)}` : '커트 당일';
 }
 function profileUrl(id: string, record: string | null) {
   return `/designers/${id}${record ? `?record=${encodeURIComponent(record)}` : ''}`;
@@ -68,6 +72,84 @@ function SelectedDesigner({ designer }: { designer: DesignerProfile }) {
         <p>{currentSalon(designer)}</p>
       </div>
     </div>
+  );
+}
+
+function SelectedMaterials({ draft }: { draft: ConsultationDraft }) {
+  const { state } = usePrototype();
+  const [open, setOpen] = useState(() => window.matchMedia('(min-width: 701px)').matches);
+  const cut = state.cuts.find((value) => value.id === draft.cutId);
+  if (!cut) return null;
+  const progress = state.progress
+    .filter((entry) => entry.cutId === cut.id && draft.progressIds.includes(entry.id))
+    .sort((a, b) => a.observedOn.localeCompare(b.observedOn));
+  const photos = state.photos.filter(
+    (photo) => photo.cutId === cut.id && draft.photoIds.includes(photo.id),
+  );
+  return (
+    <aside className="sidebar request-reference" aria-label="요청에 첨부할 자료">
+      <section className="panel sticky-summary">
+        <h2>선택한 기록</h2>
+        <p className="reference-cut">{cutTitle(cut.cutDate, cut.service)}</p>
+        <details
+          className="reference-details"
+          open={open}
+          onToggle={(event) => setOpen(event.currentTarget.open)}
+        >
+          <summary>선택한 자료 {selectedCount(draft)}개 보기</summary>
+          <div className="reference-body" role="region" aria-label="선택한 자료 내용" tabIndex={0}>
+            {draft.includeGoodNote && cut.goodNote && (
+              <article className="reference-entry">
+                <h3>커트 당일 · 좋았던 점</h3>
+                <p>{cut.goodNote}</p>
+              </article>
+            )}
+            {progress.map((entry) => (
+              <article className="reference-entry" key={entry.id}>
+                <h3>
+                  {displayDate(entry.observedOn)}{' '}
+                  <span className="day-label">D+{daysAfter(cut.cutDate, entry.observedOn)}</span>
+                </h3>
+                <AreaChips areas={entry.areas} />
+                <dl>
+                  {entry.discomfort && (
+                    <div>
+                      <dt>불편한 점</dt>
+                      <dd>{entry.discomfort}</dd>
+                    </div>
+                  )}
+                  {entry.styling && (
+                    <div>
+                      <dt>평소 손질</dt>
+                      <dd>{entry.styling}</dd>
+                    </div>
+                  )}
+                  {entry.question && (
+                    <div>
+                      <dt>물어볼 점</dt>
+                      <dd>{entry.question}</dd>
+                    </div>
+                  )}
+                </dl>
+              </article>
+            ))}
+            {photos.map((photo) => (
+              <figure className="reference-photo" key={photo.id}>
+                <img src={photo.url} alt={photo.caption} />
+                <figcaption>
+                  <strong>{photoOrigin(photo, cut.cutDate)}</strong>
+                  <span>{displayDate(photo.date)}</span>
+                  <p>{photo.caption}</p>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </details>
+        <p className="form-note">
+          선택한 기록은 함께 첨부됩니다. 요청에는 새로 부탁할 내용만 적어 주세요.
+        </p>
+      </section>
+    </aside>
   );
 }
 
@@ -205,7 +287,8 @@ export function DesignerDetail() {
 }
 
 export function MaterialsPage() {
-  const { state, consultationDraft, setConsultationDraft } = usePrototype();
+  const { state, consultationDraft, setConsultationDraft, resumeConsultationDraft } =
+    usePrototype();
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const [error, setError] = useState('');
@@ -220,14 +303,9 @@ export function MaterialsPage() {
       ? consultationDraft
       : null;
   useEffect(() => {
-    if (designer && cut)
-      setConsultationDraft((previous) =>
-        previous?.designerId === designer.id && previous?.cutId === cut.id
-          ? previous
-          : newDraft(designer.id, cut.id),
-      );
+    if (designer && cut) resumeConsultationDraft(newDraft(designer.id, cut.id));
     setError('');
-  }, [designer, cut, setConsultationDraft]);
+  }, [designer, cut, resumeConsultationDraft]);
   if (!designer || !cut)
     return (
       <Missing
@@ -240,8 +318,10 @@ export function MaterialsPage() {
     .filter((value) => value.cutId === cut.id)
     .sort((a, b) => a.observedOn.localeCompare(b.observedOn));
   const photos = state.photos.filter((value) => value.cutId === cut.id);
-  const update = (input: Partial<ConsultationDraft>) =>
+  const update = (input: Partial<ConsultationDraft>) => {
+    setError('');
     setConsultationDraft((previous) => (previous ? { ...previous, ...input } : previous));
+  };
   const toggle = (key: 'progressIds' | 'photoIds', id: string) =>
     update({
       [key]: draft[key].includes(id)
@@ -258,7 +338,7 @@ export function MaterialsPage() {
         title="상담 자료 선택"
         description="보여 주고 싶은 메모와 경과, 사진만 골라 주세요."
       />
-      <div className="two-column">
+      <div className="two-column materials-layout">
         <section className="panel">
           <SelectedDesigner designer={designer} />
           <Field label="기준 커트">
@@ -273,7 +353,7 @@ export function MaterialsPage() {
               ))}
             </select>
           </Field>
-          <p className="form-note">다른 커트로 바꾸면 자료 선택과 요청 내용이 초기화됩니다.</p>
+          <p className="form-note">다른 커트를 둘러보고 돌아와도 작성 중인 내용은 유지됩니다.</p>
           <div className="material-group">
             <h3>커트 당일 메모</h3>
             {cut.goodNote ? (
@@ -329,7 +409,9 @@ export function MaterialsPage() {
                 />
                 <img src={photo.url} alt={photo.caption} />
                 <div className="selectable-content">
-                  <strong>{displayDate(photo.date)}</strong>
+                  <strong>
+                    {photoOrigin(photo, cut.cutDate)} · {displayDate(photo.date)}
+                  </strong>
                   <p>{photo.caption}</p>
                 </div>
               </label>
@@ -337,18 +419,19 @@ export function MaterialsPage() {
             {!photos.length && <p className="muted">사진이 없습니다.</p>}
           </div>
         </section>
-        <aside className="sidebar">
+        <aside className="sidebar material-selection-bar">
           <section className="panel sticky-summary">
             <h2>선택한 자료</h2>
-            <p className="selection-count">
+            <p className="selection-count" aria-live="polite">
+              <span className="mobile-selection-label">선택 </span>
               {selectedCount(draft)}
               <small style={{ fontSize: 14, marginLeft: 6 }}>개</small>
             </p>
-            <p className="muted">
+            <p className="muted selection-detail">
               메모 {Number(draft.includeGoodNote)} · 경과 {draft.progressIds.length} · 사진{' '}
               {draft.photoIds.length}
             </p>
-            <p className="muted">커트 날짜·시술·부위와 선택한 자료만 포함합니다.</p>
+            <p className="muted selection-scope">커트 날짜·시술·부위와 선택한 자료만 포함합니다.</p>
             <Alert message={error} />
             <button
               className="button primary full"
@@ -401,7 +484,7 @@ export function RequestPage() {
     }
   }
   return (
-    <div className="form-layout">
+    <>
       <Link className="back-link" to={materialUrl(draft)}>
         ← 자료 선택
       </Link>
@@ -410,109 +493,113 @@ export function RequestPage() {
         title="이번 요청 정리"
         description="그대로 둘 부분, 바꿀 부분, 물어볼 점을 부위별로 적어 주세요."
       />
-      <form className="panel" onSubmit={submit} noValidate>
-        <SelectedDesigner designer={designer} />
-        <p className="muted">선택한 자료 {selectedCount(draft)}개</p>
-        <Alert message={error} />
-        {draft.requests.map((item, index) => (
-          <section className="request-row" key={item.id}>
-            <div className="request-row-head">
-              <strong>요청 {String(index + 1).padStart(2, '0')}</strong>
-              {draft.requests.length > 1 && (
-                <button
-                  className="remove-link"
-                  type="button"
-                  aria-label={`요청 ${index + 1} 삭제`}
-                  onClick={() =>
-                    update({ requests: draft.requests.filter((value) => value.id !== item.id) })
-                  }
-                >
-                  삭제
-                </button>
-              )}
-            </div>
-            <div className="field-grid">
-              <Field label="부위">
-                <select
-                  aria-label={`요청 부위 ${index + 1}`}
-                  value={item.area}
-                  onChange={(event) => updateRequest(item.id, { area: event.target.value as Area })}
-                >
-                  {Object.entries(AREAS).map(([key, label]) => (
-                    <option value={key} key={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+      <div className="two-column request-layout">
+        <form className="panel" onSubmit={submit} noValidate>
+          <SelectedDesigner designer={designer} />
+          <Alert message={error} />
+          {draft.requests.map((item, index) => (
+            <section className="request-row" key={item.id}>
+              <div className="request-row-head">
+                <strong>요청 {String(index + 1).padStart(2, '0')}</strong>
+                {draft.requests.length > 1 && (
+                  <button
+                    className="remove-link"
+                    type="button"
+                    aria-label={`요청 ${index + 1} 삭제`}
+                    onClick={() =>
+                      update({ requests: draft.requests.filter((value) => value.id !== item.id) })
+                    }
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
+              <div className="field-grid">
+                <Field label="부위">
+                  <select
+                    aria-label={`요청 부위 ${index + 1}`}
+                    value={item.area}
+                    onChange={(event) =>
+                      updateRequest(item.id, { area: event.target.value as Area })
+                    }
+                  >
+                    {Object.entries(AREAS).map(([key, label]) => (
+                      <option value={key} key={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="요청 종류">
+                  <select
+                    aria-label={`요청 종류 ${index + 1}`}
+                    value={item.intent}
+                    onChange={(event) =>
+                      updateRequest(item.id, { intent: event.target.value as Intent })
+                    }
+                  >
+                    {Object.entries(INTENTS).map(([key, label]) => (
+                      <option value={key} key={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <Field label="요청 내용">
+                <textarea
+                  aria-label={`요청 내용 ${index + 1}`}
+                  required
+                  maxLength={2000}
+                  value={item.content}
+                  onChange={(event) => updateRequest(item.id, { content: event.target.value })}
+                  placeholder="옆머리 아래는 조금 짧게, 위쪽 길이는 남기고 싶어요"
+                />
               </Field>
-              <Field label="요청 종류">
-                <select
-                  aria-label={`요청 종류 ${index + 1}`}
-                  value={item.intent}
-                  onChange={(event) =>
-                    updateRequest(item.id, { intent: event.target.value as Intent })
-                  }
-                >
-                  {Object.entries(INTENTS).map(([key, label]) => (
-                    <option value={key} key={key}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <Field label="요청 내용">
+            </section>
+          ))}
+          <button
+            className="text-link"
+            type="button"
+            onClick={() => update({ requests: [...draft.requests, newRequest()] })}
+          >
+            <Icon name="plus" size={17} />
+            요청 항목 추가
+          </button>
+          <div className="form-body" style={{ marginTop: 26 }}>
+            <Field label="집에서 손질" hint="선택 · 기록에 없는 내용만 추가">
               <textarea
-                aria-label={`요청 내용 ${index + 1}`}
-                required
                 maxLength={2000}
-                value={item.content}
-                onChange={(event) => updateRequest(item.id, { content: event.target.value })}
-                placeholder="옆머리 아래는 조금 짧게, 위쪽 길이는 남기고 싶어요"
+                value={draft.homeStyling}
+                onChange={(event) => update({ homeStyling: event.target.value })}
+                placeholder="드라이만 하고 있어요"
               />
             </Field>
-          </section>
-        ))}
-        <button
-          className="text-link"
-          type="button"
-          onClick={() => update({ requests: [...draft.requests, newRequest()] })}
-        >
-          <Icon name="plus" size={17} />
-          요청 항목 추가
-        </button>
-        <div className="form-body" style={{ marginTop: 26 }}>
-          <Field label="집에서 손질" hint="선택">
-            <textarea
-              maxLength={2000}
-              value={draft.homeStyling}
-              onChange={(event) => update({ homeStyling: event.target.value })}
-              placeholder="드라이만 하고 있어요"
-            />
-          </Field>
-          <Field label="추가 질문" hint="선택">
-            <textarea
-              maxLength={2000}
-              value={draft.additionalQuestion}
-              onChange={(event) => update({ additionalQuestion: event.target.value })}
-              placeholder="함께 물어볼 내용이 있나요?"
-            />
-          </Field>
-        </div>
-        <div className="form-actions">
-          <Link className="button" to={materialUrl(draft)}>
-            자료 다시 고르기
-          </Link>
-          <button type="submit" className="button primary" disabled={busy}>
-            미리보기 확인
-            <Icon name="arrow" />
-          </button>
-        </div>
-        <p className="form-note">
-          아직 실제로 전송하지 않습니다. 다음 화면에서 정리한 내용을 확인합니다.
-        </p>
-      </form>
-    </div>
+            <Field label="추가 질문" hint="선택 · 기록에 없는 내용만 추가">
+              <textarea
+                maxLength={2000}
+                value={draft.additionalQuestion}
+                onChange={(event) => update({ additionalQuestion: event.target.value })}
+                placeholder="함께 물어볼 내용이 있나요?"
+              />
+            </Field>
+          </div>
+          <div className="form-actions">
+            <Link className="button" to={materialUrl(draft)}>
+              자료 다시 고르기
+            </Link>
+            <button type="submit" className="button primary" disabled={busy}>
+              미리보기 확인
+              <Icon name="arrow" />
+            </button>
+          </div>
+          <p className="form-note">
+            아직 실제로 전송하지 않습니다. 다음 화면에서 정리한 내용을 확인합니다.
+          </p>
+        </form>
+        <SelectedMaterials draft={draft} />
+      </div>
+    </>
   );
 }
 
@@ -618,7 +705,7 @@ export function PreviewPage() {
             <Link
               className="button full"
               style={{ marginTop: 12 }}
-              to={`/records/${preview.cut.id}`}
+              to={`/records/${preview.cut.id}?preview=${encodeURIComponent(preview.id)}`}
             >
               원본 기록 보기
             </Link>

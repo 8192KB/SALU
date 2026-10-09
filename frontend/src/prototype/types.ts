@@ -21,6 +21,7 @@ export type CutRecord = {
   goodNote: string;
   salonName: string;
   designerName: string;
+  designerProfileId?: Id;
   price?: number;
 };
 export type ProgressEntry = {
@@ -80,6 +81,7 @@ export type CutDraft = {
   goodNote: string;
   salonName: string;
   designerName: string;
+  designerProfileId?: Id;
   price: string;
   photos: PhotoDraft[];
 };
@@ -96,7 +98,9 @@ export interface PrototypeRepository {
   subscribe(listener: () => void): () => void;
   load(): Promise<void>;
   createCut(input: CutDraft): Promise<CutRecord>;
+  updateCut(id: Id, input: Omit<CutDraft, 'photos'>): Promise<CutRecord>;
   addProgress(cutId: Id, input: ProgressDraft): Promise<ProgressEntry>;
+  updateProgress(cutId: Id, id: Id, input: Omit<ProgressDraft, 'photos'>): Promise<ProgressEntry>;
   createPreview(draft: RequestDraft): Promise<RequestPreview>;
   createPreviewForDesigner(previewId: Id, designerId: Id): Promise<RequestPreview>;
   preparePhotos(files: File[], existingCount: number): Promise<PhotoDraft[]>;

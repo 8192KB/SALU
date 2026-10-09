@@ -21,7 +21,7 @@ npm ci
 npm run dev
 ```
 
-기본 주소: <http://127.0.0.1:5174>. 커트 기록 → 경과 → 개인 요청 준비 → 미리보기 → 필요하면 디자이너 선택 순서. 디자이너를 먼저 선택하는 흐름도 지원. 만든 자료와 작성 중인 초안은 상단 `요청 자료`에서 다시 확인. 화면 상단에서 가상 자료 초기화 가능.
+기본 주소: <http://127.0.0.1:5174>. 커트 기록 → 경과 → 개인 요청 준비 → 미리보기 → 필요하면 디자이너 선택 순서. 디자이너를 먼저 선택하는 흐름도 지원. 만든 자료와 작성 중인 초안은 상단 `요청 자료`에서 다시 확인. 기록·경과 수정, 사진 확대, 담당 프로필 명시 연결 가능. 화면 상단에서 확인 후 가상 자료 초기화 가능.
 
 ```bash
 npm run build
@@ -44,7 +44,7 @@ npm run test:e2e
 
 [PC 기록 목록](docs/screenshots/records-desktop.png) · [모바일 커트·경과](docs/screenshots/record-mobile.png) · [PC 디자이너 프로필](docs/screenshots/designer-desktop.png) · [모바일 상담 미리보기](docs/screenshots/preview-mobile.png)
 
-개발 서버를 실행한 뒤 다른 터미널에서 `frontend`의 `npm run capture`로 재생성. 주소를 바꾸면 `SALU_CAPTURE_URL` 지정. 실제 동작 화면의 가상 자료 캡처이며 DB·전송 완료 증거는 아님.
+개발 서버를 실행한 뒤 다른 터미널에서 `frontend`의 `npm run capture`로 재생성. 주소를 바꾸면 `SALU_CAPTURE_URL` 지정. 실제 동작 화면의 가상 자료 캡처이며 DB·전송 완료 증거는 아님. 요청 작성·목록·기록 수정·사진 확대 캡처는 [초기 화면 계획](docs/prototype-plan.md)의 구현 결과 참고.
 
 ## 저장소·작업 순서
 

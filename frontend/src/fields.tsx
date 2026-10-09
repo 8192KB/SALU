@@ -6,6 +6,8 @@ import { Icon } from './components';
 import { usePrototype } from './prototype/context';
 import { photoOrigin } from './prototype/request-flow';
 import { displayDate } from './prototype/dates';
+import { PhotoButton } from './photo-viewer';
+export { PhotoButton } from './photo-viewer';
 
 export function Field({
   label,
@@ -87,17 +89,19 @@ export function PhotoList({
   photos,
   onRemove,
   cutDate,
+  removeDisabled = false,
 }: {
   photos: (PhotoDraft | RecordPhoto)[];
   onRemove?: (photo: PhotoDraft) => void;
   cutDate?: string;
+  removeDisabled?: boolean;
 }) {
   if (!photos.length) return null;
   return (
     <div className="photo-list">
       {photos.map((photo) => (
         <figure key={photo.id}>
-          <img src={photo.url} alt={photo.caption} />
+          <PhotoButton photo={photo} cutDate={cutDate} />
           <figcaption>
             {cutDate && 'date' in photo && (
               <strong className="photo-moment">
@@ -110,6 +114,7 @@ export function PhotoList({
             <button
               className="photo-remove"
               type="button"
+              disabled={removeDisabled}
               aria-label={`${photo.caption} 제거`}
               onClick={() => onRemove(photo)}
             >
@@ -124,9 +129,11 @@ export function PhotoList({
 export function PhotoPicker({
   photos,
   onChange,
+  onBusyChange,
 }: {
   photos: PhotoDraft[];
   onChange: (photos: PhotoDraft[]) => void;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const { repository } = usePrototype();
   const [error, setError] = useState('');
@@ -157,6 +164,7 @@ export function PhotoPicker({
                 event.target.value = '';
                 if (!files.length) return;
                 setBusy(true);
+                onBusyChange?.(true);
                 setError('');
                 try {
                   const prepared = await repository.preparePhotos(files, photos.length);
@@ -168,7 +176,10 @@ export function PhotoPicker({
                       failure instanceof Error ? failure.message : '사진을 다시 선택해 주세요.',
                     );
                 } finally {
-                  if (active.current) setBusy(false);
+                  if (active.current) {
+                    setBusy(false);
+                    onBusyChange?.(false);
+                  }
                 }
               }}
             />
@@ -187,6 +198,7 @@ export function PhotoPicker({
       )}
       <PhotoList
         photos={photos}
+        removeDisabled={busy}
         onRemove={(photo) => {
           repository.releasePhoto(photo);
           onChange(photos.filter((value) => value.id !== photo.id));

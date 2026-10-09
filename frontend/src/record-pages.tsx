@@ -2,8 +2,13 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Alert, Icon, Missing, PageHeading } from './components';
-import { AreaChoices, Field, PhotoList, PhotoPicker } from './fields';
-import { useProgressDraft, usePrototype } from './prototype/context';
+import { AreaChoices, Field, PhotoList, PhotoPicker, PhotoButton } from './fields';
+import {
+  useCutEditDraft,
+  useProgressEditDraft,
+  useProgressDraft,
+  usePrototype,
+} from './prototype/context';
 import { AREAS } from './prototype/types';
 import type { Area, CutRecord, RecordPhoto, ProgressEntry } from './prototype/types';
 import { cutTitle, daysAfter, displayDate, today } from './prototype/dates';
@@ -26,11 +31,23 @@ export function AreaChips({ areas }: { areas: Area[] }) {
     </div>
   );
 }
-function Cover({ photo }: { photo?: RecordPhoto }) {
+function Cover({
+  photo,
+  expandable = false,
+  cutDate,
+}: {
+  photo?: RecordPhoto;
+  expandable?: boolean;
+  cutDate?: string;
+}) {
   return (
     <div className="record-cover">
       {photo ? (
-        <img src={photo.url} alt={photo.caption} />
+        expandable ? (
+          <PhotoButton photo={photo} cutDate={cutDate} />
+        ) : (
+          <img src={photo.url} alt={photo.caption} />
+        )
       ) : (
         <div className="cover-placeholder">
           <Icon name="cut" size={42} />
@@ -109,11 +126,11 @@ export function RecordList() {
             </div>
             <div className="small-step">
               <b>2</b>
-              <span>상담할 디자이너 선택</span>
+              <span>다음 커트에서 요청할 내용 정리</span>
             </div>
             <div className="small-step">
               <b>3</b>
-              <span>필요한 자료와 요청 정리</span>
+              <span>필요할 때 디자이너 선택</span>
             </div>
             <Link className="button full" style={{ marginTop: 24 }} to="/designers">
               디자이너 찾아보기
@@ -133,19 +150,52 @@ export function RecordList() {
 }
 
 export function CutForm() {
-  const { repository, cutDraft: draft, setCutDraft } = usePrototype();
+  const { id } = useParams();
+  const { state, repository, cutDraft, setCutDraft } = usePrototype();
+  const original = state.cuts.find((cut) => cut.id === id);
+  const edit = useCutEditDraft(original);
+  if (id && !original) return <Missing />;
+  const form = id
+    ? edit
+    : {
+        draft: cutDraft,
+        update: (input: Partial<typeof cutDraft>) =>
+          setCutDraft((previous) => ({ ...previous, ...input })),
+        clear: () => setCutDraft(newCutDraft()),
+      };
+  return <CutFormBody key={id ?? 'new'} {...form} editingId={id} repository={repository} />;
+}
+function CutFormBody({
+  draft,
+  update,
+  clear,
+  editingId,
+  repository,
+}: ReturnType<typeof useCutEditDraft> & {
+  editingId?: string;
+  repository: ReturnType<typeof usePrototype>['repository'];
+}) {
+  const { state } = usePrototype();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [photosBusy, setPhotosBusy] = useState(false);
   const navigate = useNavigate();
-  const update = (input: Partial<typeof draft>) =>
-    setCutDraft((previous) => ({ ...previous, ...input }));
+  const returnUrl = editingId ? `/records/${editingId}` : '/';
+  const cancel = () => {
+    if (!editingId) draft.photos.forEach(repository.releasePhoto);
+    clear();
+    navigate(returnUrl);
+  };
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (photosBusy) return;
     setErrors({});
     setBusy(true);
     try {
-      const cut = await repository.createCut(draft);
-      setCutDraft(newCutDraft());
+      const cut = editingId
+        ? await repository.updateCut(editingId, draft)
+        : await repository.createCut(draft);
+      clear();
       navigate(`/records/${cut.id}`);
     } catch (failure) {
       setErrors(
@@ -159,18 +209,31 @@ export function CutForm() {
   }
   return (
     <div className="form-layout">
-      <Link className="back-link" to="/">
-        ← 내 기록
+      <Link className="back-link" to={returnUrl}>
+        ← {editingId ? '커트 기록' : '내 기록'}
       </Link>
       <PageHeading
         eyebrow="CUT RECORD"
-        title="이번 머리 남기기"
+        title={editingId ? '커트 기록 수정' : '이번 머리 남기기'}
         description="커트한 날짜와 사진, 마음에 든 부분을 남겨 보세요."
       />
       <form className="panel" onSubmit={submit} noValidate>
         <Alert message={errors.form ?? ''} />
         <div className="form-body">
-          <PhotoPicker photos={draft.photos} onChange={(photos) => update({ photos })} />
+          {editingId ? (
+            <PhotoList
+              photos={state.photos.filter(
+                (photo) => photo.cutId === editingId && !photo.progressId,
+              )}
+              cutDate={draft.cutDate}
+            />
+          ) : (
+            <PhotoPicker
+              photos={draft.photos}
+              onChange={(photos) => update({ photos })}
+              onBusyChange={setPhotosBusy}
+            />
+          )}
           <div className="field-grid">
             <Field label="커트 날짜" error={errors.cutDate}>
               <input
@@ -217,10 +280,38 @@ export function CutForm() {
                   placeholder="매장 이름"
                 />
               </Field>
+              <Field
+                label="연결할 디자이너 프로필"
+                hint="선택 · 직접 고른 프로필만 연결"
+                error={errors.designerProfileId}
+              >
+                <select
+                  value={draft.designerProfileId ?? ''}
+                  onChange={(event) => {
+                    const designer = state.designers.find(
+                      (value) => value.id === event.target.value,
+                    );
+                    update({
+                      designerProfileId: designer?.id,
+                      designerName: designer?.name ?? draft.designerName,
+                    });
+                  }}
+                >
+                  <option value="">프로필 연결 안 함 · 이름 직접 입력</option>
+                  {state.designers.map((designer) => (
+                    <option key={designer.id} value={designer.id}>
+                      {designer.name} ·{' '}
+                      {designer.affiliations.find((value) => value.current)?.salonName ||
+                        '소속 없음'}
+                    </option>
+                  ))}
+                </select>
+              </Field>
               <Field label="담당자">
                 <input
                   maxLength={100}
                   value={draft.designerName}
+                  readOnly={!!draft.designerProfileId}
                   onChange={(event) => update({ designerName: event.target.value })}
                   placeholder="디자이너 이름"
                 />
@@ -241,15 +332,19 @@ export function CutForm() {
           {errors.photos && <Alert message={errors.photos} />}
         </div>
         <div className="form-actions">
-          <Link className="button" to="/">
-            돌아가기
-          </Link>
-          <button disabled={busy} className="button coral" type="submit">
-            커트 기록 저장
+          <button className="button" type="button" onClick={cancel}>
+            취소
+          </button>
+          <button disabled={busy || photosBusy} className="button coral" type="submit">
+            {editingId ? '수정 저장' : '커트 기록 저장'}
             <Icon name="check" />
           </button>
         </div>
-        <p className="form-note">이번에는 화면 안에만 저장됩니다. 새로고침하면 사라집니다.</p>
+        <p className="form-note">
+          {editingId
+            ? '사진은 그대로 유지됩니다. 원본 수정은 이전 요청 미리보기를 바꾸지 않습니다.'
+            : '이번에는 화면 안에만 저장됩니다. 새로고침하면 사라집니다.'}
+        </p>
       </form>
     </div>
   );
@@ -259,10 +354,12 @@ export function ProgressBlock({
   entry,
   cutDate,
   photos = [],
+  editUrl,
 }: {
   entry: ProgressEntry;
   cutDate: string;
   photos?: RecordPhoto[];
+  editUrl?: string;
 }) {
   return (
     <article className="panel timeline-entry">
@@ -291,7 +388,12 @@ export function ProgressBlock({
           </div>
         )}
       </dl>
-      <PhotoList photos={photos} />
+      <PhotoList photos={photos} cutDate={cutDate} />
+      {editUrl && (
+        <Link className="text-link" to={editUrl}>
+          경과 수정 <Icon name="arrow" size={17} />
+        </Link>
+      )}
     </article>
   );
 }
@@ -306,6 +408,9 @@ export function RecordDetail() {
     (value) => value.id === search.get('preview') && value.cut.id === id,
   );
   if (!cut) return <Missing />;
+  const recordedDesigner = state.designers.find(
+    (designer) => designer.id === cut.designerProfileId,
+  );
   const entries = state.progress
     .filter((entry) => entry.cutId === id)
     .sort((a, b) => a.observedOn.localeCompare(b.observedOn));
@@ -335,7 +440,11 @@ export function RecordDetail() {
       <div className="two-column">
         <section>
           <article className="panel record-hero">
-            <Cover photo={photos.find((photo) => !photo.progressId)} />
+            <Cover
+              photo={photos.find((photo) => !photo.progressId)}
+              expandable
+              cutDate={cut.cutDate}
+            />
             <div className="record-hero-content">
               <p className="eyebrow">{displayDate(cut.cutDate)}</p>
               <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
@@ -346,13 +455,21 @@ export function RecordDetail() {
                 {cut.designerName && <span>{cut.designerName} 디자이너</span>}
                 {cut.price !== undefined && <span>{cut.price.toLocaleString()}원</span>}
               </div>
-              <Link className="text-link" to={`/records/${cut.id}/progress/new`}>
-                경과 추가
-                <Icon name="plus" />
-              </Link>
+              <div className="record-edit-actions">
+                <Link className="text-link" to={`/records/${cut.id}/edit`}>
+                  기록 수정 <Icon name="arrow" size={17} />
+                </Link>
+                <Link className="text-link" to={`/records/${cut.id}/progress/new`}>
+                  경과 추가
+                  <Icon name="plus" />
+                </Link>
+              </div>
             </div>
           </article>
-          <PhotoList photos={photos.filter((photo) => !photo.progressId).slice(1)} />
+          <PhotoList
+            photos={photos.filter((photo) => !photo.progressId).slice(1)}
+            cutDate={cut.cutDate}
+          />
           <div className="section-heading">
             <h2>커트 이후의 변화</h2>
             <span className="count-label">경과 {entries.length}건</span>
@@ -361,6 +478,7 @@ export function RecordDetail() {
             {entries.map((entry) => (
               <ProgressBlock
                 key={entry.id}
+                editUrl={`/records/${cut.id}/progress/${entry.id}/edit`}
                 entry={entry}
                 cutDate={cut.cutDate}
                 photos={photos.filter((photo) => photo.progressId === entry.id)}
@@ -414,6 +532,23 @@ export function RecordDetail() {
               <Icon name="arrow" />
             </Link>
           </section>
+          {recordedDesigner && (
+            <section className="panel recorded-designer">
+              <p className="eyebrow">기록에 연결한 디자이너</p>
+              <h2>{recordedDesigner.name} 디자이너</h2>
+              <p className="muted">
+                현재 소속 ·{' '}
+                {recordedDesigner.affiliations.find((value) => value.current)?.salonName ??
+                  '등록 전'}
+              </p>
+              <Link
+                className="button full"
+                to={`/designers/${recordedDesigner.id}?record=${cut.id}`}
+              >
+                프로필 · 상담 준비 <Icon name="arrow" size={17} />
+              </Link>
+            </section>
+          )}
           {previews.length > 0 && (
             <section className="panel record-request-list">
               <h2>작성한 요청 자료</h2>
@@ -444,29 +579,42 @@ export function RecordDetail() {
 }
 
 export function ProgressForm() {
-  const { id = '' } = useParams();
+  const { id = '', progressId } = useParams();
   const { state } = usePrototype();
   const cut = state.cuts.find((value) => value.id === id);
-  const form = useProgressDraft(id);
-  if (!cut) return <Missing />;
-  return <ProgressFormBody cut={cut} {...form} />;
+  const fresh = useProgressDraft(id);
+  const original = state.progress.find((entry) => entry.id === progressId && entry.cutId === id);
+  const edit = useProgressEditDraft(original);
+  if (!cut || (progressId && !original)) return <Missing />;
+  return (
+    <ProgressFormBody
+      key={progressId ?? `new-${id}`}
+      cut={cut}
+      {...(progressId ? edit : fresh)}
+      editingId={progressId}
+    />
+  );
 }
 function ProgressFormBody({
   cut,
   draft,
   update,
   clear,
-}: { cut: CutRecord } & ReturnType<typeof useProgressDraft>) {
-  const { repository } = usePrototype();
+  editingId,
+}: { cut: CutRecord; editingId?: string } & ReturnType<typeof useProgressDraft>) {
+  const { repository, state } = usePrototype();
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [photosBusy, setPhotosBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (photosBusy) return;
     setErrors({});
     setBusy(true);
     try {
-      await repository.addProgress(cut.id, draft);
+      if (editingId) await repository.updateProgress(cut.id, editingId, draft);
+      else await repository.addProgress(cut.id, draft);
       clear();
       navigate(`/records/${cut.id}`);
     } catch (failure) {
@@ -490,7 +638,7 @@ function ProgressFormBody({
       </Link>
       <PageHeading
         eyebrow="AFTER THE CUT"
-        title="시간이 지난 뒤 남기기"
+        title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />
       <form className="panel" onSubmit={submit} noValidate>
@@ -545,20 +693,41 @@ function ProgressFormBody({
               placeholder="다음 커트에서 어떻게 요청하면 좋을까요?"
             />
           </Field>
-          <PhotoPicker photos={draft.photos} onChange={(photos) => update({ photos })} />
+          {editingId ? (
+            <PhotoList
+              photos={state.photos.filter((photo) => photo.progressId === editingId)}
+              cutDate={cut.cutDate}
+            />
+          ) : (
+            <PhotoPicker
+              photos={draft.photos}
+              onChange={(photos) => update({ photos })}
+              onBusyChange={setPhotosBusy}
+            />
+          )}
           {errors.photos && <Alert message={errors.photos} />}
         </div>
         <div className="form-actions">
-          <Link className="button" to={`/records/${cut.id}`}>
-            돌아가기
-          </Link>
-          <button disabled={busy} className="button coral" type="submit">
-            경과 저장
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              if (!editingId) draft.photos.forEach(repository.releasePhoto);
+              clear();
+              navigate(`/records/${cut.id}`);
+            }}
+          >
+            취소
+          </button>
+          <button disabled={busy || photosBusy} className="button coral" type="submit">
+            {editingId ? '수정 저장' : '경과 저장'}
             <Icon name="check" />
           </button>
         </div>
         <p className="form-note">
-          관찰 날짜는 내용을 확인한 날입니다. 이번 기록도 메모리에만 저장됩니다.
+          {editingId
+            ? '사진은 그대로 유지됩니다. 수정 내용은 이전 요청 미리보기에 반영되지 않습니다.'
+            : '관찰 날짜는 내용을 확인한 날입니다. 이번 기록도 메모리에만 저장됩니다.'}
         </p>
       </form>
     </div>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Link,
@@ -12,6 +12,7 @@ import { Icon, Missing } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 import { RequestList } from './request-pages';
+import { Dialog } from './dialog';
 import {
   DesignerDetail,
   DesignerList,
@@ -24,6 +25,7 @@ function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { reset } = usePrototype();
+  const [resetOpen, setResetOpen] = useState(false);
   useEffect(() => {
     window.scrollTo(0, 0);
     document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
@@ -55,24 +57,43 @@ function Layout() {
         <div>
           <span className="demo-badge">초기 화면 · 가상 데이터</span>
           <span>새로고침하면 작성한 내용이 초기화됩니다.</span>
-          <button
-            className="reset-button"
-            onClick={() => {
-              reset();
-              navigate('/');
-            }}
-          >
+          <button className="reset-button" onClick={() => setResetOpen(true)}>
             <Icon name="reset" size={14} />
             초기화
           </button>
         </div>
       </div>
+      <Dialog
+        open={resetOpen}
+        title="작성한 내용을 초기화할까요?"
+        onClose={() => setResetOpen(false)}
+      >
+        <p>추가한 기록·사진, 작성 중인 요청과 미리보기가 사라지고 예시 데이터로 돌아갑니다.</p>
+        <div className="dialog-actions">
+          <button type="button" className="button" onClick={() => setResetOpen(false)}>
+            계속 작성
+          </button>
+          <button
+            type="button"
+            className="button coral"
+            onClick={() => {
+              setResetOpen(false);
+              reset();
+              navigate('/');
+            }}
+          >
+            모두 초기화
+          </button>
+        </div>
+      </Dialog>
       <main id="main-content">
         <Routes>
           <Route path="/" element={<RecordList />} />
           <Route path="/records/new" element={<CutForm />} />
           <Route path="/records/:id" element={<RecordDetail />} />
+          <Route path="/records/:id/edit" element={<CutForm />} />
           <Route path="/records/:id/progress/new" element={<ProgressForm />} />
+          <Route path="/records/:id/progress/:progressId/edit" element={<ProgressForm />} />
           <Route path="/designers" element={<DesignerList />} />
           <Route path="/designers/:id" element={<DesignerDetail />} />
           <Route path="/consultations/materials" element={<MaterialsPage />} />

@@ -11,6 +11,7 @@ export function fixtures(): PrototypeState {
         goodNote: '앞머리 길이가 마음에 듦',
         salonName: '예시 헤어',
         designerName: '지우',
+        designerProfileId: 'designer-jiu',
         price: 25000,
       },
       {

@@ -610,6 +610,13 @@ export function RequestPage() {
   }, [draft, setRequestDraft]);
   const designer = state.designers.find((value) => value.id === draft?.designerId);
   const source = draft ? materialSource(state, draft) : null;
+  if (search.has('draft') && !draft)
+    return (
+      <Missing
+        title="작성 중인 요청을 찾을 수 없습니다"
+        message="새로고침이나 초기화 후에는 초안이 남지 않습니다. 내 기록에서 다시 준비해 주세요."
+      />
+    );
   if (!draft || !source || (draft.designerId && (!designer || !selectedCount(draft))))
     return (
       <Missing

@@ -18,6 +18,9 @@ try {
     await page.locator('img').evaluateAll(async (images) => {
       await Promise.all(images.map((image) => image.decode()));
     });
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
     await page.screenshot({ path: resolve(output, name), fullPage: true, animations: 'disabled' });
     console.log(`캡처: ${name}`);
   };
@@ -50,6 +53,31 @@ try {
   await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
   await page.getByRole('heading', { name: '상담 요청 미리보기', exact: true }).waitFor();
   await capture('preview-mobile.png');
+  await page.getByRole('link', { name: '원본 기록 보기', exact: true }).click();
+  await page.getByRole('heading', { name: '커트 기록 · 경과', exact: true }).waitFor();
+  await page.getByRole('button', { name: '커트 당일 · 예시 사진 확대', exact: true }).click();
+  await page.getByRole('dialog', { name: '사진 확대', exact: true }).waitFor();
+  await capture('photo-mobile.png');
+  await page.keyboard.press('Escape');
+  await page.getByRole('link', { name: '기록 수정', exact: true }).click();
+  await page.getByRole('heading', { name: '커트 기록 수정', exact: true }).waitFor();
+  await capture('edit-mobile.png');
+  await page.getByRole('button', { name: '취소', exact: true }).click();
+  await page.getByRole('button', { name: '이번 요청 정리', exact: true }).click();
+  await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const reference = page.getByRole('complementary', { name: '요청에 첨부할 자료', exact: true });
+  if ((await reference.locator('details').getAttribute('open')) === null)
+    await reference.locator('summary').click();
+  await reference.getByRole('button', { name: '이 질문을 요청에 추가', exact: true }).click();
+  await capture('request-desktop.png');
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }).waitFor();
+  await page.getByRole('link', { name: '요청 자료 목록', exact: true }).click();
+  await page.getByRole('heading', { name: '요청 자료', exact: true }).waitFor();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await capture('requests-mobile.png');
 } finally {
   await browser.close();
 }

@@ -11,7 +11,9 @@ import { createMemoryRepository, newCutDraft, newProgressDraft } from './memory-
 import type {
   RequestDraft,
   CutDraft,
+  CutRecord,
   ProgressDraft,
+  ProgressEntry,
   PrototypeRepository,
   PrototypeState,
 } from './types';
@@ -24,6 +26,10 @@ type PrototypeContextValue = {
   setCutDraft: Dispatch<SetStateAction<CutDraft>>;
   progressDrafts: Record<string, ProgressDraft>;
   setProgressDrafts: Dispatch<SetStateAction<Record<string, ProgressDraft>>>;
+  cutEdits: Record<string, CutDraft>;
+  setCutEdits: Dispatch<SetStateAction<Record<string, CutDraft>>>;
+  progressEdits: Record<string, ProgressDraft>;
+  setProgressEdits: Dispatch<SetStateAction<Record<string, ProgressDraft>>>;
   requestDraft: RequestDraft | null;
   requestDrafts: Record<string, RequestDraft>;
   setRequestDraft: Dispatch<SetStateAction<RequestDraft | null>>;
@@ -42,6 +48,8 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot);
   const [cutDraft, setCutDraft] = useState(newCutDraft);
   const [progressDrafts, setProgressDrafts] = useState<Record<string, ProgressDraft>>({});
+  const [cutEdits, setCutEdits] = useState<Record<string, CutDraft>>({});
+  const [progressEdits, setProgressEdits] = useState<Record<string, ProgressDraft>>({});
   const [requestDrafts, setRequestDrafts] = useState<RequestDraftState>({
     current: null,
     saved: {},
@@ -83,6 +91,8 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
     repository.reset();
     setCutDraft(newCutDraft());
     setProgressDrafts({});
+    setCutEdits({});
+    setProgressEdits({});
     setRequestDrafts({ current: null, saved: {}, targets: {} });
   };
   return (
@@ -94,6 +104,10 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         setCutDraft,
         progressDrafts,
         setProgressDrafts,
+        cutEdits,
+        setCutEdits,
+        progressEdits,
+        setProgressEdits,
         requestDraft,
         requestDrafts: requestDrafts.saved,
         setRequestDraft,
@@ -123,6 +137,48 @@ export function useProgressDraft(cutId: string) {
     setProgressDrafts((previous) => {
       const next = { ...previous };
       delete next[cutId];
+      return next;
+    });
+  return { draft, update, clear };
+}
+
+export function useCutEditDraft(cut?: CutRecord) {
+  const { cutEdits, setCutEdits } = usePrototype();
+  const key = cut?.id ?? '';
+  const initial: CutDraft = cut
+    ? { ...cut, areas: [...cut.areas], price: cut.price?.toString() ?? '', photos: [] }
+    : newCutDraft();
+  const draft = cutEdits[key] ?? initial;
+  const update = (input: Partial<CutDraft>) =>
+    setCutEdits((previous) => ({
+      ...previous,
+      [key]: { ...(previous[key] ?? initial), ...input },
+    }));
+  const clear = () =>
+    setCutEdits((previous) => {
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+  return { draft, update, clear };
+}
+
+export function useProgressEditDraft(entry?: ProgressEntry) {
+  const { progressEdits, setProgressEdits } = usePrototype();
+  const key = entry?.id ?? '';
+  const initial: ProgressDraft = entry
+    ? { ...entry, areas: [...entry.areas], photos: [] }
+    : newProgressDraft();
+  const draft = progressEdits[key] ?? initial;
+  const update = (input: Partial<ProgressDraft>) =>
+    setProgressEdits((previous) => ({
+      ...previous,
+      [key]: { ...(previous[key] ?? initial), ...input },
+    }));
+  const clear = () =>
+    setProgressEdits((previous) => {
+      const next = { ...previous };
+      delete next[key];
       return next;
     });
   return { draft, update, clear };

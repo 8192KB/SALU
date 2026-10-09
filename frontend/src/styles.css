@@ -1474,3 +1474,98 @@ legend {
     margin: -8px 0 20px;
   }
 }
+
+.record-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+}
+.photo-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  position: relative;
+  cursor: zoom-in;
+  background: var(--soft);
+  text-align: inherit;
+}
+.record-cover .photo-open {
+  height: 100%;
+}
+.photo-open-hint {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: #153a3be6;
+  color: white;
+  font-size: 11px;
+}
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+  color: var(--dark);
+  background: white;
+}
+.dialog::backdrop {
+  background: #153a3bb3;
+}
+.dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.dialog-heading h2 {
+  margin: 0;
+  font-size: 21px;
+}
+.dialog-close {
+  flex: none;
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: white;
+  color: var(--dark);
+  font-size: 28px;
+  cursor: pointer;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+.photo-dialog {
+  width: min(1000px, calc(100vw - 32px));
+}
+.photo-dialog .photo-original {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: calc(100dvh - 220px);
+  object-fit: contain;
+}
+.photo-dialog p {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .dialog {
+    padding: 18px;
+  }
+  .dialog-heading h2 {
+    font-size: 18px;
+  }
+}

@@ -4,9 +4,11 @@ import { AREAS, INTENTS } from './types';
 import { draftFromPreview, materialSource, selectedCount } from './request-flow';
 import type {
   RequestDraft,
+  CutRecord,
   CutDraft,
   PhotoDraft,
   ProgressDraft,
+  ProgressEntry,
   PrototypeRepository,
   PrototypeState,
 } from './types';
@@ -33,7 +35,7 @@ export function newProgressDraft(): ProgressDraft {
 }
 const id = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
 const checkAreas = (values: string[]) =>
-  values.length > 0 && values.every((value) => value in AREAS);
+  values.length > 0 && values.every((value) => Object.hasOwn(AREAS, value));
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 export function createMemoryRepository(): PrototypeRepository {
@@ -52,6 +54,54 @@ export function createMemoryRepository(): PrototypeRepository {
     if (photos.length > 6 || photos.some((photo) => !urls.has(photo.url)))
       throw new InputError({ photos: '사진을 다시 선택해 주세요.' });
   };
+  const cutValues = (input: Omit<CutDraft, 'photos'>, cutId?: string) => {
+    const fields: Record<string, string> = {};
+    if (!validDate(input.cutDate) || input.cutDate > today())
+      fields.cutDate = '오늘까지의 올바른 커트 날짜를 선택해 주세요.';
+    else if (
+      cutId &&
+      state.progress.some((entry) => entry.cutId === cutId && entry.observedOn < input.cutDate)
+    )
+      fields.cutDate = '이미 남긴 경과 날짜보다 늦은 커트 날짜로 바꿀 수 없습니다.';
+    if (!input.service.trim()) fields.service = '시술을 입력해 주세요.';
+    if (!checkAreas(input.areas)) fields.areas = '부위를 하나 이상 선택해 주세요.';
+    if (input.price && (!/^\d+$/.test(input.price) || !Number.isSafeInteger(Number(input.price))))
+      fields.price = '가격은 0 이상의 정수로 입력해 주세요.';
+    const designer = state.designers.find((value) => value.id === input.designerProfileId);
+    if (input.designerProfileId && !designer)
+      fields.designerProfileId = '연결할 디자이너 프로필을 다시 선택해 주세요.';
+    if (Object.keys(fields).length) throw new InputError(fields);
+    return {
+      cutDate: input.cutDate,
+      service: input.service.trim(),
+      areas: [...new Set(input.areas)],
+      goodNote: input.goodNote.trim(),
+      salonName: input.salonName.trim(),
+      designerName: designer?.name ?? input.designerName.trim(),
+      designerProfileId: designer?.id,
+      price: input.price ? Number(input.price) : undefined,
+    };
+  };
+  const progressValues = (cut: CutRecord, input: Omit<ProgressDraft, 'photos'>) => {
+    const fields: Record<string, string> = {};
+    if (
+      !validDate(input.observedOn) ||
+      input.observedOn < cut.cutDate ||
+      input.observedOn > today()
+    )
+      fields.observedOn = '커트 날짜부터 오늘 사이의 관찰 날짜를 선택해 주세요.';
+    if (!checkAreas(input.areas)) fields.areas = '관찰한 부위를 선택해 주세요.';
+    if (![input.discomfort, input.styling, input.question].some((value) => value.trim()))
+      fields.discomfort = '불편한 점, 손질, 질문 중 하나 이상 적어 주세요.';
+    if (Object.keys(fields).length) throw new InputError(fields);
+    return {
+      observedOn: input.observedOn,
+      areas: [...new Set(input.areas)],
+      discomfort: input.discomfort.trim(),
+      styling: input.styling.trim(),
+      question: input.question.trim(),
+    };
+  };
 
   return {
     getSnapshot: () => state,
@@ -63,54 +113,33 @@ export function createMemoryRepository(): PrototypeRepository {
     },
     async load() {},
     async createCut(input) {
-      const fields: Record<string, string> = {};
-      if (!validDate(input.cutDate) || input.cutDate > today())
-        fields.cutDate = '오늘까지의 올바른 커트 날짜를 선택해 주세요.';
-      if (!input.service.trim()) fields.service = '시술을 입력해 주세요.';
-      if (!checkAreas(input.areas)) fields.areas = '부위를 하나 이상 선택해 주세요.';
-      if (input.price && (!/^\d+$/.test(input.price) || !Number.isSafeInteger(Number(input.price))))
-        fields.price = '가격은 0 이상의 정수로 입력해 주세요.';
-      if (Object.keys(fields).length) throw new InputError(fields);
+      const values = cutValues(input);
       assertPhotos(input.photos);
-      const cut = {
-        id: id('cut'),
-        cutDate: input.cutDate,
-        service: input.service.trim(),
-        areas: [...new Set(input.areas)],
-        goodNote: input.goodNote.trim(),
-        salonName: input.salonName.trim(),
-        designerName: input.designerName.trim(),
-        price: input.price ? Number(input.price) : undefined,
-      };
+      const cut: CutRecord = { id: id('cut'), ...values };
       const photos = input.photos.map((photo) => ({ ...photo, cutId: cut.id, date: cut.cutDate }));
       publish({ ...state, cuts: [cut, ...state.cuts], photos: [...state.photos, ...photos] });
+      return cut;
+    },
+    async updateCut(cutId, input) {
+      if (!state.cuts.some((cut) => cut.id === cutId))
+        throw new InputError({ form: '커트 기록을 찾을 수 없습니다.' });
+      const cut: CutRecord = { id: cutId, ...cutValues(input, cutId) };
+      publish({
+        ...state,
+        cuts: state.cuts.map((value) => (value.id === cutId ? cut : value)),
+        photos: state.photos.map((photo) =>
+          photo.cutId === cutId && !photo.progressId ? { ...photo, date: cut.cutDate } : photo,
+        ),
+      });
       return cut;
     },
     async addProgress(cutId, input) {
       const cut = state.cuts.find((value) => value.id === cutId);
       if (!cut)
         throw new InputError({ form: '커트 기록이 없어졌습니다. 내 기록에서 다시 시작해 주세요.' });
-      const fields: Record<string, string> = {};
-      if (
-        !validDate(input.observedOn) ||
-        input.observedOn < cut.cutDate ||
-        input.observedOn > today()
-      )
-        fields.observedOn = '커트 날짜부터 오늘 사이의 관찰 날짜를 선택해 주세요.';
-      if (!checkAreas(input.areas)) fields.areas = '관찰한 부위를 선택해 주세요.';
-      if (![input.discomfort, input.styling, input.question].some((value) => value.trim()))
-        fields.discomfort = '불편한 점, 손질, 질문 중 하나 이상 적어 주세요.';
-      if (Object.keys(fields).length) throw new InputError(fields);
+      const values = progressValues(cut, input);
       assertPhotos(input.photos);
-      const entry = {
-        id: id('progress'),
-        cutId,
-        observedOn: input.observedOn,
-        areas: [...new Set(input.areas)],
-        discomfort: input.discomfort.trim(),
-        styling: input.styling.trim(),
-        question: input.question.trim(),
-      };
+      const entry: ProgressEntry = { id: id('progress'), cutId, ...values };
       const photos = input.photos.map((photo) => ({
         ...photo,
         cutId,
@@ -121,6 +150,25 @@ export function createMemoryRepository(): PrototypeRepository {
         ...state,
         progress: [...state.progress, entry],
         photos: [...state.photos, ...photos],
+      });
+      return entry;
+    },
+    async updateProgress(cutId, progressId, input) {
+      const cut = state.cuts.find((value) => value.id === cutId);
+      const original = state.progress.find(
+        (value) => value.id === progressId && value.cutId === cutId,
+      );
+      if (!cut || !original)
+        throw new InputError({ form: '이 커트의 경과 기록을 찾을 수 없습니다.' });
+      const entry: ProgressEntry = { id: progressId, cutId, ...progressValues(cut, input) };
+      publish({
+        ...state,
+        progress: state.progress.map((value) => (value.id === progressId ? entry : value)),
+        photos: state.photos.map((photo) =>
+          photo.cutId === cutId && photo.progressId === progressId
+            ? { ...photo, date: entry.observedOn }
+            : photo,
+        ),
       });
       return entry;
     },
@@ -149,7 +197,10 @@ export function createMemoryRepository(): PrototypeRepository {
       if (
         !draft.requests.length ||
         draft.requests.some(
-          (item) => !(item.area in AREAS) || !(item.intent in INTENTS) || !item.content.trim(),
+          (item) =>
+            !Object.hasOwn(AREAS, item.area) ||
+            !Object.hasOwn(INTENTS, item.intent) ||
+            !item.content.trim(),
         )
       )
         throw new InputError({ requests: '부위별 요청 내용을 모두 적어 주세요.' });

@@ -173,7 +173,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 | 대상 | 주요 필드·관계 | 제약 |
 |---|---|---|
 | `members` 추가 | 기존 id/email/hash/name/status + 후속 가입 처리 | 인증 주체는 세션 principal. client memberId/role 신뢰 금지 |
-| `cut_records` | id, owner_member_id, cut_date, service, good_note, optional salon/designer/price, timestamps | 날짜 오늘 이하, 가격 nonnegative, 삭제·변경 소유자 검사 |
+| `cut_records` | id, owner_member_id, cut_date, service, good_note, optional salon/designer/price, nullable recorded_designer_profile_id, timestamps | 날짜 오늘 이하, 가격 nonnegative, 삭제·변경 소유자 검사. 프로필 단계에서 연결 필드 추가 |
 | `cut_record_areas` | cut_id, area | cut+area unique, 정해진 부위 code |
 | `progress_entries` | id, cut_id, observed_on, discomfort, styling, question, timestamps | 커트일 이상·오늘 이하, 소유자는 cut에서 도출 |
 | `progress_areas` | progress_id, area | 중복 부위 방지 |
@@ -213,11 +213,12 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 | GET/POST `/api/records` | 페이지 목록 / cutDate·service·areas·goodNote·선택 정보 → 기록 DTO | owner는 principal, client owner 무시 |
 | GET/PATCH/DELETE `/api/records/{id}` | 상세+경과 / 변경 필드 / 삭제 | 매 요청 소유자 검사 |
 | POST `/api/records/{id}/progress` | observedOn·areas·discomfort·styling·question → 경과 DTO, 201 | 소유자·날짜·한 내용 이상 |
+| PATCH `/api/records/{id}/progress/{progressId}` | 관찰 날짜·부위·문장 수정 → 경과 DTO | cut 소유자·경과 소속·날짜 검사. 이전 선택본 불변 |
 | POST `/api/records/{id}/photos` | multipart file·caption·optional progressId → photo DTO, 201 | 소유자·크기·signature·경과 연결 |
 | GET/DELETE `/api/records/{id}/photos/{photoId}` | 인증 파일 전달 / 삭제 | 사진과 커트 연결·소유자 검사 |
 | GET `/api/designers`, GET `/api/designers/{id}` | 공개 프로필·현재 소속·상담 후기 | 비공개/탈퇴 프로필 제외, 민감 회원 정보 제외 |
 | POST/PATCH `/api/designers/me` | 소개·분야·소속 → 본인 프로필 | principal→프로필 연결, 본인만 변경 |
-| POST `/api/consultations` | designerId·cutId·선택 ID·부위별 요청·손질/질문 → 상담 DTO, 201 | 모든 source ID 소유권·같은 cut, 선택본 복사 |
+| POST `/api/consultations` | designerId + (preparedVersionId 또는 cutId·선택 ID·요청 문장) → 상담 DTO, 201 | 모든 source ID 소유권·같은 cut, 선택본 복사 |
 | GET `/api/consultations`, GET `/api/consultations/{id}` | 참여 상담 목록 / 선택 자료·요청·메시지 | 양쪽 참여자. designer role만으로 허용 금지 |
 | POST `/api/consultations/{id}/messages` | content·clientMessageId → 저장된 message DTO | 참여자·중복 전송 확인·저장 성공 후 알림 |
 | POST `/api/consultations/{id}/reviews` | content → 상담 후기, 201 | 고객 principal, 디자이너 답변 존재, 상담당 한 후기 |
@@ -238,6 +239,13 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 ```
 
 서버에서 memberId, source 원문, 공개용 URL을 받아 그대로 저장하지 않음. 선택 ID를 검사하고 해당 시점 내용으로 snapshot 생성. 오류는 기존 ApiError 계약 사용. 존재하지 않거나 본인 소유가 아닌 비공개 자원은 404로 응답하고 원본 존재 노출 제한.
+
+
+기록 수정 때 같은 커트의 경과보다 커트일이 늦어지지 않도록 검사. 경과 생성/수정과 커트 날짜 수정은 같은 부모 커트 row를 먼저 잠그고 순서 검사와 변경을 하나의 트랜잭션으로 수행할 계획. 동시 요청 사이의 날짜 역전도 서버 통합 검증 대상. 화면 검증을 서버 검증으로 대체하지 않음.
+
+담당 프로필 연결은 nullable ID로 직접 선택. 이름 검색 결과를 자동 연결하지 않고, 존재·공개 상태를 서버에서 확인. 기록 당시 매장명/담당자 표시와 현재 프로필 소속은 별개. 프로필 테이블을 구현하는 단계에 연결 migration 추가. 원본 날짜/메모/부위 수정은 이미 만든 준비 버전·상담 snapshot을 갱신하지 않음.
+
+후속 화면 순서: 로그인·가입/내 기록 실제 저장 → 프로필·상담 요청·답변 대기/추가 질문/이력 → 답변 받은 상담의 후기 작성 → 공개 선택본·검색. 서버 로딩·실패·재시도·빈 목록을 각 단계에서 구현. 가상 화면을 실제 전송/답변 상태로 자동 바꾸지 않음.
 
 ### 사진·snapshot·철회
 

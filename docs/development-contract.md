@@ -40,9 +40,9 @@ Salon의 `CLAUDE.md:47-48`, `docs/발표.md:575-591`, `docs/websocket.md:263`에
 
 `scripts/verify-backend.sh`는 별도 `salu_test`와 제한된 테스트 계정 사용. 회원 테이블 V1과 테스트 전용 V900만 적용. 테스트용 Controller·보안 허용 경로·Mapper·테이블은 src/test에만 배치하고 일반 jar·salu_dev에는 포함하지 않음.
 
-## 지금 실행해서 확인할 것과 다음 단계
+## 검증 범위와 다음 단계
 
-지금 필수: 서버·React 빌드, MySQL 연결, Flyway 최초/재실행, 기본 오류의 실제 HTTP 상태/JSON, 세션·CSRF, MyBatis 변경의 실제 커밋/롤백, DB 중단/복구와 브라우저 상태·재시도, 일반 jar에서 테스트 코드 제외 확인.
+기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 이번 초기 화면의 gate는 frontend 빌드·브라우저 E2E·API 요청 없음이며 backend/DB 재검증을 요구하지 않음. 기존 검증 결과는 docs/verification.md와 docs/login.md에 보관.
 
 현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 이번 초기 화면은 독립 메모리 구현. 이후 회원·기록 연결 → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
 
@@ -59,7 +59,6 @@ erDiagram
     CUT_RECORD ||--o{ RECORD_PHOTO : contains
     PROGRESS o|--o{ RECORD_PHOTO : attaches
     DESIGNER_PROFILE ||--o{ AFFILIATION_HISTORY : works_at
-    SALON ||--o{ AFFILIATION_HISTORY : records
     MEMBER ||--o{ CONSULTATION : customer
     DESIGNER_PROFILE ||--o{ CONSULTATION : designer
     CONSULTATION ||--o{ SELECTED_MATERIAL : contains
@@ -75,7 +74,7 @@ erDiagram
 |---|---|---|
 | 회원 | `members.id` | 이메일 trim·소문자 정규화 후 중복 검사, BCrypt hash 저장. 디자이너 권한은 프로필·검증 상태로 별도 판단 |
 | 디자이너 프로필 | 고유 디자이너 ID + unique member ID | 프로필·개인 후기·상담 대상의 ID 유지. 소속 변경으로 계정이나 개인 ID 재생성 금지 |
-| 소속 이력 | 디자이너 ID·매장 ID·시작/종료일 | 이전 소속 덮어쓰기 금지. 소속 인증과 기간 겹침 기준은 해당 기능 전에 결정 |
+| 소속 이력 | 디자이너 ID·매장명·시작/종료일 | 이전 소속 덮어쓰기 금지. 소속 인증과 기간 겹침 기준은 해당 기능 전에 결정 |
 | 커트 | 소유 member ID + 커트 날짜 | 한 커트에 날짜별 경과 0..N 연결. 경과는 독립 소유자를 받지 않고 커트에서 소유권 도출 |
 | 경과·사진 | 커트 ID, 사진의 선택적 경과 ID | 경과 사진의 커트 ID가 경과의 커트 ID와 같아야 함. 날짜 순서·사진 삭제 정책은 기록 단계에서 확정 |
 | 상담 | 고객 member ID·디자이너 ID | 양쪽 참여자만 조회/발송 가능. 고객이 소유한 자료 중 명시적으로 고른 항목만 첨부 |
@@ -169,7 +168,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 ### 후속 DB 초안
 
-실행 SQL이 아닌 논리 필드 계약. V1 수정 없이 단계마다 새 Flyway migration 작성. 공통 ID는 BIGINT, 공개 JSON에서는 문자열로 전달해 JavaScript 정수 범위 문제 방지. 날짜는 DATE/ISO 날짜, 생성·변경 시각은 UTC로 저장.
+실행 SQL이 아닌 논리 필드 계약. V1 수정 없이 단계마다 새 Flyway migration 작성. 공통 ID는 BIGINT, 신규 업무 JSON에서는 문자열로 전달해 JavaScript 정수 범위 문제 방지. 기존 auth 회원 ID의 숫자 응답은 유지하고 후속 HTTP adapter에서 문자열로 정규화. 날짜는 DATE/ISO 날짜, 오늘의 업무 기준은 Asia/Seoul. 생성·변경 시각은 UTC로 저장.
 
 | 대상 | 주요 필드·관계 | 제약 |
 |---|---|---|
@@ -192,7 +191,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 ### 화면 타입과 서버 요청
 
-초기 화면의 `RecordPhoto.url`은 로컬 파일/임시 blob 주소. 후속 서버는 사진 ID·서버 제공 접근 경로·caption·date만 반환. blob URL과 가상 ID는 서버 저장 데이터가 아님. `DesignerProfile`의 가상 후기는 서버 후기 응답으로 교체.
+초기 화면의 `RecordPhoto.url`은 로컬 파일/임시 blob 주소. 후속 서버는 사진 ID·서버 제공 접근 경로·caption·date만 반환. blob URL과 가상 ID는 서버 저장 데이터가 아님. `DesignerProfile`의 가상 후기는 서버 후기 응답으로 교체. 목업 사진 caption은 로컬 파일명이며 실제 전송 전에 사용자가 작성한 설명/서버 기본 설명으로 분리. HTTP adapter에서 로컬 파일명을 caption으로 자동 전송하지 않음.
 
 | 예정 경로 | 입력·응답 | 검사 |
 |---|---|---|
@@ -260,7 +259,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 - `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
 - 컨테이너는 후속 단계에 web(Nginx+React dist), backend(JRE17+jar), MySQL 구성. 개발도 같은 Docker Compose 경로를 마련하고 호스트별 MySQL 스크립트는 대체 경로로 정리
 - 배포 기본안: cwsn NAS, `salu.doyul.dev`, 기존 Nginx Proxy Manager 사용. 실제 확인한 proxy network `nginx-proxy-manager_default`에 SALU web만 연결. backend/DB는 SALU 전용 내부 network
-- GHCR 이미지에 commit SHA 태그. CI 이미지 생성과 실제 배포 분리, 첫 배포는 검토 후 수동. 같은 origin `/api` proxy, HTTPS cookie Secure, STOMP 연결 추가 때 Upgrade header 적용
+- GHCR 이미지에 commit SHA 태그. CI 이미지 생성과 실제 배포 분리, 첫 배포는 검토 후 수동. SPA 경로는 index.html로 fallback, 같은 origin `/api` proxy, HTTPS cookie Secure, STOMP 연결 추가 때 Upgrade header 적용
 - SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
 - 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
 

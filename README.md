@@ -38,7 +38,13 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-검증은 별도 개발 서버에서 실행. 기존 backend와 MySQL을 실행하지 않아도 진행 가능. 결과는 초기 화면 계획에 기록. 기존 로그인·DB 검증과 구분.
+검증은 별도 개발 서버에서 실행. 기존 backend와 MySQL을 실행하지 않아도 진행 가능. 결과는 초기 화면 계획에 기록. 기존 로그인·DB 검증과 구분. `npm run format:check`로 코드 포맷 확인.
+
+## 실제 화면 캡처
+
+[PC 기록 목록](docs/screenshots/records-desktop.png) · [모바일 커트·경과](docs/screenshots/record-mobile.png) · [PC 디자이너 프로필](docs/screenshots/designer-desktop.png) · [모바일 상담 미리보기](docs/screenshots/preview-mobile.png)
+
+개발 서버를 실행한 뒤 다른 터미널에서 `frontend`의 `npm run capture`로 재생성. 주소를 바꾸면 `SALU_CAPTURE_URL` 지정. 실제 동작 화면의 가상 자료 캡처이며 DB·전송 완료 증거는 아님.
 
 ## 저장소·작업 순서
 

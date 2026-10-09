@@ -10,7 +10,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "format": "prettier --write src tests scripts *.ts *.json",
+    "format:check": "prettier --check src tests scripts *.ts *.json",
+    "capture": "node scripts/capture-prototype.mjs"
   },
   "dependencies": {
     "react": "19.2.8",
@@ -23,6 +26,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "6.0.5",
+    "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vite": "8.2.1"
   }

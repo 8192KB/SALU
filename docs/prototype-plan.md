@@ -7,7 +7,7 @@
 | 구분 | 상태 |
 |---|---|
 | 기존 준비본 | `8bcace5`에 보관. Spring 로그인·세션·MySQL 기반 포함 |
-| 이번 작업 | 계획 문서와 초기 React 화면 구현 중 |
+| 이번 작업 | 계획 문서·초기 React 화면·PC/모바일 검증 완료 |
 | 실제 회원가입·기록 DB·사진 업로드·상담 전송 | 미구현. 후속 개발 계약에 설계 |
 | 디자이너 로그인·실시간 대화·후기 작성·커뮤니티 | 후속 단계 |
 
@@ -52,9 +52,9 @@ flowchart LR
 - 미용실·담당자·가격은 접힌 선택 정보. 가격은 0 이상의 정수 원 단위. 상담에 자동 첨부하지 않음
 - 관찰 날짜는 커트일 이상·오늘 이하. 경과 일수는 두 날짜 차이로 계산하고 `D+14`처럼 표시
 - 경과 부위와 관찰 내용 하나 이상 필수. 불편·손질·질문은 각각 입력하고 전부 빈 값이면 저장 차단
-- 부위: 앞머리·옆머리·윗머리·뒤·목선·머리끝·전체. 기록과 요청에서 같은 값 사용
+- 부위: 앞머리·옆머리·윗머리·뒤·목선(한 부위)·머리끝·전체. 기록과 요청에서 같은 값 사용
 - 관찰 날짜는 기록한 시점이며, 불편이 시작된 날로 자동 해석하지 않음
-- 사진은 JPEG·PNG·WebP, 장당 5 MiB 이하, 한 작성 화면에 최대 6장. 브라우저에서 실제 이미지 로딩 여부 확인
+- 사진은 JPEG·PNG·WebP, 장당 5 MiB 이하, 한 작성 화면에 최대 6장. 브라우저에서 실제 이미지 로딩 여부 확인. 업로드 파일명은 로컬 미리보기 설명에만 표시하고 후속 서버에서는 별도 사진 설명으로 분리
 - 잘못된 사진·날짜·입력은 해당 화면에서 설명. 입력 내용은 유지하고 수정 가능
 
 ### 상담 자료·요청 규칙
@@ -84,7 +84,7 @@ flowchart LR
 메모리 repository는 비동기 메서드와 구독 가능한 상태를 제공. 화면은 조회 상태와 명령을 사용하고, 후속 HTTP adapter는 같은 계약에 서버 응답 캐시·로딩·오류를 연결. 서버 ID를 포함한 DTO 대응은 개발 계약에서 정의. 메모리 ID는 서버에 그대로 업로드하지 않음.
 
 - 샘플 목록은 새로고침/초기화 때 복원. 기록·경과·미리보기와 작성 중인 초안은 메모리에만 존재
-- localStorage·sessionStorage·IndexedDB·쿠키에 목업 내용 저장 금지. 초기 화면에서 `/api`·WebSocket 호출 없음
+- localStorage·sessionStorage·IndexedDB·쿠키에 목업 내용 저장 금지. 초기 화면에서 `/api`·상담 WebSocket 호출 없음. Vite 개발 서버의 HMR 연결은 개발 도구
 - 사진은 `URL.createObjectURL`로 미리보기. 삭제·초기화·페이지 종료 시 URL 해제. 폼을 오가며 사용하는 동안에는 유지
 - 기록 삭제·수정, 디자이너 편집·후기 작성은 이번 범위 밖. 없는 ID와 초기화로 사라진 ID는 안내 화면 제공
 - 화면에 외부 이미지·폰트 요청 없음. 사진은 정적 파일, 디자이너 이미지는 이니셜 표시
@@ -119,7 +119,7 @@ flowchart LR
 
 발표 표현: “PPT의 예상 화면을 실제 입력·선택 가능한 초기 화면으로 구성했습니다. 이번에는 화면 흐름을 확인했고, 실제 저장과 디자이너 상담 연결은 다음 단계입니다.”
 
-최종 캡처는 실제 브라우저 결과에서 생성. 목업 사진을 구현 완료 증거로 사용하지 않음. 테스트 결과와 캡처 위치는 완료 후 이 문서에 기록.
+최종 캡처는 실제 브라우저 결과에서 생성. 목업 사진을 구현 완료 증거로 사용하지 않음. 검증 결과와 실제 캡처는 아래 구현 결과에 기록.
 
 ## 이미지·기술 출처
 
@@ -127,3 +127,18 @@ flowchart LR
 - 사진은 여러 기록의 레이아웃 예시에 재사용. 실제 전후 변화 비교 자료가 아님
 - [React Router Declarative 설치](https://reactrouter.com/start/declarative/installation): Vite와 BrowserRouter 사용. 설치 버전은 package-lock.json에 고정
 
+
+## 구현 결과 · 2026-10-10
+
+- PPT 기준 커트·경과 입력, 디자이너 프로필, 선택 자료, 부위별 요청, 미리보기 연결 완료
+- `npm ci`, `npm run build`, `npm run format:check` 통과
+- `npm run test:e2e`: desktop 8개 + mobile 8개, 총 16개 통과. skip 없음
+- 날짜·필수 항목, 초안 이동, 선택하지 않은 자료 제외, snapshot 유지, 초기화·새로고침, 사진 decode·개수·크기·URL 정리 확인
+- 매 테스트에서 브라우저 실행 오류·API/외부 HTTP 요청·localStorage/sessionStorage 사용 없음 확인
+- 첫 검증에서 발견한 입력 이름/오류 설명 혼합을 aria-labelledby·aria-describedby로 분리한 뒤 전체 재검증
+- backend·scripts·compose·기존 DB migration은 준비본 기준점과 동일. 이 결과는 backend/DB의 새로운 검증 결과가 아님
+- Git: 기준점 main + feature/prototype-flow. 준비본·계획·레이아웃·기록·상담·검증 순서, 원격 push 없음
+
+실제 화면: [기록 목록 PC](screenshots/records-desktop.png) · [커트·경과 모바일](screenshots/record-mobile.png) · [디자이너 PC](screenshots/designer-desktop.png) · [상담 미리보기 모바일](screenshots/preview-mobile.png). 재생성: 개발 서버 실행 후 `frontend`에서 `npm run capture`.
+
+후속 첫 작업: 계획의 회원·기록 연결 단계. 화면 피드백을 먼저 반영한 뒤 신규 migration·API·HTTP adapter·소유권 검증을 기능 단위로 연결. 가상 기록을 실제 계정의 기록으로 자동 이관하지 않음.

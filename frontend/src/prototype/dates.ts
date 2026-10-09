@@ -10,7 +10,9 @@ export function validDate(value: string) {
 export function daysAfter(start: string, end: string) {
   return Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000);
 }
-export function displayDate(value: string) { return value.replaceAll('-', '. '); }
+export function displayDate(value: string) {
+  return value.replaceAll('-', '. ');
+}
 export function cutTitle(date: string, service: string) {
   const [, month, day] = date.split('-');
   return `${Number(month)}월 ${Number(day)}일 ${service}`;

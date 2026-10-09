@@ -41,8 +41,10 @@ export type DesignerProfile = {
   reviewExamples: { id: Id; content: string; date: string }[];
 };
 export type RequestItem = { id: Id; area: Area; intent: Intent; content: string };
-export type ConsultationDraft = {
-  designerId: Id;
+export type RequestDraft = {
+  id: Id;
+  designerId?: Id;
+  referencePreviewId?: Id;
   cutId: Id;
   includeGoodNote: boolean;
   progressIds: Id[];
@@ -51,10 +53,10 @@ export type ConsultationDraft = {
   homeStyling: string;
   additionalQuestion: string;
 };
-export type ConsultationPreview = {
+export type RequestPreview = {
   id: Id;
   createdAt: string;
-  designer: { id: Id; name: string; salonName: string };
+  designer?: { id: Id; name: string; salonName: string };
   cut: { id: Id; cutDate: string; service: string; areas: Area[] };
   goodNote?: string;
   progress: ProgressEntry[];
@@ -62,14 +64,14 @@ export type ConsultationPreview = {
   requests: RequestItem[];
   homeStyling: string;
   additionalQuestion: string;
-  sourceDraft: ConsultationDraft;
+  sourceDraft: RequestDraft;
 };
 export type PrototypeState = {
   cuts: CutRecord[];
   progress: ProgressEntry[];
   photos: RecordPhoto[];
   designers: DesignerProfile[];
-  previews: ConsultationPreview[];
+  previews: RequestPreview[];
 };
 export type CutDraft = {
   cutDate: string;
@@ -95,7 +97,8 @@ export interface PrototypeRepository {
   load(): Promise<void>;
   createCut(input: CutDraft): Promise<CutRecord>;
   addProgress(cutId: Id, input: ProgressDraft): Promise<ProgressEntry>;
-  createPreview(draft: ConsultationDraft): Promise<ConsultationPreview>;
+  createPreview(draft: RequestDraft): Promise<RequestPreview>;
+  createPreviewForDesigner(previewId: Id, designerId: Id): Promise<RequestPreview>;
   preparePhotos(files: File[], existingCount: number): Promise<PhotoDraft[]>;
   releasePhoto(photo: PhotoDraft): void;
   reset(): void;

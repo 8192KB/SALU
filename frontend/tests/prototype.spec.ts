@@ -35,7 +35,12 @@ async function chooseDesigner(page: Page) {
   await page.getByRole('link', { name: '디자이너 선택', exact: true }).click();
   await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
   await expect(page.getByRole('heading', { name: '지우 디자이너', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await chooseMaterials(page);
+}
+async function chooseMaterials(page: Page) {
+  const existing = page.getByRole('link', { name: '기존 초안 이어쓰기', exact: true });
+  const fresh = page.getByRole('button', { name: '상담 자료 선택', exact: true });
+  await existing.or(fresh).click();
 }
 async function fillRequest(
   page: Page,
@@ -168,7 +173,7 @@ test('커트·디자이너별 초안 분리 보관, 재방문 복원과 초기�
 
   await page.getByRole('link', { name: '디자이너', exact: true }).click();
   await page.getByRole('link').filter({ hasText: '민서 디자이너' }).click();
-  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await chooseMaterials(page);
   await expect(
     page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
   ).not.toBeChecked();
@@ -178,7 +183,7 @@ test('커트·디자이너별 초안 분리 보관, 재방문 복원과 초기�
   await page.getByLabel('요청 내용 1', { exact: true }).fill('민서에게만 쓸 요청');
   await page.getByRole('link', { name: '디자이너', exact: true }).click();
   await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
-  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await chooseMaterials(page);
   await page.getByRole('button', { name: '요청 작성', exact: true }).click();
   await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
     '돌아와도 남아 있을 요청',
@@ -186,7 +191,7 @@ test('커트·디자이너별 초안 분리 보관, 재방문 복원과 초기�
   await page.getByRole('button', { name: '초기화', exact: true }).click();
   await page.getByRole('link', { name: '디자이너', exact: true }).click();
   await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
-  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await chooseMaterials(page);
   await expect(
     page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
   ).not.toBeChecked();
@@ -363,5 +368,182 @@ test('없는 경로와 빈 경과·사진을 안내하고 긴 내용도 화면�
   await chooseDesigner(page);
   await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
   await fillRequest(page, '아주긴요청내용'.repeat(150));
+  await withinViewport(page);
+});
+
+test('디자이너 없이 개인 요청 준비, 경과 질문 가져오기와 목록 재진입', async ({ page }) => {
+  await page.goto('/records/cut-september');
+  await page.getByRole('button', { name: '이번 요청 정리', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '다음 커트 준비', exact: true })).toBeVisible();
+  await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  const reference = page.getByRole('complementary', { name: '요청에 첨부할 자료', exact: true });
+  if ((await reference.locator('details').getAttribute('open')) === null)
+    await reference.locator('summary').click();
+  await reference.getByRole('button', { name: '이 질문을 요청에 추가', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '옆머리 아래는 짧게, 위는 길게 남기면 덜 뜰까요?',
+  );
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toBeFocused();
+  await expect(
+    reference.getByRole('button', { name: '이 질문을 요청에 추가', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByLabel('요청 내용 2', { exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  const previewPath = new URL(page.url()).pathname;
+  await expect(page.getByText('앞머리 길이가 마음에 듦', { exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.locator(`a[href="${previewPath}"]`).click();
+  await expect(
+    page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: '원본 기록 보기', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '작성한 요청 자료', exact: true })).toBeVisible();
+  const saved = page.getByRole('heading', { name: '작성한 요청 자료', exact: true }).locator('..');
+  await saved.locator(`a[href="${previewPath}"]`).click();
+  await expect(
+    page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  await withinViewport(page);
+});
+
+test('첨부 없는 개인 준비에서 상담 자료 추가, 요청 문장 유지', async ({ page }) => {
+  await page.goto('/records/cut-august');
+  await page.getByRole('button', { name: '이번 요청 정리', exact: true }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page
+    .getByLabel('요청 내용 1', { exact: true })
+    .fill('아직 디자이너를 정하지 않은 개인 준비');
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('전체적으로 가벼운 느낌이에요', { exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: '디자이너 선택하기', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
+  await page.getByRole('button', { name: '자료를 추가해서 상담 준비', exact: true }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('상담에 사용할 자료를 하나 이상 선택해 주세요.');
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '아직 디자이너를 정하지 않은 개인 준비',
+  );
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '상담 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  await withinViewport(page);
+});
+
+test('개인 준비를 디자이너용으로 복사해도 기존 초안과 개인 준비본 보존', async ({ page }) => {
+  await page.goto('/consultations/materials?designer=designer-jiu&record=cut-september');
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('디자이너별 기존 초안');
+  await page.getByRole('link', { name: '내 기록', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '9월 1일 커트' }).click();
+  await page.getByRole('button', { name: '새 요청 준비', exact: true }).click();
+  await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
+  await page.getByRole('checkbox', { name: '사진 1 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('개인 준비에서 가져갈 새 요청');
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  const personalPath = new URL(page.url()).pathname;
+  await page.getByRole('link', { name: '디자이너 선택하기', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
+  await expect(page.getByRole('link', { name: '기존 초안 이어쓰기', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '이 자료로 상담 준비', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: '상담 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  expect(new URL(page.url()).pathname).not.toBe(personalPath);
+  await expect(page.getByText('개인 준비에서 가져갈 새 요청', { exact: true })).toBeVisible();
+  await expect(page.getByText('앞머리 길이가 마음에 듦', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('커트 당일 · 2026. 09. 01', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.locator(`a[href="${personalPath}"]`).click();
+  await expect(
+    page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '디자이너별 기존 초안' }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue('디자이너별 기존 초안');
+  await withinViewport(page);
+});
+
+test('같은 디자이너·커트의 새 준비와 이전 초안을 각각 다시 열기', async ({ page }) => {
+  await page.goto('/consultations/materials?designer=designer-jiu&record=cut-september');
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('같은 대상의 첫 번째 초안');
+  await page.getByRole('link', { name: '디자이너', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
+  await page.getByRole('button', { name: '새 준비 만들기', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('checkbox', { name: '커트 당일 메모 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('같은 대상의 두 번째 초안');
+  const secondPath = new URL(page.url()).pathname + new URL(page.url()).search;
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '같은 대상의 첫 번째 초안' }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '같은 대상의 첫 번째 초안',
+  );
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.getByRole('link').filter({ hasText: '같은 대상의 두 번째 초안' }).click();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '같은 대상의 두 번째 초안',
+  );
+  await page.reload();
+  await expect(
+    page.getByRole('heading', { name: '먼저 요청에 사용할 기록을 선택해 주세요', exact: true }),
+  ).toBeVisible();
+  expect(new URL(page.url()).pathname + new URL(page.url()).search).toBe(secondPath);
+});
+
+test('수정은 확정 시점 자료를 유지하고 최신 기록 선택은 명시적으로 전환', async ({ page }) => {
+  await page.goto('/records/cut-september');
+  await page.getByRole('button', { name: '이번 요청 정리', exact: true }).click();
+  await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await page.getByLabel('요청 내용 1', { exact: true }).fill('원본을 다시 봐도 유지할 개인 준비');
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  const oldPath = new URL(page.url()).pathname;
+  await page.getByRole('link', { name: '원본 기록 보기', exact: true }).click();
+  await page.getByRole('link', { name: '경과 추가', exact: true }).click();
+  await page.getByLabel('관찰 날짜', { exact: true }).fill('2026-10-01');
+  await page.getByRole('checkbox', { name: '옆머리', exact: true }).check();
+  await page.getByLabel('불편한 점').fill('미리보기 이후 새로 적은 관찰');
+  await page.getByRole('button', { name: '경과 저장', exact: true }).click();
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.locator(`a[href="${oldPath}"]`).click();
+  await page.getByRole('button', { name: '내용 수정', exact: true }).click();
+  await page.getByRole('link', { name: '자료 다시 고르기', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', { name: '경과 2026-10-01 선택', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: '최신 기록에서 다시 고르기', exact: true }).click();
+  await expect(
+    page.getByRole('checkbox', { name: '경과 2026-10-01 선택', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('checkbox', { name: '경과 2026-10-01 선택', exact: true }).check();
+  await page.getByRole('button', { name: '요청 작성', exact: true }).click();
+  await expect(page.getByLabel('요청 내용 1', { exact: true })).toHaveValue(
+    '원본을 다시 봐도 유지할 개인 준비',
+  );
+  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await expect(page.getByText('미리보기 이후 새로 적은 관찰', { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: '요청 자료', exact: true }).click();
+  await page.locator(`a[href="${oldPath}"]`).click();
+  await expect(page.getByText('미리보기 이후 새로 적은 관찰', { exact: true })).toHaveCount(0);
   await withinViewport(page);
 });

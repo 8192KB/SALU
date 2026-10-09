@@ -11,6 +11,7 @@ import {
 import { Icon, Missing } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
+import { RequestList } from './request-pages';
 import {
   DesignerDetail,
   DesignerList,
@@ -41,6 +42,10 @@ function Layout() {
             <NavLink to="/designers">
               <Icon name="user" />
               디자이너
+            </NavLink>
+            <NavLink to="/requests">
+              <Icon name="chat" />
+              요청 자료
             </NavLink>
           </nav>
           <span className="member-label">나의 헤어 기록</span>
@@ -73,6 +78,10 @@ function Layout() {
           <Route path="/consultations/materials" element={<MaterialsPage />} />
           <Route path="/consultations/request" element={<RequestPage />} />
           <Route path="/consultations/previews/:id" element={<PreviewPage />} />
+          <Route path="/requests" element={<RequestList />} />
+          <Route path="/requests/materials" element={<MaterialsPage />} />
+          <Route path="/requests/write" element={<RequestPage />} />
+          <Route path="/requests/previews/:id" element={<PreviewPage />} />
           <Route
             path="*"
             element={

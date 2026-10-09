@@ -4,6 +4,8 @@ import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
 import { Icon } from './components';
 import { usePrototype } from './prototype/context';
+import { photoOrigin } from './prototype/request-flow';
+import { displayDate } from './prototype/dates';
 
 export function Field({
   label,
@@ -84,9 +86,11 @@ export function AreaChoices({
 export function PhotoList({
   photos,
   onRemove,
+  cutDate,
 }: {
   photos: (PhotoDraft | RecordPhoto)[];
   onRemove?: (photo: PhotoDraft) => void;
+  cutDate?: string;
 }) {
   if (!photos.length) return null;
   return (
@@ -94,7 +98,14 @@ export function PhotoList({
       {photos.map((photo) => (
         <figure key={photo.id}>
           <img src={photo.url} alt={photo.caption} />
-          <figcaption>{photo.caption}</figcaption>
+          <figcaption>
+            {cutDate && 'date' in photo && (
+              <strong className="photo-moment">
+                {photoOrigin(photo, cutDate)} · {displayDate(photo.date)}
+              </strong>
+            )}
+            {photo.caption}
+          </figcaption>
           {onRemove && (
             <button
               className="photo-remove"

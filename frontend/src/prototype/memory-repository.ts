@@ -1,8 +1,9 @@
 import { fixtures } from './fixtures';
 import { today, validDate } from './dates';
 import { AREAS, INTENTS } from './types';
+import { draftFromPreview, materialSource, selectedCount } from './request-flow';
 import type {
-  ConsultationDraft,
+  RequestDraft,
   CutDraft,
   PhotoDraft,
   ProgressDraft,
@@ -123,16 +124,17 @@ export function createMemoryRepository(): PrototypeRepository {
       });
       return entry;
     },
-    async createPreview(draft: ConsultationDraft) {
-      const cut = state.cuts.find((value) => value.id === draft.cutId);
+    async createPreview(draft: RequestDraft) {
+      const source = materialSource(state, draft);
       const designer = state.designers.find((value) => value.id === draft.designerId);
-      if (!cut || !designer)
+      if (!source || (draft.designerId && !designer))
         throw new InputError({ form: '기록과 디자이너를 다시 선택해 주세요.' });
+      const cut = source.cut;
       const progress = draft.progressIds.map((value) =>
-        state.progress.find((entry) => entry.id === value && entry.cutId === cut.id),
+        source.progress.find((entry) => entry.id === value && entry.cutId === cut.id),
       );
       const photos = draft.photoIds.map((value) =>
-        state.photos.find((photo) => photo.id === value && photo.cutId === cut.id),
+        source.photos.find((photo) => photo.id === value && photo.cutId === cut.id),
       );
       if (
         progress.some((value) => !value) ||
@@ -142,7 +144,7 @@ export function createMemoryRepository(): PrototypeRepository {
         throw new InputError({
           materials: '선택한 자료를 찾을 수 없습니다. 자료를 다시 확인해 주세요.',
         });
-      if (!draft.includeGoodNote && !progress.length && !photos.length)
+      if (designer && !draft.includeGoodNote && !progress.length && !photos.length)
         throw new InputError({ materials: '상담에 사용할 자료를 하나 이상 선택해 주세요.' });
       if (
         !draft.requests.length ||
@@ -154,11 +156,13 @@ export function createMemoryRepository(): PrototypeRepository {
       const preview = structuredClone({
         id: id('preview'),
         createdAt: new Date().toISOString(),
-        designer: {
-          id: designer.id,
-          name: designer.name,
-          salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
-        },
+        designer: designer
+          ? {
+              id: designer.id,
+              name: designer.name,
+              salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
+            }
+          : undefined,
         cut: { id: cut.id, cutDate: cut.cutDate, service: cut.service, areas: cut.areas },
         goodNote: draft.includeGoodNote ? cut.goodNote : undefined,
         progress: progress.filter((value) => value !== undefined),
@@ -167,6 +171,27 @@ export function createMemoryRepository(): PrototypeRepository {
         homeStyling: draft.homeStyling.trim(),
         additionalQuestion: draft.additionalQuestion.trim(),
         sourceDraft: draft,
+      });
+      publish({ ...state, previews: [...state.previews, preview] });
+      return preview;
+    },
+    async createPreviewForDesigner(previewId, designerId) {
+      const source = state.previews.find((value) => value.id === previewId);
+      const designer = state.designers.find((value) => value.id === designerId);
+      if (!source || !designer)
+        throw new InputError({ form: '요청 자료와 디자이너를 다시 선택해 주세요.' });
+      if (!selectedCount(source.sourceDraft))
+        throw new InputError({ materials: '상담에 사용할 자료를 하나 이상 선택해 주세요.' });
+      const preview = structuredClone({
+        ...source,
+        id: id('preview'),
+        createdAt: new Date().toISOString(),
+        designer: {
+          id: designer.id,
+          name: designer.name,
+          salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
+        },
+        sourceDraft: draftFromPreview(source, designer.id),
       });
       publish({ ...state, previews: [...state.previews, preview] });
       return preview;

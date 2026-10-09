@@ -8,6 +8,12 @@ import { AREAS } from './prototype/types';
 import type { Area, CutRecord, RecordPhoto, ProgressEntry } from './prototype/types';
 import { cutTitle, daysAfter, displayDate, today } from './prototype/dates';
 import { InputError, newCutDraft } from './prototype/memory-repository';
+import {
+  materialUrl,
+  newRequestDraft,
+  previewUrl,
+  unfinishedDrafts,
+} from './prototype/request-flow';
 
 export function AreaChips({ areas }: { areas: Area[] }) {
   return (
@@ -293,7 +299,8 @@ export function ProgressBlock({
 export function RecordDetail() {
   const { id } = useParams();
   const [search] = useSearchParams();
-  const { state } = usePrototype();
+  const { state, requestDrafts, setRequestDraft } = usePrototype();
+  const navigate = useNavigate();
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
     (value) => value.id === search.get('preview') && value.cut.id === id,
@@ -303,13 +310,20 @@ export function RecordDetail() {
     .filter((entry) => entry.cutId === id)
     .sort((a, b) => a.observedOn.localeCompare(b.observedOn));
   const photos = state.photos.filter((photo) => photo.cutId === id);
+  const drafts = unfinishedDrafts(state, requestDrafts).filter((draft) => draft.cutId === id);
+  const previews = state.previews.filter((value) => value.cut.id === id).reverse();
+  const startPersonalRequest = () => {
+    const draft = newRequestDraft(cut.id);
+    setRequestDraft(draft);
+    navigate(materialUrl(draft));
+  };
   return (
     <>
       <Link className="back-link" to="/">
         ← 내 기록
       </Link>
       {preview && (
-        <Link className="preview-return-link" to={`/consultations/previews/${preview.id}`}>
+        <Link className="preview-return-link" to={previewUrl(preview)}>
           상담 미리보기로 돌아가기 <Icon name="arrow" size={17} />
         </Link>
       )}
@@ -368,13 +382,55 @@ export function RecordDetail() {
         <aside className="sidebar">
           <section className="panel">
             <Icon name="chat" size={25} />
-            <h2 style={{ marginTop: 13 }}>이 기록으로 상담하기</h2>
-            <p className="muted">디자이너를 고르고, 필요한 사진과 경과만 선택하세요.</p>
-            <Link className="button primary full" to={`/designers?record=${cut.id}`}>
+            <h2 style={{ marginTop: 13 }}>다음 커트 준비</h2>
+            <p className="muted">
+              기록을 보고 이번에 요청할 내용을 정리하세요. 디자이너는 나중에 선택해도 됩니다.
+            </p>
+            {drafts.length ? (
+              <>
+                <Link className="button primary full" to={materialUrl(drafts[0])}>
+                  작성 중인 요청 이어쓰기 <Icon name="arrow" />
+                </Link>
+                <button
+                  className="text-link"
+                  type="button"
+                  style={{ marginTop: 16 }}
+                  onClick={startPersonalRequest}
+                >
+                  새 요청 준비 <Icon name="plus" size={17} />
+                </button>
+              </>
+            ) : (
+              <button className="button primary full" onClick={startPersonalRequest}>
+                이번 요청 정리 <Icon name="arrow" />
+              </button>
+            )}
+            <Link
+              className="button full"
+              style={{ marginTop: 16 }}
+              to={`/designers?record=${cut.id}`}
+            >
               디자이너 선택
               <Icon name="arrow" />
             </Link>
           </section>
+          {previews.length > 0 && (
+            <section className="panel record-request-list">
+              <h2>작성한 요청 자료</h2>
+              {previews.slice(0, 3).map((value) => (
+                <Link className="record-request-link" key={value.id} to={previewUrl(value)}>
+                  <span>{value.designer ? `${value.designer.name} · 전송 전` : '개인 준비본'}</span>
+                  <strong>{value.requests[0]?.content}</strong>
+                  <span>
+                    미리보기 <span aria-hidden="true">↗</span>
+                  </span>
+                </Link>
+              ))}
+              <Link className="text-link" to="/requests">
+                요청 자료 전체 보기 <Icon name="arrow" size={17} />
+              </Link>
+            </section>
+          )}
           <section className="panel">
             <h3>관찰한 날짜의 기록</h3>
             <p className="muted">

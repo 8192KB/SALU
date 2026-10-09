@@ -9,12 +9,13 @@ import {
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import { createMemoryRepository, newCutDraft, newProgressDraft } from './memory-repository';
 import type {
-  ConsultationDraft,
+  RequestDraft,
   CutDraft,
   ProgressDraft,
   PrototypeRepository,
   PrototypeState,
 } from './types';
+import { requestTarget } from './request-flow';
 
 type PrototypeContextValue = {
   repository: PrototypeRepository;
@@ -23,46 +24,55 @@ type PrototypeContextValue = {
   setCutDraft: Dispatch<SetStateAction<CutDraft>>;
   progressDrafts: Record<string, ProgressDraft>;
   setProgressDrafts: Dispatch<SetStateAction<Record<string, ProgressDraft>>>;
-  consultationDraft: ConsultationDraft | null;
-  setConsultationDraft: Dispatch<SetStateAction<ConsultationDraft | null>>;
-  resumeConsultationDraft: (initial: ConsultationDraft) => void;
+  requestDraft: RequestDraft | null;
+  requestDrafts: Record<string, RequestDraft>;
+  setRequestDraft: Dispatch<SetStateAction<RequestDraft | null>>;
+  resumeRequestDraft: (initial: RequestDraft) => void;
   reset: () => void;
 };
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
-type ConsultationDraftState = {
-  current: ConsultationDraft | null;
-  saved: Record<string, ConsultationDraft>;
+type RequestDraftState = {
+  current: RequestDraft | null;
+  saved: Record<string, RequestDraft>;
+  targets: Record<string, string>;
 };
-const draftKey = (draft: ConsultationDraft) => JSON.stringify([draft.designerId, draft.cutId]);
 
 export function PrototypeProvider({ children }: { children: ReactNode }) {
   const [repository] = useState(createMemoryRepository);
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot);
   const [cutDraft, setCutDraft] = useState(newCutDraft);
   const [progressDrafts, setProgressDrafts] = useState<Record<string, ProgressDraft>>({});
-  const [consultationDrafts, setConsultationDrafts] = useState<ConsultationDraftState>({
+  const [requestDrafts, setRequestDrafts] = useState<RequestDraftState>({
     current: null,
     saved: {},
+    targets: {},
   });
-  const consultationDraft = consultationDrafts.current;
-  const setConsultationDraft = useCallback<Dispatch<SetStateAction<ConsultationDraft | null>>>(
+  const requestDraft = requestDrafts.current;
+  const setRequestDraft = useCallback<Dispatch<SetStateAction<RequestDraft | null>>>(
     (action) =>
-      setConsultationDrafts((previous) => {
+      setRequestDrafts((previous) => {
         const next = typeof action === 'function' ? action(previous.current) : action;
         if (next === previous.current) return previous;
         return {
           current: next,
-          saved: next ? { ...previous.saved, [draftKey(next)]: next } : previous.saved,
+          saved: next ? { ...previous.saved, [next.id]: next } : previous.saved,
+          targets: next
+            ? { ...previous.targets, [requestTarget(next)]: next.id }
+            : previous.targets,
         };
       }),
     [],
   );
-  const resumeConsultationDraft = useCallback((initial: ConsultationDraft) => {
-    setConsultationDrafts((previous) => {
-      const key = draftKey(initial);
-      const next = previous.saved[key] ?? initial;
+  const resumeRequestDraft = useCallback((initial: RequestDraft) => {
+    setRequestDrafts((previous) => {
+      const key = requestTarget(initial);
+      const next = previous.saved[previous.targets[key]] ?? initial;
       if (previous.current === next) return previous;
-      return { current: next, saved: { ...previous.saved, [key]: next } };
+      return {
+        current: next,
+        saved: { ...previous.saved, [next.id]: next },
+        targets: { ...previous.targets, [key]: next.id },
+      };
     });
   }, []);
   useEffect(() => {
@@ -73,7 +83,7 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
     repository.reset();
     setCutDraft(newCutDraft());
     setProgressDrafts({});
-    setConsultationDrafts({ current: null, saved: {} });
+    setRequestDrafts({ current: null, saved: {}, targets: {} });
   };
   return (
     <PrototypeContext.Provider
@@ -84,9 +94,10 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         setCutDraft,
         progressDrafts,
         setProgressDrafts,
-        consultationDraft,
-        setConsultationDraft,
-        resumeConsultationDraft,
+        requestDraft,
+        requestDrafts: requestDrafts.saved,
+        setRequestDraft,
+        resumeRequestDraft,
         reset,
       }}
     >

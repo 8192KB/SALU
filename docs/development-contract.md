@@ -1,6 +1,6 @@
 # SALU 개발 기준
 
-현재 작업: PPT 기준 초기 React 화면과 후속 개발 계획. 초기 화면은 메모리 가상 데이터만 사용하며 서버에 요청하지 않음. 기존 로컬 로그인·세션·MySQL 기반은 별도 구현. 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
+현재 작업: PPT 기준 초기 React 화면과 후속 개발 계획. 초기 화면은 메모리 가상 데이터만 사용하며 서버에 요청하지 않음. 기존 로컬 로그인·세션·MySQL 기반은 별도 구현. 개인 준비·선택 자료·전송 전 미리보기의 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
 
 ## 기술과 코드 구조
 
@@ -188,6 +188,20 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 | 공개 게시글·댓글 | owner, 공개 선택 snapshot, 공개 상태, timestamps | 상담 내용 자동 공개 금지. 원본 private 파일 URL 재사용 금지 |
 
 사진의 cut_id/progress_id 일치는 Service 검사와 복합 FK 가능한 구조로 확인. 디자이너가 일반 개인 기록도 남길 수 있으므로 회원을 고객/디자이너 배타적 종류로 나누지 않음.
+
+### 개인 준비본의 후속 저장
+
+초기 화면에서 디자이너 없이 준비 가능하도록 흐름 확장. 실제 `consultations.designer_id`는 필수 유지하고 개인 준비를 상담 row로 저장하지 않음. 아래는 서버 연결 단계의 제안이며 현재 테이블·API 없음.
+
+| 대상 | 제안 | 기준 |
+|---|---|---|
+| `request_preparations` | owner_member_id, source_cut_id, optional target_designer_id, form_json, revision, timestamps | 소유자만 초안 조회·변경. 선택 원본 ID·요청 문장 저장, client owner 무시 |
+| `prepared_request_versions` | preparation_id, snapshot_json, created_at | 생성 시 원본 소유권·선택 범위 검사. 버전 불변, 개인 사진은 owner만 접근 |
+| 상담 전환 | 준비 버전과 designerId를 명시적으로 선택하여 새 상담 생성 | 원본 준비와 이전 상담 유지. 상담 참여자에게 허용한 내용만 복사 |
+
+제안 경로: GET/POST `/api/preparations`, GET/PATCH `/api/preparations/{id}`, POST `/api/preparations/{id}/versions`. 소유권·CSRF 적용. 변경 충돌은 revision으로 검사하고 구버전을 덮어쓰지 않음. 실제 전송은 POST `/api/consultations`에 명시적 designerId와 preparedVersionId를 전달하는 경로로 연결할 계획. 서버는 버전의 소유권을 확인하고 보관된 선택본을 상담 전용 사본으로 복사. 현재 원본을 자동 재조회하거나 client snapshot을 그대로 신뢰하지 않음. 기존 원본 ID·선택 자료 방식과 버전 방식은 요청에서 동시 사용하지 않음. 전송 없는 프로필 선택만으로 상담을 생성하지 않음.
+
+개인 준비는 첨부 없이 요청 문장부터 작성 가능. 실제 상담으로 전환할 때 designerId·선택 자료·원본 소유권을 검사. 프론트의 UUID 초안 ID·referencePreviewId·blob URL을 서버 ID/파일 key로 그대로 저장하지 않음.
 
 ### 화면 타입과 서버 요청
 

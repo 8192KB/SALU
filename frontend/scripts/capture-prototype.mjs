@@ -33,7 +33,7 @@ try {
   await capture('record-mobile.png');
   await page.getByRole('link', { name: '디자이너 선택', exact: true }).click();
   await page.getByRole('link').filter({ hasText: '지우 디자이너' }).click();
-  await page.getByRole('link', { name: '상담 자료 선택', exact: true }).click();
+  await page.getByRole('button', { name: '상담 자료 선택', exact: true }).click();
   await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
   await page.getByRole('checkbox', { name: '사진 1 선택', exact: true }).check();
   await page.getByRole('button', { name: '요청 작성', exact: true }).click();

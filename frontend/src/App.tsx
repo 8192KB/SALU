@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router';
-import { Icon, Missing, PageHeading } from './components';
+import { Icon, Missing } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
+import { DesignerDetail, DesignerList, MaterialsPage, PreviewPage, RequestPage } from './consultation-pages';
 
 function Layout() {
   const location = useLocation();
@@ -21,19 +22,15 @@ function Layout() {
       <Route path="/records/new" element={<CutForm/>}/>
       <Route path="/records/:id" element={<RecordDetail/>}/>
       <Route path="/records/:id/progress/new" element={<ProgressForm/>}/>
-      <Route path="/designers" element={<Placeholder title="디자이너 찾기"/>}/>
-      <Route path="/designers/:id" element={<Placeholder title="디자이너 프로필"/>}/>
-      <Route path="/consultations/materials" element={<Placeholder title="상담 자료 선택"/>}/>
-      <Route path="/consultations/request" element={<Placeholder title="이번 요청 정리"/>}/>
-      <Route path="/consultations/previews/:id" element={<Placeholder title="상담 요청 미리보기"/>}/>
+      <Route path="/designers" element={<DesignerList/>}/>
+      <Route path="/designers/:id" element={<DesignerDetail/>}/>
+      <Route path="/consultations/materials" element={<MaterialsPage/>}/>
+      <Route path="/consultations/request" element={<RequestPage/>}/>
+      <Route path="/consultations/previews/:id" element={<PreviewPage/>}/>
       <Route path="*" element={<Missing title="페이지를 찾을 수 없습니다" message="내 기록에서 다시 시작해 주세요."/>}/>
     </Routes></main>
     <footer className="app-footer"><span className="brand">salu<span>.</span></span><span>나의 기록에서 시작하는 상담</span><span>초기 화면</span></footer>
   </div>;
-}
-
-function Placeholder({ title, description }: { title: string; description?: string }) {
-  return <><PageHeading eyebrow="MY HAIR JOURNAL" title={title} description={description}/><section className="panel empty-state"><p>화면 구성 중</p><Link className="button primary" to="/records/new">커트 기록 작성<Icon name="plus"/></Link></section></>;
 }
 
 export default function App() { return <BrowserRouter><PrototypeProvider><Layout/></PrototypeProvider></BrowserRouter>; }

@@ -1,0 +1,17 @@
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, '..', 'SALU_');
+  const port = process.env.SALU_SERVER_PORT ?? env.SALU_SERVER_PORT ?? '8081';
+  return {
+    plugins: [react()],
+    server: {
+      host: '127.0.0.1',
+      port: Number(process.env.SALU_FRONTEND_PORT ?? env.SALU_FRONTEND_PORT ?? '5174'),
+      strictPort: true,
+      proxy: { '/api': { target: `http://127.0.0.1:${port}` } },
+    },
+    preview: { host: '127.0.0.1', port: 5174, strictPort: true },
+  };
+});

@@ -7,6 +7,112 @@
   --muted: #70817e;
   --line: #e3ebe8;
   --soft: #eef5f3;
+  --motion-fast: 120ms;
+  --motion-enter: 180ms;
+  --motion-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.route-content {
+  animation: content-arrive var(--motion-enter) ease-out;
+}
+.button,
+.photo-picker-button,
+.journal-entry,
+.app-header nav a,
+.choice-pills span {
+  transition:
+    transform var(--motion-fast) var(--motion-ease),
+    background-color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+.button:active:not(:disabled),
+.photo-picker-button:active:not(:has(input:disabled)) {
+  transform: scale(0.975);
+}
+.journal-entry:active {
+  background: #f6f9f8;
+  transform: scale(0.99);
+}
+.choice-pills label:active span {
+  transform: scale(0.95);
+}
+.choice-pills span {
+  pointer-events: none;
+}
+.field input,
+.field textarea,
+.field select {
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease;
+  scroll-margin-block: 120px;
+}
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px #14615b12;
+  outline: none;
+}
+.field.invalid input:focus,
+.field.invalid textarea:focus,
+.field.invalid select:focus {
+  border-color: #c2634b;
+  box-shadow: 0 0 0 3px #c2634b14;
+}
+.button-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-turn 650ms linear infinite;
+}
+.feedback-region {
+  position: fixed;
+  inset: auto 20px 28px;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.feedback-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  border-radius: 14px;
+  background: #183c3cf2;
+  color: #fff;
+  padding: 14px 18px;
+  font-size: 14px;
+  box-shadow: 0 8px 24px #183c3c14;
+  animation: feedback-arrive var(--motion-enter) var(--motion-ease);
+}
+.feedback-toast svg {
+  flex-shrink: 0;
+}
+@keyframes content-arrive {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes feedback-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
 }
 h1 {
   font-size: 30px;
@@ -197,21 +303,28 @@ h2 {
   }
   .app-header nav a {
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     min-height: 68px;
-    padding: 10px 4px 8px;
+    padding: 6px 4px;
     font-size: 12px;
     line-height: 1.5;
     border: 0;
-    border-top: 3px solid transparent;
   }
   .app-header nav a.active {
+    background: transparent;
+  }
+  .app-header nav a.active svg {
     background: var(--soft);
-    border-top-color: var(--teal);
+  }
+  .app-header nav a:active {
+    transform: scale(0.94);
   }
   .app-header nav svg {
-    width: 22px;
-    height: 22px;
+    width: 32px;
+    height: 32px;
+    padding: 5px;
+    border-radius: 12px;
+    transition: background-color var(--motion-fast) ease;
   }
   .account-controls {
     gap: 8px;
@@ -343,6 +456,36 @@ h2 {
     border-bottom: 1px solid var(--line);
     border-radius: 0;
   }
+  .feedback-region {
+    bottom: calc(89px + env(safe-area-inset-bottom));
+  }
+  .dialog:not(.photo-dialog) {
+    position: fixed;
+    inset: auto 0 0;
+    margin: 0;
+    width: 100%;
+    max-width: none;
+    max-height: min(80dvh, 640px);
+    border: 0;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+  }
+  .dialog:not(.photo-dialog)[open] {
+    animation: sheet-arrive var(--motion-enter) var(--motion-ease);
+  }
+  .dialog::backdrop {
+    background: #0b242666;
+  }
+  @keyframes sheet-arrive {
+    from {
+      transform: translateY(24px);
+      opacity: 0.8;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
 }
 @media (max-width: 360px) {
   .journal-entry.with-photo {
@@ -354,5 +497,31 @@ h2 {
   }
   .journal-entry h3 {
     font-size: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .route-content,
+  .feedback-toast,
+  .button-spinner,
+  .dialog:not(.photo-dialog)[open] {
+    animation: none;
+  }
+  .button,
+  .photo-picker-button,
+  .journal-entry,
+  .app-header nav a,
+  .app-header nav svg,
+  .choice-pills span,
+  .field input,
+  .field textarea,
+  .field select {
+    transition: none;
+  }
+  .button:active:not(:disabled),
+  .photo-picker-button:active:not(:has(input:disabled)),
+  .journal-entry:active,
+  .app-header nav a:active,
+  .choice-pills label:active span {
+    transform: none;
   }
 }

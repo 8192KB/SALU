@@ -31,6 +31,46 @@ async function withinViewport(page: Page) {
     true,
   );
 }
+
+test('저장 완료 안내는 입력 실패에 나오지 않고 성공 후에만 표시', async ({ page }) => {
+  await page.goto('/records/new');
+  await page.getByRole('button', { name: '커트 기록 저장', exact: true }).click();
+  await expect(page.getByText('부위를 하나 이상 선택해 주세요.', { exact: true })).toBeVisible();
+  await expect(page.locator('.feedback-toast')).toHaveCount(0);
+  await page.getByRole('checkbox', { name: '옆머리', exact: true }).check();
+  await page.getByLabel('좋았던 점').fill('완료 안내 확인용 기록');
+  await page.getByRole('button', { name: '커트 기록 저장', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '커트 기록 · 경과', exact: true })).toBeVisible();
+  await expect(page.locator('.feedback-region')).toHaveText('예시 커트 기록을 남겼어요');
+  await expect(page.locator('.feedback-toast')).toHaveCount(0, { timeout: 5000 });
+  await page.getByRole('link', { name: '내 기록', exact: true }).click();
+  await expect(page.getByText('완료 안내 확인용 기록', { exact: true })).toBeVisible();
+  await expect(page.locator('.feedback-toast')).toHaveCount(0);
+});
+
+test('확인창 내부 클릭은 유지하고 배경 클릭은 초안을 보존하며 닫기', async ({ page }, info) => {
+  await page.goto('/records/new');
+  await page.getByLabel('좋았던 점').fill('배경으로 닫아도 보존할 기록');
+  const trigger = page.getByRole('button', { name: '초기화', exact: true });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: '작성한 내용을 초기화할까요?', exact: true });
+  await expect(dialog).toBeVisible();
+  if (info.project.name === 'mobile') {
+    await expect
+      .poll(async () => {
+        const bounds = await dialog.boundingBox();
+        return Math.round(bounds!.y + bounds!.height);
+      })
+      .toBe(page.viewportSize()!.height);
+  }
+  await dialog.getByRole('heading').click();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(8, 8);
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await expect(page.getByLabel('좋았던 점')).toHaveValue('배경으로 닫아도 보존할 기록');
+  await expect(page.locator('body')).not.toHaveCSS('overflow', 'hidden');
+});
 async function resetPrototype(page: Page) {
   await page.getByRole('button', { name: '초기화', exact: true }).click();
   await page.getByRole('button', { name: '모두 초기화', exact: true }).click();

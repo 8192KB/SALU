@@ -13,6 +13,7 @@ import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 import { RequestList } from './request-pages';
 import { Dialog } from './dialog';
+import { FeedbackProvider } from './feedback';
 import { AuthProvider, useAuth } from './auth/context';
 import { AccountControls, LoginPage, SessionNotice } from './auth/pages';
 import {
@@ -105,33 +106,35 @@ function Layout() {
             <p role="status">계정 정보를 확인하고 있습니다.</p>
           </section>
         ) : (
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<RecordList />} />
-            <Route path="/records/new" element={<CutForm />} />
-            <Route path="/records/:id" element={<RecordDetail />} />
-            <Route path="/records/:id/edit" element={<CutForm />} />
-            <Route path="/records/:id/progress/new" element={<ProgressForm />} />
-            <Route path="/records/:id/progress/:progressId/edit" element={<ProgressForm />} />
-            <Route path="/designers" element={<DesignerList />} />
-            <Route path="/designers/:id" element={<DesignerDetail />} />
-            <Route path="/consultations/materials" element={<MaterialsPage />} />
-            <Route path="/consultations/request" element={<RequestPage />} />
-            <Route path="/consultations/previews/:id" element={<PreviewPage />} />
-            <Route path="/requests" element={<RequestList />} />
-            <Route path="/requests/materials" element={<MaterialsPage />} />
-            <Route path="/requests/write" element={<RequestPage />} />
-            <Route path="/requests/previews/:id" element={<PreviewPage />} />
-            <Route
-              path="*"
-              element={
-                <Missing
-                  title="페이지를 찾을 수 없습니다"
-                  message="내 기록에서 다시 시작해 주세요."
-                />
-              }
-            />
-          </Routes>
+          <div className="route-content" key={location.pathname}>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<RecordList />} />
+              <Route path="/records/new" element={<CutForm />} />
+              <Route path="/records/:id" element={<RecordDetail />} />
+              <Route path="/records/:id/edit" element={<CutForm />} />
+              <Route path="/records/:id/progress/new" element={<ProgressForm />} />
+              <Route path="/records/:id/progress/:progressId/edit" element={<ProgressForm />} />
+              <Route path="/designers" element={<DesignerList />} />
+              <Route path="/designers/:id" element={<DesignerDetail />} />
+              <Route path="/consultations/materials" element={<MaterialsPage />} />
+              <Route path="/consultations/request" element={<RequestPage />} />
+              <Route path="/consultations/previews/:id" element={<PreviewPage />} />
+              <Route path="/requests" element={<RequestList />} />
+              <Route path="/requests/materials" element={<MaterialsPage />} />
+              <Route path="/requests/write" element={<RequestPage />} />
+              <Route path="/requests/previews/:id" element={<PreviewPage />} />
+              <Route
+                path="*"
+                element={
+                  <Missing
+                    title="페이지를 찾을 수 없습니다"
+                    message="내 기록에서 다시 시작해 주세요."
+                  />
+                }
+              />
+            </Routes>
+          </div>
         )}
       </main>
       <footer className="app-footer">
@@ -149,7 +152,9 @@ function AccountScopedPrototype() {
   const { memoryEpoch } = useAuth();
   return (
     <PrototypeProvider key={memoryEpoch}>
-      <Layout />
+      <FeedbackProvider>
+        <Layout />
+      </FeedbackProvider>
     </PrototypeProvider>
   );
 }

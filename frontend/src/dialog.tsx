@@ -15,6 +15,7 @@ export function Dialog({
   className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const pressedOutside = useRef(false);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
@@ -28,7 +29,36 @@ export function Dialog({
     };
   }, [open]);
   return (
-    <dialog ref={ref} aria-labelledby={titleId} className={`dialog ${className}`} onClose={onClose}>
+    <dialog
+      ref={ref}
+      aria-labelledby={titleId}
+      className={`dialog ${className}`}
+      onClose={onClose}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onPointerDown={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        pressedOutside.current =
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom;
+      }}
+      onClick={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect();
+        if (
+          pressedOutside.current &&
+          (event.clientX < bounds.left ||
+            event.clientX > bounds.right ||
+            event.clientY < bounds.top ||
+            event.clientY > bounds.bottom)
+        )
+          onClose();
+        pressedOutside.current = false;
+      }}
+    >
       {open && (
         <>
           <div className="dialog-heading">

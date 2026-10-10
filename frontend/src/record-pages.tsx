@@ -13,6 +13,7 @@ import { AREAS } from './prototype/types';
 import type { Area, CutRecord, RecordPhoto, ProgressEntry } from './prototype/types';
 import { cutTitle, daysAfter, displayDate, today } from './prototype/dates';
 import { InputError, newCutDraft } from './prototype/memory-repository';
+import { useFeedback } from './feedback';
 import {
   materialUrl,
   newRequestDraft,
@@ -164,6 +165,7 @@ function CutFormBody({
   repository: ReturnType<typeof usePrototype>['repository'];
 }) {
   const { state } = usePrototype();
+  const notify = useFeedback();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [photosBusy, setPhotosBusy] = useState(false);
@@ -176,7 +178,7 @@ function CutFormBody({
   };
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (photosBusy) return;
+    if (busy || photosBusy) return;
     setErrors({});
     setBusy(true);
     try {
@@ -185,6 +187,7 @@ function CutFormBody({
         : await repository.createCut(draft);
       clear();
       navigate(`/records/${cut.id}`);
+      notify(editingId ? '예시 커트 기록을 수정했어요' : '예시 커트 기록을 남겼어요');
     } catch (failure) {
       setErrors(
         failure instanceof InputError
@@ -322,9 +325,25 @@ function CutFormBody({
           <button className="button" type="button" onClick={cancel}>
             취소
           </button>
-          <button disabled={busy || photosBusy} className="button coral" type="submit">
-            {editingId ? '수정 저장' : '커트 기록 저장'}
-            <Icon name="check" />
+          <button
+            disabled={busy || photosBusy}
+            aria-busy={busy || photosBusy}
+            aria-label={editingId ? '수정 저장' : '커트 기록 저장'}
+            className="button coral"
+            type="submit"
+          >
+            {busy
+              ? '기록 남기는 중'
+              : photosBusy
+                ? '사진을 확인하고 있어요'
+                : editingId
+                  ? '수정 저장'
+                  : '커트 기록 저장'}
+            {busy || photosBusy ? (
+              <span className="button-spinner" aria-hidden="true" />
+            ) : (
+              <Icon name="check" />
+            )}
           </button>
         </div>
         <p className="form-note">
@@ -589,13 +608,14 @@ function ProgressFormBody({
   editingId,
 }: { cut: CutRecord; editingId?: string } & ReturnType<typeof useProgressDraft>) {
   const { repository, state } = usePrototype();
+  const notify = useFeedback();
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [photosBusy, setPhotosBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (photosBusy) return;
+    if (busy || photosBusy) return;
     setErrors({});
     setBusy(true);
     try {
@@ -603,6 +623,7 @@ function ProgressFormBody({
       else await repository.addProgress(cut.id, draft);
       clear();
       navigate(`/records/${cut.id}`);
+      notify(editingId ? '예시 경과 기록을 수정했어요' : '예시 경과를 추가했어요');
     } catch (failure) {
       setErrors(
         failure instanceof InputError
@@ -704,9 +725,25 @@ function ProgressFormBody({
           >
             취소
           </button>
-          <button disabled={busy || photosBusy} className="button coral" type="submit">
-            {editingId ? '수정 저장' : '경과 저장'}
-            <Icon name="check" />
+          <button
+            disabled={busy || photosBusy}
+            aria-busy={busy || photosBusy}
+            aria-label={editingId ? '수정 저장' : '경과 저장'}
+            className="button coral"
+            type="submit"
+          >
+            {busy
+              ? '경과 남기는 중'
+              : photosBusy
+                ? '사진을 확인하고 있어요'
+                : editingId
+                  ? '수정 저장'
+                  : '경과 저장'}
+            {busy || photosBusy ? (
+              <span className="button-spinner" aria-hidden="true" />
+            ) : (
+              <Icon name="check" />
+            )}
           </button>
         </div>
         <p className="form-note">

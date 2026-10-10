@@ -274,3 +274,19 @@ PC·모바일 캡처를 확인하며 모바일의 미리보기 버튼 줄바꿈�
 - 320·390·600·720·900·1440px × 주요 화면 8종 = 48개 가로 넘침 없음, 브라우저 오류 없음. 390×844 모바일·1440×1000 PC에서 시안과 캡처 비교
 - 추가 모바일 조작: 사진 선택 → 커트 저장 → 경과 추가 → 하단 내 기록 메뉴 → 작성 메모 확인. 자료 선택 버튼 bottom=775, 메뉴 top=775로 겹침 없음
 - 실제 Spring 인증은 이번 화면 작업에서 재검증하지 않음. 물리 휴대폰·iOS Safari·가상 키보드는 후속 확인. DB 저장·업로드·상담 전송은 미구현 유지
+
+### 모바일 터치·상태 피드백 보완
+
+참고: [TDS Mobile](https://tossmini-docs.toss.im/tds-mobile/), [Top 예시](https://tossmini-docs.toss.im/tds-mobile/components/top/), [바텀시트 예시](https://tossmini-docs.toss.im/tds-mobile/hooks/OverlayExtension/use-bottom-sheet/). 토스 패키지·브랜드 자산을 가져오지 않고 기존 SALU 컴포넌트에서 구현. 화면 전체 재설계가 아닌 기존 디자인의 동작 보완으로 새 Image Gen 시안 생성 없음.
+
+- 버튼·기록 행·부위 선택·하단 메뉴에 120ms 눌림 반응. 메뉴 선택 상태는 아이콘 배경으로 표시
+- 화면 이동은 본문에 180ms opacity 전환. 실제 이동·저장에 인위적 지연 추가 없음
+- 모바일 확인창은 하단 시트로 표시. 사진 확대는 기존 중앙 dialog 유지. 배경 클릭·Escape·닫기는 초안 보존, 포커스·스크롤 복원
+- 입력 포커스 강조, 실제 처리 중인 저장/사진 확인 상태에 spinner·aria-busy·disabled 표시. 버튼 접근 이름은 기존 이름 유지
+- 커트·경과 생성/수정 성공 후 3초 완료 안내. 실패에는 완료 안내 없음. 서버 저장 오해를 막도록 `예시` 명시, 계정/예시 초기화 때 안내도 초기화
+- prefers-reduced-motion에서 전환·눌림·spinner 회전 제거. 오류·버튼 상태·완료 메시지는 유지
+- 부위 선택 애니메이션 적용 중 span이 checkbox 클릭을 가로챈 문제를 발견하고 장식 span의 pointer-events를 제거한 뒤 전체 재검증
+- 최종 build·format:check 통과. 화면 E2E PC 22 + 모바일 22 = 44개 통과(35.1초). 성공/실패 안내·배경 닫기·초안/포커스 복원 회귀 검증 추가
+- 실제 Spring8081·MySQL3307에 연결한 인증 E2E 9개 통과(8.7초), skip 없음. 로그인·세션·로그아웃은 실제 응답, 장애/CSRF 복구는 기존 브라우저 응답 재현 방식. 실제 DB 중단·업무 기록 저장 검증과 구분
+- Playwright에서 320·390·600·720·900·1440px × 주요 화면 6종 총 36개 가로 넘침·브라우저 오류 없음. 390×844에서 눌림·하단 시트·완료 안내·모션 감소 설정 확인, view_image로 실제 캡처 검토
+- 임시 증거 `/tmp/salu-touch-{home,pressed,sheet,success}.png`. Browser plugin 미제공으로 Playwright 사용. 물리 휴대폰·iOS Safari·가상 키보드·실제 기기의 프레임 성능은 미검증

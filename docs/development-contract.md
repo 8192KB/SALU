@@ -277,7 +277,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 ### Git·CI·배포 준비
 
-- 원격 기본안: 비공개 `8192KB/SALU`, main 보호와 PR 검토. 박도율·장용찬의 GitHub 계정을 확인한 뒤 최소 권한 초대
+- 원격: 사용자가 만든 비공개 `8192KB/SALU`에 2026-10-10 연결·업로드 확인. 기본 브랜치 main과 기존 feature/spring-auth 유지. main 보호·PR 검토 설정과 조원 최소 권한 초대는 후속
 - 기능 단위 브랜치와 작업 범위 합의. 같은 화면/Service를 동시 수정하지 않고 타입·인터페이스를 먼저 PR에서 합의
 - PR 기본 gate: frontend npm ci/build/화면 전용 E2E. 인증 연결 변경은 실제 Spring·등록된 테스트 계정으로 test:auth 추가. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
 - `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
@@ -287,4 +287,4 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 - SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
 - 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
 
-현재 완료는 로컬 초기 화면과 Spring 인증 연결·계획 문서까지. 원격 생성·초대·CI·Docker 앱 구성·DNS·실제 배포는 각 단계에서 실행·검증한 뒤 완료로 기록.
+현재 완료는 로컬 초기 화면·Spring 인증 연결·계획 검토·7주차 발표 예시안과 GitHub 원격 업로드까지. 기기 저장·복원은 검증 전이며 조원 초대·main 보호·CI·Docker 앱 구성·DNS·실제 배포는 후속. 각 단계에서 실행·검증한 뒤 완료로 기록.

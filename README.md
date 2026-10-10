@@ -96,6 +96,6 @@ SALU/
 └── compose.yml  개발 DB 설정 (앱 컨테이너는 후속)
 ```
 
-기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 `8192KB/SALU`. 조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.
+기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 [8192KB/SALU](https://github.com/8192KB/SALU). 2026-10-10 현재 소스 이력과 발표·계획 문서를 main·feature/spring-auth에 업로드 확인. 조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.
 
 `.env`·개발 계정 파일·DB 데이터·업로드 사진·빌드 결과는 Git/공유 제외. Salon의 DB·초기 SQL은 사용하거나 변경하지 않음. [Salon 참고 코드와 보안 점검](docs/salon-security-audit.md) 확인 후 필요한 로직만 선별.

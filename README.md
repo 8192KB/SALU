@@ -6,6 +6,8 @@
 
 ## 먼저 볼 문서
 
+- [7주차 발표 예시안](docs/presentations/week07/README.md): 검증 전 PPTX·PDF, 현재 구현과 기기 저장 방향·발표 범위 구분
+- [기기 기록·PPT 대조·발표 범위 검토](docs/plans/2026-10-10-local-records-and-week7-review.md): 로그인 없는 개인 보관, 선택 계정 연결, 파일 복원과 후속 상담
 - [로그인 연결과 검증](docs/login.md): 실제 계정·세션·CSRF·오류 복구
 - [화면 계획](docs/prototype-plan.md): 기록·개인 준비·자료 선택·미리보기
 - [후속 개발 계약](docs/development-contract.md): DB·권한·예정 API·사진·상담·공동 작업·배포
@@ -68,7 +70,7 @@ npm run test:e2e
 SALU_E2E_LOGIN_FILE=../.env.dev-login.json npm run test:auth
 ```
 
-`test:e2e`는 명시적 화면 전용 모드의 PC·모바일 40개. `test:auth`는 실제 Spring·DB·등록된 계정 필요, 인증/복구 9개. 계정 파일이 없으면 완료로 건너뛰지 않고 실패. 실제 계정의 비밀번호·CSRF를 담을 trace·영상·스크린샷 저장 안 함. 자세한 결과는 [로그인 문서](docs/login.md).
+`test:e2e`는 명시적 화면 전용 모드의 PC·모바일 44개(2026-10-10 재실행). `test:auth`는 실제 Spring·DB·등록된 계정 필요, 인증/복구 9개. 계정 파일이 없으면 완료로 건너뛰지 않고 실패. 실제 계정의 비밀번호·CSRF를 담을 trace·영상·스크린샷 저장 안 함. 자세한 결과는 [로그인 문서](docs/login.md)와 [현재 구현 검토](docs/features/FR01-current-state-review.md).
 
 백엔드를 변경할 때에는 별도 통합 검증:
 
@@ -94,6 +96,6 @@ SALU/
 └── compose.yml  개발 DB 설정 (앱 컨테이너는 후속)
 ```
 
-기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. 원격 생성·push·조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.
+기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 `8192KB/SALU`. 조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.
 
 `.env`·개발 계정 파일·DB 데이터·업로드 사진·빌드 결과는 Git/공유 제외. Salon의 DB·초기 SQL은 사용하거나 변경하지 않음. [Salon 참고 코드와 보안 점검](docs/salon-security-audit.md) 확인 후 필요한 로직만 선별.

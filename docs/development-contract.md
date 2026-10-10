@@ -2,6 +2,8 @@
 
 현재 작업: PPT 기준 React 초기 화면과 실제 Spring 인증 연결. 기본 실행에서 로그인·회원 확인·로그아웃·CSRF는 서버 연결, 업무 기록은 메모리 예시. `dev:prototype`만 서버 호출 없는 화면 전용 모드. 기록 DB·사진 업로드·상담 전송은 후속. 개인 준비·선택 자료·전송 전 미리보기의 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
 
+2026-10-10 후속 제안: 로그인 없는 기기 기록·파일 백업·선택 계정 연결은 [검토안](plans/2026-10-10-local-records-and-week7-review.md)에서 검토 중. 아래 내용은 현재 코드와 서버 중심 후속 설계의 기준. 새 기기 저장 모드의 구현·수명·계정 관계는 아직 확정/구현되지 않음.
+
 ## 기술과 코드 구조
 
 Java 17, Spring Boot 4.1.1, MyBatis Starter 4.1.0, MySQL 8.4 LTS. React 19, Vite 8, TypeScript 7, React Router 8.4.0. Maven Wrapper와 npm lockfile로 빌드 기준 고정.

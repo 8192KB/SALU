@@ -11,7 +11,7 @@
 - [후속 개발 계약](docs/development-contract.md): DB·권한·예정 API·사진·상담·공동 작업·배포
 - [자료 조사 목록](docs/document-inventory.md): 캡스톤·Salon·SALU·임시 조사 문서의 대표 원본과 구버전 구분
 
-사람이 읽는 통합 안내는 Obsidian `30 프로젝트/SALU`의 **SALU 개요 → SALU 개발계획 → SALU 벤치마킹** 순서. 원본은 `~/dotfiles/obsidian/managed/30 프로젝트/SALU/`이며 Vault 복사본을 직접 수정하지 않음.
+사람이 읽는 진행 체크는 Obsidian `20 진행 중인 일/SALU 진행상황`에서 관리. 이 개인 노트는 직접 체크 가능하며 자동 발행 대상이 아님. 상세 안내는 `30 프로젝트/SALU`의 **SALU 개요 → SALU 개발계획 → SALU 벤치마킹** 순서. 원본은 `~/dotfiles/obsidian/managed/30 프로젝트/SALU/`이며 Vault 복사본을 직접 수정하지 않음.
 
 ## 실행
 

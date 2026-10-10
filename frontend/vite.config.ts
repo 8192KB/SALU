@@ -6,12 +6,22 @@ export default defineConfig(({ mode }) => {
   const port = process.env.SALU_SERVER_PORT ?? env.SALU_SERVER_PORT ?? '8081';
   return {
     plugins: [react()],
+    define: {
+      'import.meta.env.VITE_SALU_AUTH_MODE': JSON.stringify(
+        mode === 'prototype' ? 'prototype' : (process.env.VITE_SALU_AUTH_MODE ?? 'server'),
+      ),
+    },
     server: {
       host: '127.0.0.1',
       port: Number(process.env.SALU_FRONTEND_PORT ?? env.SALU_FRONTEND_PORT ?? '5174'),
       strictPort: true,
       proxy: { '/api': { target: `http://127.0.0.1:${port}` } },
     },
-    preview: { host: '127.0.0.1', port: 5174, strictPort: true },
+    preview: {
+      host: '127.0.0.1',
+      port: 5174,
+      strictPort: true,
+      proxy: { '/api': { target: `http://127.0.0.1:${port}` } },
+    },
   };
 });

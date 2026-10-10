@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "format": "prettier --write src tests scripts *.ts *.json",
     "format:check": "prettier --check src tests scripts *.ts *.json",
-    "capture": "node scripts/capture-prototype.mjs"
+    "capture": "node scripts/capture-prototype.mjs",
+    "test:auth": "playwright test --config playwright.auth.config.ts",
+    "dev:prototype": "vite --mode prototype"
   },
   "dependencies": {
     "react": "19.2.8",

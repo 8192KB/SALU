@@ -4,6 +4,8 @@ const baseURL = process.env.SALU_E2E_URL ?? 'http://127.0.0.1:5185';
 
 export default defineConfig({
   testDir: './tests',
+  outputDir: './test-results/prototype',
+  testMatch: 'prototype.spec.ts',
   timeout: 20_000,
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
@@ -27,6 +29,7 @@ export default defineConfig({
     ? undefined
     : {
         command: 'npm run dev -- --port 5185',
+        env: { VITE_SALU_AUTH_MODE: 'prototype' },
         url: baseURL,
         reuseExistingServer: false,
         timeout: 15_000,

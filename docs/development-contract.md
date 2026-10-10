@@ -1,6 +1,6 @@
 # SALU 개발 기준
 
-현재 작업: PPT 기준 초기 React 화면과 후속 개발 계획. 초기 화면은 메모리 가상 데이터만 사용하며 서버에 요청하지 않음. 기존 로컬 로그인·세션·MySQL 기반은 별도 구현. 개인 준비·선택 자료·전송 전 미리보기의 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
+현재 작업: PPT 기준 React 초기 화면과 실제 Spring 인증 연결. 기본 실행에서 로그인·회원 확인·로그아웃·CSRF는 서버 연결, 업무 기록은 메모리 예시. `dev:prototype`만 서버 호출 없는 화면 전용 모드. 기록 DB·사진 업로드·상담 전송은 후속. 개인 준비·선택 자료·전송 전 미리보기의 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
 
 ## 기술과 코드 구조
 
@@ -42,9 +42,9 @@ Salon의 `CLAUDE.md:47-48`, `docs/발표.md:575-591`, `docs/websocket.md:263`에
 
 ## 검증 범위와 다음 단계
 
-기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 이번 초기 화면의 gate는 frontend 빌드·브라우저 E2E·API 요청 없음이며 backend/DB 재검증을 요구하지 않음. 기존 검증 결과는 docs/verification.md와 docs/login.md에 보관.
+기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 화면 전용 gate는 frontend 빌드·브라우저 E2E·API 요청 없음. 인증 연결은 실제 Spring·DB에서 별도 test:auth 실행. backend 변경 없이는 전체 DB 기반 검증을 반복하지 않음. 기존 검증 결과는 docs/verification.md와 docs/login.md에 보관.
 
-현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 이번 초기 화면은 독립 메모리 구현. 이후 회원·기록 연결 → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
+현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 기록 화면은 메모리 예시이며 인증은 실제 서버 연결. 이후 가입·기록 연결 → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
 
 
 ## 계정과 데이터 관계
@@ -158,7 +158,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 | 단계 | 구현 | 완료 기준 |
 |---|---|---|
-| 1. 회원·기록 연결 | 가입, 기존 로그인 연결, 커트·경과·사진 | 재접속 후 보존, 다른 회원의 ID/파일 접근 차단 |
+| 1. 회원·기록 연결 | 로그인 연결 완료. 가입, 커트·경과·사진 후속 | 재접속 후 보존, 다른 회원의 ID/파일 접근 차단 |
 | 2. 디자이너·상담 | 프로필·현재 소속, 명시적 첨부, 요청·HTTP 답변·이력 | 두 실제 계정이 선택한 자료로 상담, 제3자 접근 차단 |
 | 3. 상담 후속 | WebSocket/STOMP, 소속 이력, 상담 후기 | 메시지 저장 후 전송, 이동 후 개인 ID·후기 유지 |
 | 4. 공개 사례 | 선택 공개 게시글·댓글·검색 | 비공개 원본 분리, 공개 철회·삭제 확인 |
@@ -277,7 +277,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 - 원격 기본안: 비공개 `8192KB/SALU`, main 보호와 PR 검토. 박도율·장용찬의 GitHub 계정을 확인한 뒤 최소 권한 초대
 - 기능 단위 브랜치와 작업 범위 합의. 같은 화면/Service를 동시 수정하지 않고 타입·인터페이스를 먼저 PR에서 합의
-- PR 기본 gate: frontend npm ci/build/초기 화면 E2E. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
+- PR 기본 gate: frontend npm ci/build/화면 전용 E2E. 인증 연결 변경은 실제 Spring·등록된 테스트 계정으로 test:auth 추가. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
 - `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
 - 컨테이너는 후속 단계에 web(Nginx+React dist), backend(JRE17+jar), MySQL 구성. 개발도 같은 Docker Compose 경로를 마련하고 호스트별 MySQL 스크립트는 대체 경로로 정리
 - 배포 기본안: cwsn NAS, `salu.doyul.dev`, 기존 Nginx Proxy Manager 사용. 실제 확인한 proxy network `nginx-proxy-manager_default`에 SALU web만 연결. backend/DB는 SALU 전용 내부 network
@@ -285,4 +285,4 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 - SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
 - 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
 
-현재 완료는 로컬 초기 화면과 계획 문서까지. 원격 생성·초대·CI·Docker 앱 구성·DNS·실제 배포는 각 단계에서 실행·검증한 뒤 완료로 기록.
+현재 완료는 로컬 초기 화면과 Spring 인증 연결·계획 문서까지. 원격 생성·초대·CI·Docker 앱 구성·DNS·실제 배포는 각 단계에서 실행·검증한 뒤 완료로 기록.

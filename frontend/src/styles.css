@@ -1569,3 +1569,82 @@ legend {
     font-size: 18px;
   }
 }
+
+.account-controls {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.account-name {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.button.account-button {
+  min-height: 38px;
+  padding: 7px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.session-notice {
+  max-width: 1116px;
+  margin: 18px auto 0;
+  padding: 16px 20px;
+  border: 1px solid #ead5b9;
+  border-radius: 12px;
+  background: #fff8ee;
+  font-size: 14px;
+}
+.session-notice .button {
+  margin-left: 12px;
+}
+.session-notice p {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.login-page {
+  max-width: 540px;
+  margin: 18px auto 48px;
+}
+.login-form {
+  display: grid;
+  gap: 20px;
+}
+.login-form .field {
+  margin: 0;
+}
+.login-hint {
+  font-size: 13px;
+  margin: 0;
+}
+.login-page > .back-link {
+  margin-top: 22px;
+}
+.login-page p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+  .header-inner:has(.account-controls) {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header-inner:has(.account-controls) nav {
+    order: 3;
+    width: 100%;
+  }
+  .account-controls {
+    max-width: calc(100% - 88px);
+  }
+  .account-name {
+    max-width: 150px;
+  }
+  .session-notice {
+    margin: 14px 20px 0;
+  }
+  .session-notice .button {
+    display: flex;
+    margin: 12px 0 0;
+  }
+}

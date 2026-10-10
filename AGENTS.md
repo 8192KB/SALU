@@ -2,8 +2,8 @@
 
 - `~/.agents/AI_INSTRUCTIONS.md`, `~/.agents/HOST.md`, Codex의 `~/.codex/AGENTS.md`를 먼저 확인
 - 작업 전 `docs/development-contract.md`와 해당 기능의 검증 기록 확인
-- 현재 승인 범위는 초기 React 화면과 후속 개발 계획. docs/prototype-plan.md 기준으로 메모리 기록·경과 생성/수정, 디자이너 명시 연결, 사진 확인, 개인 요청 준비·선택 자료·상담 미리보기·재진입 구현. 서버 API 호출·DB 변경·실제 전송은 후속 단계
-- 기존 인증 backend와 검증 기록 보존. 초기 화면 테스트를 기존 DB·인증 기능의 검증으로 주장하지 않음
+- 현재 승인 범위는 초기 React 화면과 후속 개발 계획. docs/prototype-plan.md 기준으로 메모리 기록·경과 생성/수정, 디자이너 명시 연결, 사진 확인, 개인 요청 준비·선택 자료·상담 미리보기·재진입 구현. 기본 React 실행에서 Spring 로그인/me/logout/CSRF 연결 승인·완료. 기록 DB 변경·사진 업로드·상담 실제 전송은 후속 단계
+- 기존 인증 backend와 검증 기록 보존. test:e2e는 서버 없는 화면 검증, test:auth는 실제 Spring 인증 검증. 예시 화면 검증을 업무 DB·전송 검증으로 주장하지 않음
 - Controller는 입력/응답, Service는 업무·소유권·트랜잭션, Mapper는 SQL 담당
 - URL 인증/역할 규칙은 SecurityConfig에 집중. 자원 소유권·상담 참여자 검사는 해당 Service에서 수행
 - Security filter 오류는 SecurityConfig, MVC 오류는 GlobalExceptionHandler에서 처리. 같은 ApiError JSON 사용, Controller별 try-catch·redirect·오류 형식 추가 금지

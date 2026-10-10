@@ -188,7 +188,6 @@ export function DesignerList() {
   return (
     <>
       <PageHeading
-        eyebrow="YOUR NEXT CONVERSATION"
         title="디자이너 찾기"
         description={
           sourcePreview
@@ -289,7 +288,6 @@ export function DesignerDetail() {
           <div className="panel profile-banner">
             <Avatar name={designer.name} large />
             <div>
-              <p className="eyebrow">DESIGNER PROFILE</p>
               <h1 tabIndex={-1}>{designer.name} 디자이너</h1>
               <p>현재 소속 · {currentSalon(designer)}</p>
               <div className="chip-row">

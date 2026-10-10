@@ -152,9 +152,10 @@ export function PhotoPicker({
         <div>
           <strong>사진으로 남기기</strong>
           <p>JPEG · PNG · WebP / 장당 5 MiB, 최대 6장</p>
-          <label>
-            <span className="sr-only">사진 추가</span>
+          <label className="photo-picker-button">
+            <span>사진 추가</span>
             <input
+              className="sr-only"
               type="file"
               multiple
               accept="image/jpeg,image/png,image/webp"

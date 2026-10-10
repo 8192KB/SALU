@@ -34,14 +34,20 @@ function Layout() {
     document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
   }, [location.pathname]);
   return (
-    <div className="app-shell">
+    <div className={`app-shell${location.pathname === '/' ? ' journal-screen' : ''}`}>
       <header className="app-header">
         <div className="header-inner">
           <Link className="brand" to="/" aria-label="SALU 홈">
             salu<span>.</span>
           </Link>
           <nav aria-label="주 메뉴">
-            <NavLink to="/" end>
+            <NavLink
+              to="/"
+              end
+              className={({ isActive }) =>
+                isActive || location.pathname.startsWith('/records/') ? 'active' : undefined
+              }
+            >
               <Icon name="cut" />내 기록
             </NavLink>
             <NavLink to="/designers">

@@ -61,39 +61,31 @@ export function RecordList() {
   const { state } = usePrototype();
   const cuts = [...state.cuts].sort((a, b) => b.cutDate.localeCompare(a.cutDate));
   return (
-    <>
-      <PageHeading
-        eyebrow="MY HAIR JOURNAL"
-        title="나의 커트 기록"
-        description="커트한 날부터 집에서 느낀 변화까지, 하나의 기록에."
-        action={
-          <Link className="button primary" to="/records/new">
-            <Icon name="plus" />새 기록
-          </Link>
-        }
-      />
-      <div className="two-column">
-        <section>
-          <div className="hero-banner">
-            <div>
-              <p className="eyebrow">A LITTLE NOTE, A BETTER CONVERSATION</p>
-              <h2>내 머리를 가장 잘 아는 기록</h2>
-              <p>좋았던 점과 불편했던 점을 남기고, 다음 상담에 꺼내 보세요.</p>
-            </div>
-            <span className="hero-symbol">
-              <Icon name="cut" size={32} />
-            </span>
-          </div>
-          <div className="section-heading">
-            <h2>최근 커트</h2>
-            <span className="count-label">{cuts.length}개의 기록</span>
-          </div>
-          <div className="record-grid">
-            {cuts.map((cut) => (
-              <Link to={`/records/${cut.id}`} className="record-card" key={cut.id}>
-                <Cover
-                  photo={state.photos.find((photo) => photo.cutId === cut.id && !photo.progressId)}
-                />
+    <div className="two-column journal-layout">
+      <section>
+        <PageHeading
+          title="나의 커트 기록"
+          description="커트한 날부터 달라진 모습까지."
+          action={
+            <Link className="button primary" to="/records/new">
+              <Icon name="plus" />새 기록
+            </Link>
+          }
+        />
+        <div className="section-heading">
+          <h2>최근 커트</h2>
+          <span className="count-label">{cuts.length}개의 기록</span>
+        </div>
+        <div className="journal-list">
+          {cuts.map((cut) => {
+            const photo = state.photos.find((photo) => photo.cutId === cut.id && !photo.progressId);
+            return (
+              <Link
+                to={`/records/${cut.id}`}
+                className={`journal-entry${photo ? ' with-photo' : ''}`}
+                key={cut.id}
+              >
+                {photo ? <Cover photo={photo} /> : null}
                 <div className="card-content">
                   <time dateTime={cut.cutDate}>{displayDate(cut.cutDate)}</time>
                   <h3>{cutTitle(cut.cutDate, cut.service)}</h3>
@@ -105,47 +97,43 @@ export function RecordList() {
                     <span>
                       경과 {state.progress.filter((entry) => entry.cutId === cut.id).length}건
                     </span>
-                    <span>
-                      기록 보기 <span aria-hidden="true">↗</span>
-                    </span>
                   </div>
                 </div>
+                <span className="journal-chevron" aria-hidden="true">
+                  <Icon name="arrow" />
+                </span>
               </Link>
-            ))}
+            );
+          })}
+        </div>
+        {!cuts.length && <Missing title="첫 커트 기록을 남겨 보세요" />}
+        <Link className="journal-next text-link" to="/requests">
+          다음 커트 요청 정리하기 <Icon name="arrow" size={16} />
+        </Link>
+      </section>
+      <aside className="sidebar journal-guide">
+        <section className="panel">
+          <h2>기록을 더 잘 남기는 방법</h2>
+          <p className="muted">말로 설명하기 어려운 부분을 사진과 기록으로 정리해 보세요.</p>
+          <div className="small-step">
+            <b>1</b>
+            <span>커트와 이후 변화 남기기</span>
           </div>
-          {!cuts.length && <Missing title="첫 커트 기록을 남겨 보세요" />}
+          <div className="small-step">
+            <b>2</b>
+            <span>다음 커트에서 요청할 내용 정리</span>
+          </div>
+          <div className="small-step">
+            <b>3</b>
+            <span>필요할 때 디자이너 선택</span>
+          </div>
+          <Link className="button full" style={{ marginTop: 24 }} to="/designers">
+            디자이너 찾아보기
+            <Icon name="arrow" />
+          </Link>
         </section>
-        <aside className="sidebar">
-          <section className="panel">
-            <p className="eyebrow">FROM RECORD TO CONSULTATION</p>
-            <h2>기록 다음에는?</h2>
-            <p className="muted">말로 설명하기 어려운 부분을 사진과 기록으로 정리해 보세요.</p>
-            <div className="small-step">
-              <b>1</b>
-              <span>커트와 이후 변화 남기기</span>
-            </div>
-            <div className="small-step">
-              <b>2</b>
-              <span>다음 커트에서 요청할 내용 정리</span>
-            </div>
-            <div className="small-step">
-              <b>3</b>
-              <span>필요할 때 디자이너 선택</span>
-            </div>
-            <Link className="button full" style={{ marginTop: 24 }} to="/designers">
-              디자이너 찾아보기
-              <Icon name="arrow" />
-            </Link>
-          </section>
-          <section className="panel">
-            <h3>나만 보는 기록에서 시작</h3>
-            <p className="muted">
-              모든 기록을 전달할 필요는 없어요. 상담에 사용할 자료만 직접 고릅니다.
-            </p>
-          </section>
-        </aside>
-      </div>
-    </>
+      </aside>
+    </div>
   );
 }
 
@@ -213,9 +201,8 @@ function CutFormBody({
         ← {editingId ? '커트 기록' : '내 기록'}
       </Link>
       <PageHeading
-        eyebrow="CUT RECORD"
         title={editingId ? '커트 기록 수정' : '이번 머리 남기기'}
-        description="커트한 날짜와 사진, 마음에 든 부분을 남겨 보세요."
+        description="커트한 날짜와 마음에 든 부분을 남겨 보세요."
       />
       <form className="panel" onSubmit={submit} noValidate>
         <Alert message={errors.form ?? ''} />
@@ -433,7 +420,6 @@ export function RecordDetail() {
         </Link>
       )}
       <PageHeading
-        eyebrow="CUT & AFTER"
         title="커트 기록 · 경과"
         description="당일의 느낌과 이후 변화를 함께 확인하세요."
       />
@@ -637,7 +623,6 @@ function ProgressFormBody({
         ← 커트 기록
       </Link>
       <PageHeading
-        eyebrow="AFTER THE CUT"
         title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />

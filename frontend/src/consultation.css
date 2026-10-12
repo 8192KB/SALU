@@ -1,0 +1,353 @@
+.avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.example-notice {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.example-notice > .example-notice-inner {
+  min-height: 44px;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+.example-notice .reset-button {
+  margin: 0;
+  padding: 8px 0;
+  min-height: 44px;
+  font-size: 12px;
+}
+.example-notice .example-exit {
+  white-space: nowrap;
+  font-size: 12px;
+  margin-left: auto;
+}
+.app-shell:has(.example-notice) > .app-header {
+  top: 44px;
+}
+.consultation-screen {
+  width: min(100%, 620px);
+  margin: 0 auto;
+  padding-bottom: 20px;
+  word-break: keep-all;
+}
+.consultation-screen .page-heading {
+  margin-bottom: 28px;
+}
+.consultation-profile-identity {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin: 12px 0 28px;
+}
+.consultation-profile-identity .avatar.large {
+  flex: 0 0 136px;
+  width: 136px;
+  height: 136px;
+}
+.consultation-profile-identity h2 {
+  font-size: 28px;
+  margin: 0 0 10px;
+}
+.consultation-profile-identity p {
+  margin: 0;
+  font-size: 18px;
+}
+.consultation-soft-panel {
+  padding: 24px;
+  margin: 20px 0;
+  border-radius: 18px;
+  background: var(--surface-subtle);
+}
+.consultation-soft-panel h2,
+.consultation-soft-panel h3 {
+  margin: 0 0 14px;
+  font-size: 22px;
+}
+.consultation-soft-panel p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.85;
+  font-size: 17px;
+}
+.consultation-profile-reviews article {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 16px 0;
+}
+.consultation-review-avatar {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  background: var(--soft);
+  color: var(--teal);
+}
+.consultation-profile-reviews article + article {
+  border-top: 1px solid var(--line);
+}
+.consultation-profile-reviews article:last-child {
+  padding-bottom: 0;
+}
+.consultation-profile-reviews time {
+  padding-top: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.consultation-profile-reviews article p {
+  padding-top: 9px;
+  font-size: 16px;
+  line-height: 1.65;
+}
+.consultation-action {
+  margin-top: 28px;
+}
+.consultation-action .button {
+  min-height: 58px;
+  font-size: 21px;
+  font-weight: 700;
+}
+.consultation-choices {
+  padding: 0;
+  margin: 0;
+  border: none;
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.consultation-choice {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.consultation-choice.selected {
+  border: 2px solid var(--teal);
+  padding: 15px;
+  background: var(--soft);
+}
+.consultation-choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.consultation-choice:has(input:focus-visible) {
+  outline: 3px solid var(--teal);
+  outline-offset: 3px;
+}
+.consultation-choice:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.7;
+}
+.consultation-choice .consultation-attachment {
+  flex: 1;
+}
+.consultation-choice-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--strong-line);
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+}
+.selected .consultation-choice-mark {
+  background: var(--teal);
+  color: var(--on-action);
+  border-color: var(--teal);
+}
+.consultation-attachment {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+.consultation-attachment > img,
+.consultation-attachment > .photo-placeholder {
+  width: 94px;
+  height: 100px;
+  flex: 0 0 94px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.consultation-attachment > div {
+  min-width: 0;
+}
+.consultation-attachment strong {
+  font-size: 21px;
+  line-height: 1.4;
+}
+.consultation-attachment p {
+  margin: 8px 0 0;
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.consultation-request-field {
+  display: grid;
+  gap: 10px;
+  margin-top: 26px;
+}
+.consultation-request-field > span {
+  font-size: 20px;
+  font-weight: 700;
+}
+.consultation-request-field textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 18px;
+  line-height: 1.7;
+  padding: 16px;
+  min-height: 110px;
+  border-radius: 16px;
+}
+.consultation-history {
+  display: grid;
+  gap: 22px;
+}
+.consultation-history-card {
+  display: block;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+.consultation-history-card > p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 20px 0;
+  font-size: 18px;
+}
+.consultation-history-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.consultation-history-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.consultation-history-heading .avatar {
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+}
+.consultation-status {
+  margin-left: auto;
+  border-radius: 8px;
+  padding: 5px 10px;
+  background: var(--soft);
+  color: var(--teal);
+  font-size: 14px;
+  font-weight: 600;
+}
+.consultation-screen time {
+  color: var(--muted);
+}
+.consultation-history-card > time,
+.consultation-reply time {
+  display: block;
+  margin-top: 16px;
+  font-size: 14px;
+}
+.consultation-message {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .consultation-profile-identity {
+    gap: 20px;
+  }
+  .consultation-profile-identity .avatar.large {
+    flex-basis: 100px;
+    width: 100px;
+    height: 100px;
+  }
+  .consultation-profile-identity h2 {
+    font-size: 24px;
+  }
+  .consultation-profile-identity p {
+    font-size: 16px;
+  }
+  .consultation-soft-panel {
+    padding: 20px;
+  }
+  .consultation-profile-reviews article {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 12px;
+  }
+  .consultation-review-avatar {
+    width: 40px;
+    height: 40px;
+  }
+  .consultation-profile-reviews article p {
+    padding-top: 8px;
+    font-size: 15px;
+  }
+  .consultation-profile-reviews time {
+    padding-top: 11px;
+    font-size: 12px;
+  }
+  .consultation-attachment {
+    gap: 14px;
+  }
+  .consultation-attachment > img,
+  .consultation-attachment > .photo-placeholder {
+    width: 76px;
+    height: 84px;
+    flex-basis: 76px;
+  }
+  .consultation-attachment strong {
+    font-size: 20px;
+  }
+  .consultation-attachment p {
+    font-size: 16px;
+  }
+  .consultation-screen .consultation-action {
+    position: sticky;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 25;
+    background: var(--page);
+    padding: 12px 0;
+  }
+  .task-focused .consultation-compose .consultation-action {
+    bottom: 0;
+  }
+  .example-notice > .example-notice-inner {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .example-notice-inner > .example-directory {
+    font-size: 12px;
+  }
+}
+
+/* 폰·터치 화면의 헤더는 relative라 sticky용 top이 그대로 아래로 밀어냄 */
+@media (any-pointer: coarse), (max-width: 700px) {
+  .app-shell:has(.example-notice) > .app-header {
+    top: auto;
+  }
+}
+
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  .app-shell:has(.example-notice) .app-header nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .task-focused .consultation-compose .consultation-action {
+    position: static;
+  }
+}

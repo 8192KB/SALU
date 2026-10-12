@@ -7,8 +7,13 @@ import type { Location, NavigateOptions, To } from 'react-router';
 import { useWorkspace } from './workspace';
 import { PageNavigationContext } from './page-navigation';
 
-export type MainSection = 'home' | 'records' | 'requests';
-const sectionRoots = { home: '/', records: '/records', requests: '/requests' };
+export type MainSection = 'home' | 'records' | 'requests' | 'consultations';
+const sectionRoots = {
+  home: '/',
+  records: '/records',
+  requests: '/requests',
+  consultations: '/consultations',
+};
 const ActivePageContext = createContext(true);
 export const useActivePage = () => useContext(ActivePageContext);
 
@@ -16,13 +21,16 @@ function sectionOf(pathname: string): MainSection | undefined {
   const path = pathname.replace(/^\/examples(?=\/|$)/, '') || '/';
   if (path === '/') return 'home';
   if (path === '/records' || path.startsWith('/records/')) return 'records';
-  if (/^\/(requests|consultations|designers)(\/|$)/.test(path)) return 'requests';
+  if (/^\/consultations(\/|$)/.test(path)) return 'consultations';
+  if (/^\/designers(\/|$)/.test(path))
+    return pathname.startsWith('/examples/') ? 'consultations' : 'requests';
+  if (/^\/requests(\/|$)/.test(path)) return 'requests';
 }
 export function isTaskPath(pathname: string) {
   const path = pathname.replace(/^\/examples(?=\/|$)/, '') || '/';
   return (
     /^\/records\/(?:new|[^/]+\/edit|[^/]+\/progress\/(?:new|[^/]+\/edit))$/.test(path) ||
-    /^\/(?:requests|consultations)\/(?:materials|write|request|review)$/.test(path)
+    /^\/(?:requests|consultations)\/(?:new|materials|write|request|review)$/.test(path)
   );
 }
 function pageKey(pathname: string) {

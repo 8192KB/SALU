@@ -66,3 +66,5 @@
 기능 source fdda7e5, 앱 e14fd7c의 NAS 배포 완료. 소셜 설정 연결과 V4 적용, 공개 HTTPS·PC/폰/태블릿 두 방향의 실제 비로그인 흐름 확인. 기존 DB 컨테이너·volume·암호화 키 유지. `/tmp/salu-release-20261012-fdda7e5/qa/result.json` 4개 환경 통과, 서버 테스트 쓰기·가로 넘침·실행 오류 없음.
 
 배포 전 최종 펼침/키보드 수정(`/tmp/salu-release-focus-final.log`) 20개 반복 검증 통과. 앞선 전체 화면 117개 통과/1개 실패를 수정한 결과로 구분 기록. 코드 리뷰 WebP 오탐 해제 및 실제 백업 4개 통과. 실제 소셜 동의·회원가입·상담·후기·실물 기기 확인은 그대로 보류/후속. 조원 전달 문구는 [시연 안내](team-preview-message.md), 운영 결과는 [NAS 기록](nas-preview.md).
+
+Git 정리(2026-10-12): 사용자 승인으로 e741af9까지 main에 fast-forward 통합, 고유 커밋이 남지 않은 완료 기능 브랜치 정리. 코드·발표·검증 이력 유지, 조원 공유 링크는 저장소 기본 main으로 갱신. NAS 배포 태그/DB/키 변경 없음.

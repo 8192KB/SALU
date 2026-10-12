@@ -2,7 +2,7 @@
 
 개인 커트·경과 기록에서 필요한 자료를 골라 디자이너와 상담하는 서비스.
 
-시연 주소: **https://salu.doyul.dev**. 배포 버전 `20261012-fdda7e5`, 최신 개발 코드는 `feature/personal-storage-backup` 브랜치. [조원 전달 문구](docs/team-preview-message.md).
+시연 주소: **https://salu.doyul.dev**. 배포 버전 `20261012-fdda7e5`, 최신 통합 코드는 `main` 브랜치. [조원 전달 문구](docs/team-preview-message.md).
 
 현재 React에서 **로그인 없이 기기 보관·ZIP 백업/복원·로그인 후 계정 자동 저장** 제공. 소개 홈과 개인 기록, 별도 예시 체험을 분리. Google·네이버 로그인은 SALU client 설정 시 활성화. 상담 실제 전송·커뮤니티·앱은 후속 단계.
 
@@ -106,6 +106,6 @@ SALU/
 └── compose.nas.yml  웹·Spring·독립 DB의 NAS 시연 구성
 ```
 
-기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 [8192KB/SALU](https://github.com/8192KB/SALU). 2026-10-10 현재 소스 이력과 발표·계획 문서를 main·feature/spring-auth에 업로드 확인. 조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.
+기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 [8192KB/SALU](https://github.com/8192KB/SALU). 2026-10-12 최신 앱·발표·배포 문서를 `main`에 통합하고 완료한 기능 브랜치를 정리. NAS 배포 완료, 조원 초대는 별도. 이후 공동 작업은 최신 main에서 새 기능 브랜치 → PR 검토 → main 통합.
 
 `.env`·개발 계정 파일·DB 데이터·업로드 사진·빌드 결과는 Git/공유 제외. Salon의 DB·초기 SQL은 사용하거나 변경하지 않음. [Salon 참고 코드와 보안 점검](docs/salon-security-audit.md) 확인 후 필요한 로직만 선별.

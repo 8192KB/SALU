@@ -199,3 +199,9 @@ NAS 브라우저 검증: Browser plugin not available → 기존 Playwright, 임
 4. 공개 HTTPS의 새 화면·API와 DB 보존 확인 후 점검표/배포 기록 갱신, 조원에게 링크 전달.
 
 앱 복구 시 release의 env.before/compose.before.yml과 이전 이미지 사용. V4를 이미 적용한 DB에 이전 backend의 Flyway 호환성은 별도 확인해야 하므로 무조건 태그 변경만으로 DB까지 복구됐다고 판단하지 않음. DB 복원은 이후 사용자 변경이 없는지 확인한 뒤 정식 복구 절차로 진행하며 적용 migration을 삭제하지 않음.
+
+## 2026-10-12 main 통합과 브랜치 정리
+
+사용자 승인으로 검증·배포한 feature/personal-storage-backup의 e741af9까지 main에 fast-forward 통합. 기존 main의 고유 커밋 없음, 최신 앱·발표·검증·배포 문서와 전체 이력 보존. 포함된 feature/prototype-flow·feature/spring-auth·feature/personal-storage-backup의 완료 브랜치 정리.
+
+조원 코드 링크는 기본 main을 가리키는 https://github.com/8192KB/SALU 로 변경. NAS 앱은 source fdda7e5 / tag 20261012-fdda7e5 유지하며, 이번 문서·브랜치 정리에 재배포는 필요 없음. 다음 개발은 최신 main에서 새 기능 브랜치를 생성하여 진행.

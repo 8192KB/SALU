@@ -25,7 +25,7 @@ SALU 수정본 공유합니다!
 
 특히 처음 무엇부터 해야 하는지, 커트와 경과가 구분되는지, 저장한 뒤 어디로 가야 하는지 봐 주세요. 피드백 모아서 수정하고 발표 자료에 반영할 예정입니다.
 
-코드: https://github.com/8192KB/SALU/tree/feature/personal-storage-backup
+코드: https://github.com/8192KB/SALU
 비공개 저장소라 초대를 수락해야 코드가 보입니다. 화면 테스트는 Git이나 Docker 설치 없이 위 웹 주소로 접속하면 됩니다.
 
 ## 전달 전 확인

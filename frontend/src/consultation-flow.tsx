@@ -248,7 +248,7 @@ function ConsultationForm({
     <div className="consultation-screen consultation-compose">
       <PageHeading
         title="상담 자료 선택"
-        description="상담에 사용할 커트 기록을 선택해주세요."
+        description="상담에 사용할 커트 기록을 선택해 주세요."
         back={
           <BackLink
             to={`/designers/${designer.id}${record ? `?record=${encodeURIComponent(record)}` : ''}`}
@@ -288,7 +288,7 @@ function ConsultationForm({
             aria-label="이번 요청"
             maxLength={2000}
             rows={3}
-            placeholder="손질 방법 상담하고 싶어요"
+            placeholder="예: 옆머리가 뜨는데 손질 방법이 궁금해요"
             value={draft.request}
             disabled={busy}
             onChange={(event) => update({ request: event.target.value })}
@@ -296,6 +296,9 @@ function ConsultationForm({
         </label>
         <Alert message={error} />
         <div className="consultation-action">
+          <p className="consultation-privacy">
+            첨부한 기록과 요청은 {designer.name} 디자이너만 볼 수 있어요.
+          </p>
           <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
             {busy ? '보내는 중' : '요청 보내기'}
           </button>
@@ -319,8 +322,8 @@ export function ConsultationComplete() {
         description="답변이 오면 상담 내역에서 확인할 수 있어요."
         primary="상담 내역 보기"
         to={`/consultations/${thread.id}`}
-        secondary="내 기록으로"
-        secondaryTo="/records"
+        secondary="상담 목록"
+        secondaryTo="/consultations"
       >
         <div className="completed-summary">
           <div className="prepared-cut-photo">

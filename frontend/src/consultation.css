@@ -108,6 +108,12 @@
 .consultation-action {
   margin-top: 28px;
 }
+.consultation-privacy {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+}
 .consultation-action .button {
   min-height: 58px;
   font-size: 21px;

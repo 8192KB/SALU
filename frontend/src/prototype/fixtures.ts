@@ -89,8 +89,8 @@ export function fixtures(): PrototypeState {
           '얼굴형과 모발 상태에 맞는 자연스럽고 손질하기 쉬운 스타일을 제안해드려요. 편하게 고민을 말씀해주세요.',
         specialties: ['커트', '스타일 상담'],
         affiliations: [
-          { salonName: '그린 헤어', period: '2026. 08 – 현재', current: true },
-          { salonName: '온 헤어', period: '2025. 03 – 2026. 07', current: false },
+          { salonName: '그린 헤어', period: '2026. 03 – 현재', current: true },
+          { salonName: '온 헤어', period: '2022. 03 – 2026. 02', current: false },
         ],
         reviewExamples: [
           {

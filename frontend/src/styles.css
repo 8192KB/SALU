@@ -771,8 +771,9 @@ legend {
   align-items: center;
   gap: 15px;
 }
-.designer-top h3 {
+.designer-top h2 {
   margin: 0;
+  font-size: 18px;
 }
 .designer-top p {
   margin: 4px 0 0;

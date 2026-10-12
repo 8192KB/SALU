@@ -204,6 +204,14 @@ function CutFormBody({
         return choices;
       }, new Map<string, CutRecord>())
       .values(),
+  ).filter(
+    // 등록 디자이너와 이름·현재 매장이 같으면 아래 ‘SALU 등록 디자이너’로만 표시
+    (cut) =>
+      !directory.designers.some(
+        (designer) =>
+          designer.name === cut.designerName.trim() &&
+          designer.affiliations.find((value) => value.current)?.salonName === cut.salonName.trim(),
+      ),
   );
   const previousDesigner = previousDesigners.find(
     (cut) =>

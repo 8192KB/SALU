@@ -11,7 +11,7 @@ import {
 import type { Location } from 'react-router';
 import { DirectoryEditor } from './directory-page';
 import { RecordComplete } from './completion';
-import { Icon, Missing } from './components';
+import { Icon, LoadBoundary, Missing } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 import { RequestList } from './request-pages';
@@ -63,7 +63,8 @@ function Layout() {
   const { repository: consultations } = useConsultations();
   const mode = useWorkspace();
   useEffect(() => {
-    if (mode === 'example') void import('./consultation-flow');
+    // 미리 받기 실패는 실제 화면 진입 때 LoadBoundary가 안내함
+    if (mode === 'example') import('./consultation-flow').catch(() => {});
   }, [mode]);
   const navigation = useMainNavigation(ready);
   const [pageSlot, setPageSlot] = useState<HTMLDivElement | null>(null);
@@ -99,7 +100,7 @@ function Layout() {
       className={`app-shell${path === '/records' ? ' journal-screen' : ''}${path === '/' && mode === 'empty' ? ' home-screen' : ''}${focused ? ' task-focused' : ''}${keyboardOpen ? ' keyboard-open' : ''}`}
     >
       {mode === 'example' && (
-        <div className="prototype-notice example-notice">
+        <section className="prototype-notice example-notice" aria-label="예시 체험">
           <div className="example-notice-inner">
             <span className="demo-badge">예시 체험</span>
             <WorkspaceLink className="example-directory" to="/designers">
@@ -112,7 +113,7 @@ function Layout() {
               체험 종료
             </Link>
           </div>
-        </div>
+        </section>
       )}
       <header className="app-header">
         <div className="header-inner">
@@ -144,7 +145,7 @@ function Layout() {
                 navigation.menu(
                   'consultations',
                   <>
-                    <Icon name="chat" />
+                    <Icon name="consult" />
                     상담
                   </>,
                 )}
@@ -194,6 +195,7 @@ function Layout() {
               setResetOpen(false);
               reset();
               consultations?.reset();
+              navigation.forget();
               navigate('/examples/records');
             }}
           >
@@ -244,49 +246,53 @@ function PageRoutes({
   mode: ReturnType<typeof useWorkspace>;
 }) {
   return (
-    <Suspense fallback={<p role="status">상담 화면을 불러오고 있어요.</p>}>
-      <Routes location={location}>
-        <Route
-          index
-          element={mode === 'example' ? <Navigate to="/examples/records" replace /> : <HomePage />}
-        />
-        <Route path="login" element={<LoginPage />} />
-        <Route path="signup" element={<SignupPage />} />
-        <Route path="backup" element={<BackupPage />} />
-        <Route path="account/designer" element={<DirectoryEditor />} />
-        <Route path="account" element={<AccountPage />} />
-        <Route path="auth/complete" element={<AuthCompletePage />} />
-        <Route path="records" element={<RecordList />} />
-        <Route path="records/new" element={<CutForm />} />
-        <Route path="records/:id/complete" element={<RecordComplete />} />
-        <Route path="records/:id/progress/:progressId/complete" element={<RecordComplete />} />
-        <Route path="records/:id" element={<RecordDetail />} />
-        <Route path="records/:id/edit" element={<CutForm />} />
-        <Route path="records/:id/progress/new" element={<ProgressForm />} />
-        <Route path="records/:id/progress/:progressId/edit" element={<ProgressForm />} />
-        <Route path="designers" element={<DesignerList />} />
-        <Route path="designers/:id" element={<DesignerDetail />} />
-        <Route path="consultations" element={<ConsultationList />} />
-        <Route path="consultations/new" element={<ConsultationNew />} />
-        <Route path="consultations/:id/complete" element={<ConsultationComplete />} />
-        <Route path="consultations/:id" element={<ConsultationDetail />} />
-        <Route path="consultations/materials" element={<MaterialsPage />} />
-        <Route path="consultations/request" element={<RequestPage />} />
-        <Route path="consultations/previews/:id" element={<PreviewPage />} />
-        <Route path="requests" element={<RequestList />} />
-        <Route path="requests/materials" element={<MaterialsPage />} />
-        <Route path="requests/write" element={<RequestPage />} />
-        <Route path="requests/review" element={<ReviewPage />} />
-        <Route path="requests/complete/:id" element={<CompletePage />} />
-        <Route path="requests/previews/:id" element={<PreviewPage />} />
-        <Route
-          path="*"
-          element={
-            <Missing title="페이지를 찾을 수 없어요" message="내 기록에서 다시 시작해 주세요." />
-          }
-        />
-      </Routes>
-    </Suspense>
+    <LoadBoundary key={location.pathname}>
+      <Suspense fallback={<p role="status">상담 화면을 불러오고 있어요.</p>}>
+        <Routes location={location}>
+          <Route
+            index
+            element={
+              mode === 'example' ? <Navigate to="/examples/records" replace /> : <HomePage />
+            }
+          />
+          <Route path="login" element={<LoginPage />} />
+          <Route path="signup" element={<SignupPage />} />
+          <Route path="backup" element={<BackupPage />} />
+          <Route path="account/designer" element={<DirectoryEditor />} />
+          <Route path="account" element={<AccountPage />} />
+          <Route path="auth/complete" element={<AuthCompletePage />} />
+          <Route path="records" element={<RecordList />} />
+          <Route path="records/new" element={<CutForm />} />
+          <Route path="records/:id/complete" element={<RecordComplete />} />
+          <Route path="records/:id/progress/:progressId/complete" element={<RecordComplete />} />
+          <Route path="records/:id" element={<RecordDetail />} />
+          <Route path="records/:id/edit" element={<CutForm />} />
+          <Route path="records/:id/progress/new" element={<ProgressForm />} />
+          <Route path="records/:id/progress/:progressId/edit" element={<ProgressForm />} />
+          <Route path="designers" element={<DesignerList />} />
+          <Route path="designers/:id" element={<DesignerDetail />} />
+          <Route path="consultations" element={<ConsultationList />} />
+          <Route path="consultations/new" element={<ConsultationNew />} />
+          <Route path="consultations/:id/complete" element={<ConsultationComplete />} />
+          <Route path="consultations/:id" element={<ConsultationDetail />} />
+          <Route path="consultations/materials" element={<MaterialsPage />} />
+          <Route path="consultations/request" element={<RequestPage />} />
+          <Route path="consultations/previews/:id" element={<PreviewPage />} />
+          <Route path="requests" element={<RequestList />} />
+          <Route path="requests/materials" element={<MaterialsPage />} />
+          <Route path="requests/write" element={<RequestPage />} />
+          <Route path="requests/review" element={<ReviewPage />} />
+          <Route path="requests/complete/:id" element={<CompletePage />} />
+          <Route path="requests/previews/:id" element={<PreviewPage />} />
+          <Route
+            path="*"
+            element={
+              <Missing title="페이지를 찾을 수 없어요" message="내 기록에서 다시 시작해 주세요." />
+            }
+          />
+        </Routes>
+      </Suspense>
+    </LoadBoundary>
   );
 }
 

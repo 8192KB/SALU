@@ -37,7 +37,7 @@ function attachmentFor(
       designerId: cut.designerProfileId,
       cutDate: preview.cut.cutDate,
       service: preview.cut.service,
-      summary: preview.progress.at(-1)?.discomfort || preview.goodNote || '커트한 날의 기록',
+      summary: preview.goodNote || preview.progress.at(-1)?.discomfort || '커트한 날의 기록',
       photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
     };
   }
@@ -72,12 +72,12 @@ function AttachmentCard({ attachment }: { attachment: ConsultationAttachment }) 
     </div>
   );
 }
-const sentTime = (date: string) =>
-  new Intl.DateTimeFormat('ko-KR', {
-    timeZone: 'Asia/Seoul',
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(date));
+const sentFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+const sentTime = (date: string) => sentFormatter.format(new Date(date));
 
 export function ConsultationDesignerProfile({
   designer,
@@ -170,7 +170,8 @@ export function ConsultationNew() {
     return <Missing title="상담할 디자이너와 기록을 찾을 수 없어요" />;
   return (
     <ConsultationForm
-      key={`${consultationState.generation}:${designer.id}:${record}:${previewId ?? ''}`}
+      // 보낸 뒤에는 보관된 같은 화면도 새 초안으로 다시 시작
+      key={`${consultationState.generation}:${consultationState.threads.length}:${designer.id}:${record}:${previewId ?? ''}`}
       repository={repository}
       designer={designer}
       record={record}
@@ -230,11 +231,10 @@ function ConsultationForm({
         attachment,
         request: draft.request,
       });
-      if (repository.get(thread.id))
-        navigate(`/consultations/${thread.id}/complete`, {
-          replace: true,
-          state: { celebrate: true },
-        });
+      navigate(`/consultations/${thread.id}/complete`, {
+        replace: true,
+        state: { celebrate: true },
+      });
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : '요청을 보내지 못했어요. 다시 시도해 주세요.',

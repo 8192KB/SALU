@@ -250,7 +250,7 @@ export function DesignerList() {
             <div className="designer-top">
               <Avatar name={designer.name} src={designer.avatarUrl} />
               <div>
-                <h3>{designer.name} 디자이너</h3>
+                <h2>{designer.name} 디자이너</h2>
                 <p>{currentSalon(designer)}</p>
               </div>
             </div>
@@ -264,7 +264,9 @@ export function DesignerList() {
             <p>{designer.introduction.split('\n')[0]}</p>
             <div className="card-bottom">
               <span>
-                {mode === 'example' ? designer.specialties.join(' · ') : '직접 등록한 프로필'}
+                {mode === 'example'
+                  ? `상담 후기 ${designer.reviewExamples.length}개`
+                  : '직접 등록한 프로필'}
               </span>
               <span>프로필 보기 ↗</span>
             </div>
@@ -331,7 +333,12 @@ export function DesignerDetail() {
   if (mode === 'example')
     return (
       <Suspense fallback={<p role="status">프로필을 불러오고 있어요.</p>}>
-        <ConsultationDesignerProfile designer={designer} record={record} preview={sourcePreview} />
+        {/* 상담은 주소로 고른 커트만 첨부함. 개인 커트 준비 초안의 커트로 대신 채우지 않음 */}
+        <ConsultationDesignerProfile
+          designer={designer}
+          record={search.get('record') ?? sourcePreview?.cut.id ?? null}
+          preview={sourcePreview}
+        />
       </Suspense>
     );
   const existing = unfinishedDrafts(state, requestDrafts).find(

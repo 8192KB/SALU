@@ -43,7 +43,23 @@ const database = () =>
       db.createObjectStore('workspaces', { keyPath: 'scope' });
       db.createObjectStore('assets');
     },
+    // 새 버전 탭이 스키마를 올릴 때 이 탭의 연결이 막지 않도록 닫고 다음 요청에서 다시 엶
+    blocking() {
+      const current = connection;
+      connection = undefined;
+      void current?.then((db) => db.close());
+    },
+    terminated() {
+      connection = undefined;
+    },
   }));
+let persistenceRequested = false;
+// 로그인 전 기록은 기기에만 있어 브라우저 저장 공간 정리(Safari 7일 정책 등)로 지워지지 않게 한 번 요청함
+function requestPersistentStorage() {
+  if (persistenceRequested) return;
+  persistenceRequested = true;
+  void navigator.storage?.persist?.().catch(() => false);
+}
 const stores = new Set<PersonalStore>();
 export const flushPersonalStores = () => Promise.all([...stores].map((store) => store.flush()));
 
@@ -486,6 +502,7 @@ export class PersonalStore {
       await tx.done;
 
       this.document = next;
+      requestPersistentStorage();
       this.pendingDrafts = draftVersion !== this.draftVersion;
       const latestDrafts = this.view.bundle.drafts;
       this.persistedRuntime = this.hydrate(bundle, this.pendingDrafts ? latestDrafts : undefined);

@@ -117,6 +117,11 @@ export function useMainNavigation(ready: boolean) {
     activePageKey,
     pages,
     location,
+    // 예시 초기화로 자료가 사라진 뒤 메뉴가 지워진 화면으로 돌아가지 않게 보관 화면도 비움
+    forget: () => {
+      positions.current.clear();
+      setVisited({});
+    },
     background: (page: Location, to: To, options?: NavigateOptions) => {
       const path = resolvePath(to, page.pathname);
       const nextSection = sectionOf(path.pathname);

@@ -33,7 +33,7 @@ export function Completion({
       <p className="completion-description">
         {description ??
           (mode === 'example'
-            ? '기록을 저장했어요.'
+            ? '저장했어요.'
             : '기기에 저장했어요. 계정 백업 상태는 내 기록에서 확인할 수 있어요.')}
       </p>
       {children}

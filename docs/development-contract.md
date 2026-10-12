@@ -4,17 +4,9 @@
 
 현재 작업: 소개 홈·개인/예시 분리·기록/경과·커트 준비 화면, Spring 인증·이메일 회원가입, 기기 보관·ZIP 복사본 복원·계정 자동 저장·조건부 Google/네이버 로그인 구현. 현재 저장 계약은 [personal-storage.md](personal-storage.md), 승인과 실행 결과는 [FR02](features/FR02-personal-storage-and-account-backup.md).
 
-커트 준비의 핵심 입력 우선 배치·선택 정보 접기·저장 오류 복구·대비와 문구 정리는 [모바일 작성 흐름 개선](plans/2026-10-11-mobile-writing-flow.md)에 승인 범위와 최종 검증 기록 보관.
+실제 공개 미용실·디자이너 등록/조회/선택은 FR04 구현. 예시는 메모리 전용, 계정 자동 업로드 금지. 도메인 기록 CRUD·실제 상담·후기·커뮤니티·앱은 후속 설계와 구분.
 
-조원 목업을 반영한 공통 앱 화면·기록/프로필/자료 요약·자료 전체 선택은 [앱 화면 개편](plans/2026-10-11-app-ui-refinement.md)에 구현 기준과 검증 기록 보관. 기존 입력·선택·스냅샷·저장 계약 유지. 운영 NAS 반영은 별도 배포 단계.
-
-2026-10-11 화면 조작·문구 정리와 이전 담당자(이름·매장) 재선택 구현은 [프론트 검토](plans/2026-10-11-frontend-polish-review.md) 참고. 실제 SALU 등록 디자이너 선택도 사용자가 필요성을 확인했으며, 공개 프로필 목록·등록/관리·ID 연결/저장 계약을 이어 구현할 범위. 개인 기록의 담당자 이름만으로 프로필을 자동 연결하지 않음.
-
-사용자가 로그인 없는 기기 저장과 로그인 후 전체 개인 자료 자동 서버 저장을 확정. 이전 2026-10-10 검토안의 수동 백업 제안은 과거 조사 기록. 아래 도메인 기록·디자이너·상담 설계는 후속 기준이며, 현재 암호화 백업 API와 구분. 예시는 계속 메모리 전용이고 자동 업로드 금지.
-
-화면 구분·기기 설정을 따르는 테마·내부망 연결 복구·전체 화면/오류 검토는 [화면 구분과 전체 검증](plans/2026-10-12-screen-audit-and-theme.md)에 구현과 최종 결과 기록. 실제 제공자 동의·NAS 반영은 별도 범위.
-
-2026-10-12 이메일 회원가입·구글/네이버 설정 연결·보관 안내 정리는 [FR03](features/FR03-account-signup-and-storage-navigation.md) 참고. 실제 제공자 동의·callback과 새 가입의 DB/브라우저 검증은 사용자 지시로 이후 진행.
+회원가입·소셜 설정은 [FR03](features/FR03-account-signup-and-storage-navigation.md). 새 이메일 가입과 실제 외부 동의/콜백 검증은 사용자 지시로 보류. NAS `20261012-fdda7e5`·HTTPS·V4 반영 완료, 최신 코드 main 통합. [현재 배포 절차](nas-preview.md)와 [과거 계획·검증 색인](archive/README.md) 참조.
 
 ## 기술과 코드 구조
 
@@ -56,9 +48,9 @@ Salon의 `CLAUDE.md:47-48`, `docs/발표.md:575-591`, `docs/websocket.md:263`에
 
 ## 검증 범위와 다음 단계
 
-기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 화면 전용 gate는 frontend 빌드·브라우저 E2E·API 요청 없음. 인증 연결은 실제 Spring·DB에서 별도 test:auth 실행. backend 변경 없이는 전체 DB 기반 검증을 반복하지 않음. 기존 검증 결과는 docs/verification.md와 docs/login.md에 보관.
+기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 화면 전용 gate는 frontend 빌드·브라우저 E2E·API 요청 없음. 인증 연결은 실제 Spring·DB에서 별도 test:auth 실행. backend 변경 없이는 전체 DB 기반 검증을 반복하지 않음. 초기 기반 검증은 [과거 검증](archive/verification/2026-10-05-foundation.md), 현재 인증은 [로그인](login.md), 최신 화면/디렉터리 검증은 [점검표](issue-tracker.md) 기준.
 
-현재 로그인·세션·로그아웃 검증은 docs/login.md, 기기 보관·계정 자동 저장 검증은 FR02 참고. 개인 기록은 비로그인 상태에서도 기기에 보관하며 로그인하면 계정 백업에 연결. 예시는 별도 메모리 영역에서 체험. 이후 가입·기록 도메인 API → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
+현재 로그인·세션·로그아웃 검증은 docs/login.md, 기기 보관·계정 자동 저장 검증은 FR02 참고. 개인 기록은 비로그인 상태에서도 기기에 보관하며 로그인하면 계정 백업에 연결. 예시는 별도 메모리 영역에서 체험. 이후 가입/소셜 실제 검증·기록 도메인 API → 상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 기본 공개 디자이너 등록/선택은 FR04 완료. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
 
 
 ## 계정과 데이터 관계
@@ -170,7 +162,7 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 
 ## 후속 업무 구현 계약
 
-아래 내용은 실제 저장·전송 단계의 제안 설계. 현재 `members` 외 업무 테이블·아래 API는 미구현. 초기 화면 계약은 [prototype-plan.md](prototype-plan.md)에 분리.
+아래 내용은 실제 저장·전송 단계의 제안 설계. 현재 회원·암호화 백업·소셜 식별·미용실·디자이너 공개 프로필 테이블/API는 구현. 아래 도메인 기록·상담·후기 설계는 미구현이며 FR04 디렉터리와 구분. 초기 화면 계약은 [prototype-plan.md](prototype-plan.md)에 분리.
 
 ### 단계와 완료 기준
 
@@ -291,28 +283,11 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 4. 기록/선택 자료/후기 수정·삭제·공유 철회와 파일 실패 복구 확인. 기존 세션·CSRF 기준 유지
 5. 모바일에서 로그인부터 상담 답변·후기까지 실제 저장 흐름 확인. 이때 초안 캡처와 구현 결과를 구분해 발표
 
-### Git·CI·배포 준비
+### Git·CI·배포
 
-- 원격: 사용자가 만든 비공개 `8192KB/SALU`에 2026-10-10 연결·업로드 확인. 기본 브랜치 main과 기존 feature/spring-auth 유지. main 보호·PR 검토 설정과 조원 최소 권한 초대는 후속
-- 기능 단위 브랜치와 작업 범위 합의. 같은 화면/Service를 동시 수정하지 않고 타입·인터페이스를 먼저 PR에서 합의
-- PR 기본 gate: frontend npm ci/build/화면 전용 E2E. 인증 연결 변경은 실제 Spring·등록된 테스트 계정으로 test:auth 추가. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
-- `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
-- 2026-10-11 web(Nginx+React dist)·backend(JRE17+jar) Dockerfile과 독립 MySQL의 `compose.nas.yml` 준비, 격리 salu_test 컨테이너·PC/모바일·계정 백업 흐름 확인. 기존 개발 DB Compose와 호스트 실행은 유지. 실제 NAS 설치·HTTPS 연결은 후속. [NAS 시연·피드백](nas-preview.md) 기준
-- 배포 기본안: cwsn NAS, `salu.doyul.dev`, 기존 Nginx Proxy Manager 사용. 실제 확인한 proxy network `nginx-proxy-manager_default`에 SALU web만 연결. backend/DB는 SALU 전용 내부 network
-- GHCR 이미지에 commit SHA 태그. CI 이미지 생성과 실제 배포 분리, 첫 배포는 검토 후 수동. SPA 경로는 index.html로 fallback, 같은 origin `/api` proxy, HTTPS cookie Secure, STOMP 연결 추가 때 Upgrade header 적용
-- SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
-- 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
-
-현재 완료는 초기 화면·Spring 인증·기기 저장/ZIP·계정 자동 저장·소셜 로그인 코드와 격리 검증, Docker 앱 구성·로컬 컨테이너 실행 검증. 실제 소셜 제공자 설정·동의 확인과 조원 초대·main 보호·CI·NAS 환경 설정·DNS/TLS·실제 배포는 후속. 발표 자료는 NAS 조원 시연·피드백과 화면 수정 뒤 제작. 각 단계에서 실행·검증한 뒤 완료로 기록.
-
-
-2026-10-11 사용자 승인으로 cwsn NAS에 `salu-preview` 설치·실행. 최신 웹/Spring `20261011-flow`와 SALU 전용 MySQL 8.4.11 모두 healthy, 신규 DB Flyway 1~3 성공. 기존 NAS 서비스 보존. SSH 터널 기반 PC·모바일 비로그인 기록·사진·경과 재조회 검증 완료. NPM host·DNS/TLS·외부 HTTPS·운영 계정 발급·Git 업로드는 후속. 상세 설정·Nginx 담당자 전달 내용은 [NAS 시연 기록](nas-preview.md#nas-실행-기록--2026-10-11-최신-화면-반영).
-
-
-### 2026-10-12 집중 작업 흐름 반영
-
-사용자 승인으로 기록·경과 입력과 커트 준비의 작업 화면에서 주 메뉴를 숨기고, 나가기/재개로 입력·사진 처리 상태를 보존. 준비는 저장 전 확인 → 저장 성공 결과 → 보관한 내용으로 분리. 확인 진입만으로 snapshot을 생성하지 않으며, 실제 기기 저장 성공 후 완료 표시. 예시의 완료는 메모리 체험 범위. 인증·서버 DB·ZIP 계약과 실제 상담 전송 후속 범위 유지. 구현·검증 결과는 [집중 작업 흐름](plans/2026-10-12-focused-task-flow.md) 참조. NAS·Git 원격 반영은 별도 실행 필요.
-
-현재 배포(2026-10-12): feature/personal-storage-backup의 source fdda7e5, NAS 20261012-fdda7e5·HTTPS 연결·V4 적용 완료. [실행 기록](nas-preview.md)과 [조원 안내](team-preview-message.md) 참고. 소셜 실제 동의·새 가입 검증·실제 상담/후기는 계속 별도 범위.
-
-Git 기준(2026-10-12): 최신 앱·발표·배포 기록을 main에 fast-forward 통합. 완료된 prototype-flow·spring-auth·personal-storage-backup 브랜치 정리. 이후 작업은 최신 main에서 새 기능 브랜치 사용. NAS source fdda7e5의 앱 코드와 통합된 앱 코드 동일, 브랜치 정리로 재배포하지 않음.
+- 비공개 [8192KB/SALU](https://github.com/8192KB/SALU), 최신 앱·발표·문서 main 통합. 완료 기능 브랜치 정리. 이후 최신 main에서 기능 브랜치 → 검증 → PR 검토 → 통합
+- 조원 초대·main 보호·CI 자동화는 후속. 이미지는 현재 로컬 빌드 후 SSH 전달, GHCR/CI 자동 배포는 미구현
+- PR gate는 변경 범위에 맞는 빌드·화면·실제 인증·독립 MySQL 검증. DB 검증 skip을 통과로 기록하지 않음
+- `.env.example` 등 값 없는 예시만 공유. 비밀 값·회원 fixture·사진·DB·운영 로그 제외
+- NAS 웹·Spring·독립 MySQL·HTTPS 배포 완료. SPA fallback·동일 origin `/api`·Secure cookie 적용. 상세 업데이트·DB/키 보존·복구는 [NAS 운영](nas-preview.md) 기준
+- 현재 운영 기준은 이 문서에 갱신, 긴 당시 계획과 실패/검증 이력은 [archive](archive/README.md)에 보존

@@ -1,9 +1,11 @@
 # SALU 개발계획 확장 검토안
 
+> 당시 계획·승인 범위·검증 근거를 보존한 기록. 현재 구현 상태는 [문서 안내](../../README.md)와 점검표 기준.
+
 상태: 사용자 검토 초안 · 후속 구현 승인 전
 작성일: 2026-10-10
-현재 구현 검토: [FR01-current-state-review.md](../features/FR01-current-state-review.md)
-현재 확정 계약: [development-contract.md](../development-contract.md), [prototype-plan.md](../prototype-plan.md)
+현재 구현 검토: [FR01-current-state-review.md](../reviews/FR01-current-state-review.md)
+현재 확정 계약: [development-contract.md](../../development-contract.md), [prototype-plan.md](../../prototype-plan.md)
 
 후속 사용자 제안: [개인 기록·선택 연결과 7주차 발표 검토안](2026-10-10-local-records-and-week7-review.md). 첫 이용의 기록/둘러보기 선택, 로그인 없는 기기 보관, 파일 백업, 필요한 기능에서의 계정 연결을 반영한 **최신 방향 검토는 새 문서 우선**. 아래 계정 중심 저장 가지와 개발 순서는 이 제안 전의 초안이며, 자료 선택·디자이너 수신·공개 범위의 상세 검토는 공통 참고.
 
@@ -260,7 +262,7 @@ flowchart LR
 - 이력 불변이면 사진도 계속 볼 수 있는가? 텍스트 기록과 파일 접근·철회는 다른 정책
 - 실시간과 커뮤니티가 먼저 필요한가? HTTP 왕복과 재열람에서 먼저 가치가 생긴다면 후속 범위를 줄일 수 있음
 
-이 가정들은 ‘현재 구현 실패’가 아니라 계획을 확정하기 전에 줄일 불확실성. 기존 기록·상담 기능의 시장 유사성과 차별화 미입증 상태는 [자료 조사 목록](../document-inventory.md) 유지.
+이 가정들은 ‘현재 구현 실패’가 아니라 계획을 확정하기 전에 줄일 불확실성. 기존 기록·상담 기능의 시장 유사성과 차별화 미입증 상태는 [자료 조사 목록](../reviews/2026-10-10-document-inventory.md) 유지.
 
 ## 다음 확정 절차
 

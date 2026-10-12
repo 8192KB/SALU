@@ -19,13 +19,13 @@
 
 | 항목 | 현재 증거 / 다음 확인 |
 |---|---|
-| 전체 선택/전체 해제, 가격 천원 단위와 직접 입력 | [프론트 검토](plans/2026-10-11-frontend-polish-review.md). 회귀 검증 대상 |
-| 날짜 한국어 표시, 선택 정보 접기, 자연스러운 안내 | [모바일 작성 흐름](plans/2026-10-11-mobile-writing-flow.md). 달력은 UI-04에서 별도 해결 |
-| 작성 중 메뉴 이동·초안·스크롤 유지 | [집중 작업 흐름](plans/2026-10-12-focused-task-flow.md), navigation/persistence 테스트. 완료 화면 이동도 재검증 |
-| 흰 배경 구분·다크 모드·사진/빈 프레임·오류 표시 | [화면 검토](plans/2026-10-12-screen-audit-and-theme.md). UI-02/06에서 재검증 |
+| 전체 선택/전체 해제, 가격 천원 단위와 직접 입력 | [프론트 검토](archive/plans/2026-10-11-frontend-polish-review.md). 회귀 검증 대상 |
+| 날짜 한국어 표시, 선택 정보 접기, 자연스러운 안내 | [모바일 작성 흐름](archive/plans/2026-10-11-mobile-writing-flow.md). 달력은 UI-04에서 별도 해결 |
+| 작성 중 메뉴 이동·초안·스크롤 유지 | [집중 작업 흐름](archive/plans/2026-10-12-focused-task-flow.md), navigation/persistence 테스트. 완료 화면 이동도 재검증 |
+| 흰 배경 구분·다크 모드·사진/빈 프레임·오류 표시 | [화면 검토](archive/plans/2026-10-12-screen-audit-and-theme.md). UI-02/06에서 재검증 |
 | 좋았던 점/불편 입력 느림 | 기존 106개 화면·5개 실제 저장 테스트 통과, 200커트/1000경과 준비 비용 4907→196ms. 실기기 IME 확인 필요 |
 | 로그인·회원가입·구글/네이버·백업 안내 | [FR03](features/FR03-account-signup-and-storage-navigation.md). 회원가입 실제 동작·소셜 동의 검증은 사용자 지시로 보류 |
-| 태블릿 서버 연결 오류 | [화면 검토](plans/2026-10-12-screen-audit-and-theme.md). 현재 URL에서 공개 디렉터리 API 재검증 |
+| 태블릿 서버 연결 오류 | [화면 검토](archive/plans/2026-10-12-screen-audit-and-theme.md). 현재 URL에서 공개 디렉터리 API 재검증 |
 
 ## 이번 작업 검증 기록
 

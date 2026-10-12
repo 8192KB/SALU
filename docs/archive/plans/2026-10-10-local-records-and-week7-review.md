@@ -1,8 +1,10 @@
 # SALU 개인 기록·선택 연결과 7주차 발표 검토안
 
+> 당시 계획·승인 범위·검증 근거를 보존한 기록. 현재 구현 상태는 [문서 안내](../../README.md)와 점검표 기준.
+
 상태: 사용자 제안 반영 초안 · 기능 구현 전 · 발표 범위 확정 전
 작성일: 2026-10-10
-근거: 사용자 제안, 실제 `6주차_캡스톤발표.pptx`, [현재 구현 검토](../features/FR01-current-state-review.md)
+근거: 사용자 제안, 실제 `6주차_캡스톤발표.pptx`, [현재 구현 검토](../reviews/FR01-current-state-review.md)
 
 ## 제안 방향
 
@@ -171,7 +173,7 @@ flowchart TD
 | 두 실제 계정 질문·답변 → 재접속 | 선택본과 답변만 참여자가 열람, 제3자 차단 | 미구현 |
 | 공개 선택 → 공개 철회 | 비로그인 읽기는 공개 상태만, 원본은 계속 비공개 | 미구현 |
 
-현재 검증 기록은 [FR01](../features/FR01-current-state-review.md): 화면 44개·실제 인증 9개·백엔드 기반 21개 통과. 저장·백업·커뮤니티·상담 표의 미구현 행을 대신 검증한 결과가 아님. 이번 후속 작업은 문서 검토이며 제품 테스트 재실행 없음.
+현재 검증 기록은 [FR01](../reviews/FR01-current-state-review.md): 화면 44개·실제 인증 9개·백엔드 기반 21개 통과. 저장·백업·커뮤니티·상담 표의 미구현 행을 대신 검증한 결과가 아님. 이번 후속 작업은 문서 검토이며 제품 테스트 재실행 없음.
 
 ## 7주차 발표 범위 추천
 
@@ -226,15 +228,15 @@ flowchart TD
 
 사용자가 제시한 첫 진입·기기 보관·선택 로그인·수동 백업 방향은 이 초안에 반영. 확정할 범위는 7주차 웹 시연 여부, 사진을 포함할지, 파일 복원 충돌 처리, 공용 기기 접근과 계정 변경 경계. 상세 구현 계약은 그 결정 뒤 기능 문서로 작성.
 
-현재 [development-contract.md](../development-contract.md)와 [prototype-plan.md](../prototype-plan.md)는 기존 코드의 기준. 이 초안은 변경 제안이며 기존 계약을 덮어쓰지 않음. 새 기능 승인 시 ‘회원이 모든 기록의 소유 주체’와 목업 저장 금지를 실제 기기 모드와 구분해서 함께 갱신해야 함.
+현재 [development-contract.md](../../development-contract.md)와 [prototype-plan.md](../../prototype-plan.md)는 기존 코드의 기준. 이 초안은 변경 제안이며 기존 계약을 덮어쓰지 않음. 새 기능 승인 시 ‘회원이 모든 기록의 소유 주체’와 목업 저장 금지를 실제 기기 모드와 구분해서 함께 갱신해야 함.
 
 ## 참고
 
 문서 확인: 관련 로컬 파일 링크·코드 블록 검사 통과. 이 검토안·최초 확장안·Obsidian 개발계획/개요의 Mermaid 18개를 11.12.0으로 구문 검사·렌더링 확인. 기능 코드와 PPT 파일은 변경하지 않았으며 기기 저장·복원의 제품 테스트 결과는 아직 없음.
 
 - [기존 개발계획 확장 검토](2026-10-10-development-plan-review.md): 기록 선택·디자이너 수신·정책·검증의 상세 가지
-- [현재 구현 검토](../features/FR01-current-state-review.md): 완료 범위와 R01/R02
-- [현재 개발 계약](../development-contract.md), [초기 화면 계약](../prototype-plan.md), [실제 인증 계약](../login.md)
+- [현재 구현 검토](../reviews/FR01-current-state-review.md): 완료 범위와 R01/R02
+- [현재 개발 계약](../../development-contract.md), [초기 화면 계약](../../prototype-plan.md), [실제 인증 계약](../../login.md)
 - [Capacitor 저장](https://capacitorjs.com/docs/guides/storage), [Capacitor 설정](https://capacitorjs.com/docs/config), [파일 API](https://capacitorjs.com/docs/apis/filesystem)
 - [IndexedDB 표준](https://www.w3.org/TR/IndexedDB/): 사진 Blob/File 저장과 임시 URL의 구분
 - [오프라인 웹 화면 준비](https://web.dev/articles/offline-cookbook): 앱 파일의 캐시와 개인 DB 저장은 별도

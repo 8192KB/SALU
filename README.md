@@ -4,21 +4,14 @@
 
 시연 주소: **https://salu.doyul.dev**. 배포 버전 `20261012-fdda7e5`, 최신 통합 코드는 `main` 브랜치. [조원 전달 문구](docs/team-preview-message.md).
 
-현재 React에서 **로그인 없이 기기 보관·ZIP 백업/복원·로그인 후 계정 자동 저장** 제공. 소개 홈과 개인 기록, 별도 예시 체험을 분리. Google·네이버 로그인은 SALU client 설정 시 활성화. 상담 실제 전송·커뮤니티·앱은 후속 단계.
+현재 React에서 **로그인 없이 기기 보관·ZIP 백업/복원·로그인 후 계정 자동 저장** 제공. 소개 홈과 개인 기록, 별도 예시 체험을 분리. Google·네이버 설정과 버튼은 연결했으며 실제 제공자 동의 검증은 보류. 상담 실제 전송·커뮤니티·앱은 후속 단계.
 
 ## 먼저 볼 문서
 
-- [사용자 지적사항 점검표](docs/issue-tracker.md): 구현·검증·실기기 확인·NAS 반영을 따로 관리
-- [명확한 흐름과 실제 디렉터리](docs/features/FR04-clear-flow-and-public-directory.md): 앱 달력·공통 저장 결과·미용실/디자이너 등록·선택
-- [NAS 조원 시연과 피드백](docs/nas-preview.md): Docker 구성·이미지 이전·HTTPS 연결·공유 순서, 발표 자료는 피드백 후 제작
-- [기기 보관·계정 자동 저장](docs/personal-storage.md): 현재 저장·복원·암호화·소셜 로그인 계약과 실행/복구
-- [FR02 구현/검증](docs/features/FR02-personal-storage-and-account-backup.md): 승인한 계획의 구현 결과
-- [7주차 발표 예시안](docs/presentations/week07/README.md): 검증 전 PPTX·PDF, 현재 구현과 기기 저장 방향·발표 범위 구분
-- [기기 기록·PPT 대조·발표 범위 검토](docs/plans/2026-10-10-local-records-and-week7-review.md): 로그인 없는 개인 보관, 선택 계정 연결, 파일 복원과 후속 상담
-- [로그인 연결과 검증](docs/login.md): 실제 계정·세션·CSRF·오류 복구
-- [화면 계획](docs/prototype-plan.md): 기록·개인 준비·자료 선택·미리보기
-- [후속 개발 계약](docs/development-contract.md): DB·권한·예정 API·사진·상담·공동 작업·배포
-- [자료 조사 목록](docs/document-inventory.md): 캡스톤·Salon·SALU·임시 조사 문서의 대표 원본과 구버전 구분
+- [문서 안내](docs/README.md): 현재 기준·기능 계약·과거 기록의 위치
+- [지적사항과 남은 확인](docs/issue-tracker.md): 구현·검증·실기기·NAS 상태
+- [로컬 실행](docs/local-runtime.md) · [NAS 배포와 업데이트](docs/nas-preview.md)
+- [조원 전달 문구](docs/team-preview-message.md) · [7주차 발표 초안](docs/presentations/week07/README.md)
 
 사람이 읽는 진행 체크는 Obsidian `20 진행 중인 일/SALU 진행상황`에서 관리. 이 개인 노트는 직접 체크 가능하며 자동 발행 대상이 아님. 상세 안내는 `30 프로젝트/SALU`의 **SALU 개요 → SALU 개발계획 → SALU 벤치마킹** 순서. 원본은 `~/dotfiles/obsidian/managed/30 프로젝트/SALU/`이며 Vault 복사본을 직접 수정하지 않음.
 
@@ -79,7 +72,7 @@ npm run test:auth
 npm run test:storage
 ```
 
-`test:e2e`는 Spring 없는 PC·모바일 화면/기기 보관 검증. 실제 인증과 자동 저장 검증 전, 별도 터미널에서 `./scripts/storage-test-server.sh` 실행. `test:auth`와 `test:storage`는 차례로 실행. 같은 서버에서 연속 로그인 요청이 분당 제한에 걸리면 1분 후 재실행하며 보안 제한을 낮추지 않음. 두 검증은 테스트 서버8083·salu_test·/tmp 임시 계정 사용. 기존 개발/Salon 회원이나 개인 자료를 테스트 fixture로 쓰지 않음. 인증 trace·영상·스크린샷 저장 없음. 최신 결과와 정확한 범위는 [FR02](docs/features/FR02-personal-storage-and-account-backup.md), 과거 결과는 [FR01](docs/features/FR01-current-state-review.md) 참고.
+`test:e2e`는 Spring 없는 PC·모바일 화면/기기 보관 검증. 실제 인증과 자동 저장 검증 전, 별도 터미널에서 `./scripts/storage-test-server.sh` 실행. `test:auth`와 `test:storage`는 차례로 실행. 같은 서버에서 연속 로그인 요청이 분당 제한에 걸리면 1분 후 재실행하며 보안 제한을 낮추지 않음. 두 검증은 테스트 서버8083·salu_test·/tmp 임시 계정 사용. 기존 개발/Salon 회원이나 개인 자료를 테스트 fixture로 쓰지 않음. 인증 trace·영상·스크린샷 저장 없음. 최신 결과와 정확한 범위는 [점검표](docs/issue-tracker.md)와 [FR04](docs/features/FR04-clear-flow-and-public-directory.md), 과거 결과는 [FR01](docs/archive/reviews/FR01-current-state-review.md) 참고.
 
 백엔드를 변경할 때에는 별도 통합 검증:
 

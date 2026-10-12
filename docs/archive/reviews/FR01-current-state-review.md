@@ -1,6 +1,8 @@
 # 현재 인증·기록·요청 준비 검토
 
-이 검토는 소개 홈·예시 체험 분리 전 상태의 기록. 이후 화면과 인증 검증은 [현재 화면 계획](../prototype-plan.md)과 [로그인 검증](../login.md) 참고.
+> 당시 계획·승인 범위·검증 근거를 보존한 기록. 현재 구현 상태는 [문서 안내](../../README.md)와 점검표 기준.
+
+이 검토는 소개 홈·예시 체험 분리 전 상태의 기록. 이후 화면과 인증 검증은 [현재 화면 계획](../../prototype-plan.md)과 [로그인 검증](../../login.md) 참고.
 
 
 상태: 기존 구현 검토 완료 · 보완 항목 미수정
@@ -29,7 +31,7 @@
 
 ### R01 · P2 · ‘오늘’의 기준이 브라우저 시간대에 의존
 
-- 근거: [dates.ts](../../frontend/src/prototype/dates.ts)의 `today()`가 브라우저의 `getFullYear/getMonth/getDate` 사용
+- 근거: [dates.ts](../../../frontend/src/prototype/dates.ts)의 `today()`가 브라우저의 `getFullYear/getMonth/getDate` 사용
 - 재현: 같은 순간 `2026-10-10T00:30:00Z`, 브라우저 `America/Los_Angeles`, 새 커트 날짜와 입력 상한 모두 `2026-10-09`. 서울 날짜는 `2026-10-10`
 - 영향: 한국 기준 당일 기록을 하루 전으로 기본 입력하거나 당일 날짜를 미래로 판단. 서울보다 날짜가 앞선 지역에서는 한국 기준 미래 날짜를 허용할 가능성
 - 판정: 현재 예시의 날짜 구현과 후속 계약의 `Asia/Seoul` 기준 사이 불일치. 서울 시간대로만 실행한 기존 테스트에서 드러나지 않는 항목
@@ -38,7 +40,7 @@
 
 ### R02 · P2 · 인증 성공 화면이 후속 CSRF 조회를 기다림
 
-- 근거: [auth/api.ts](../../frontend/src/auth/api.ts)의 로그인·로그아웃이 성공 응답을 받은 뒤 `await csrfHeaders().catch(() => {})` 실행
+- 근거: [auth/api.ts](../../../frontend/src/auth/api.ts)의 로그인·로그아웃이 성공 응답을 받은 뒤 `await csrfHeaders().catch(() => {})` 실행
 - 재현: 비밀값 없는 브라우저 응답 재현에서 로그인 200을 먼저 반환하고 이후 CSRF 조회만 3.5초 지연. 성공 1초 뒤에도 `/login`에서 `로그인 중` 표시, 약 3.9초 뒤 계정 표시
 - 영향: 이미 성공한 인증의 표시와 예시 자료 초기화가 후속 요청 시간만큼 늦어짐. 현재 요청 timeout은 8초이므로 후속 요청 지연도 기다림
 - 판정: 인증 실패·세션 보안 우회가 아니라 성공 피드백 지연. 로그인에서 재현했고 로그아웃도 같은 대기 구조는 코드로 확인
@@ -71,13 +73,13 @@
 
 | 파일 | 역할 |
 |---|---|
-| [SecurityConfig.java](../../backend/src/main/java/kr/salu/config/SecurityConfig.java) | URL 인증·CSRF·세션·로그인/로그아웃 응답 |
-| [ActiveSessionGuard.java](../../backend/src/main/java/kr/salu/auth/ActiveSessionGuard.java) | 계정 활성 상태·DB 장애 응답 |
-| [GlobalExceptionHandler.java](../../backend/src/main/java/kr/salu/common/error/GlobalExceptionHandler.java) | MVC 공통 오류 |
-| [auth/context.tsx](../../frontend/src/auth/context.tsx) | 계정 상태·응답 순서·메모리 초기화 |
-| [memory-repository.ts](../../frontend/src/prototype/memory-repository.ts) | 예시 입력 검사·기록 변경·자료 복사·blob 정리 |
-| [request-flow.ts](../../frontend/src/prototype/request-flow.ts) | 과거 선택본과 최신 자료 구분·초안 주소 |
-| [consultation-pages.tsx](../../frontend/src/consultation-pages.tsx) | 자료 선택·요청 작성·프로필 연결·미리보기 |
+| [SecurityConfig.java](../../../backend/src/main/java/kr/salu/config/SecurityConfig.java) | URL 인증·CSRF·세션·로그인/로그아웃 응답 |
+| [ActiveSessionGuard.java](../../../backend/src/main/java/kr/salu/auth/ActiveSessionGuard.java) | 계정 활성 상태·DB 장애 응답 |
+| [GlobalExceptionHandler.java](../../../backend/src/main/java/kr/salu/common/error/GlobalExceptionHandler.java) | MVC 공통 오류 |
+| [auth/context.tsx](../../../frontend/src/auth/context.tsx) | 계정 상태·응답 순서·메모리 초기화 |
+| [memory-repository.ts](../../../frontend/src/prototype/memory-repository.ts) | 예시 입력 검사·기록 변경·자료 복사·blob 정리 |
+| [request-flow.ts](../../../frontend/src/prototype/request-flow.ts) | 과거 선택본과 최신 자료 구분·초안 주소 |
+| [consultation-pages.tsx](../../../frontend/src/consultation-pages.tsx) | 자료 선택·요청 작성·프로필 연결·미리보기 |
 
 ## 이번 실행 결과
 
@@ -97,16 +99,16 @@ Browser plugin 미제공으로 기존 Playwright 사용. 최초 sandbox 실행�
 
 ## 검증의 한계
 
-실제 DB 중단/복구 스크립트는 이번에 실행하지 않음. 기존 검증 이력은 [login.md](../login.md) 유지. 물리 휴대폰·Safari·가상 키보드, 다중 서버·실제 운영 배포, 외부 사용자 사용성은 이번 검토 범위 밖.
+실제 DB 중단/복구 스크립트는 이번에 실행하지 않음. 기존 검증 이력은 [login.md](../../login.md) 유지. 물리 휴대폰·Safari·가상 키보드, 다중 서버·실제 운영 배포, 외부 사용자 사용성은 이번 검토 범위 밖.
 
 기록 DB·사진 서버 업로드·상담 왕복·후기·공개 사례는 아직 미구현. 인증/화면 테스트 통과를 이 기능의 소유권·참여자·중복/동시성 검증으로 확대하지 않음. 초안에 있는 후속 수용 기준은 실행 결과가 아님.
 
 ## 참고
 
-- [개발 기준과 후속 업무 계약](../development-contract.md)
-- [초기 화면 계약](../prototype-plan.md)
-- [실제 인증 연결](../login.md)
-- [기존 검증 이력](../verification.md)
-- [Salon 선별 이식 감사](../salon-security-audit.md)
+- [개발 기준과 후속 업무 계약](../../development-contract.md)
+- [초기 화면 계약](../../prototype-plan.md)
+- [실제 인증 연결](../../login.md)
+- [기존 검증 이력](../verification/2026-10-05-foundation.md)
+- [Salon 선별 이식 감사](../../salon-security-audit.md)
 - [개발계획 검토 초안](../plans/2026-10-10-development-plan-review.md)
 - [개인 기록·선택 연결과 7주차 발표 검토안](../plans/2026-10-10-local-records-and-week7-review.md)

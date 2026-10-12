@@ -188,7 +188,7 @@ async function main() {
       C.muted,
     );
     s.addNotes(
-      "약 40~50초. 지난주에는 커트와 경과를 저장하고 조회하는 기능을 React 입력·목록 화면과 연결하겠다고 말씀드렸습니다. 이번에는 커트 기록을 작성하고 목록과 상세에서 확인한 뒤, 같은 커트에 날짜별 경과를 추가하는 화면을 구현했습니다. 목업과 화면 구상에서 실제 조작하는 흐름으로 넘어간 단계입니다. 기록 유지와 계정 분리는 현재 기기 저장·계정 백업 범위에서 확인했습니다.\n근거: 캡스톤 실제 6주차_캡스톤발표.pptx 12장. 입력·목록과 같은 커트의 경과 추가가 다음 주 예고이며, 재로그인 유지·타인 접근 차단은 완료 기준입니다. 현재 개인 영역은 IndexedDB 기기 보관과 로그인 후 암호화 백업 API를 사용합니다. 별도 커트/경과 도메인 테이블 CRUD와 상담 참여자 권한까지 완료했다고 말하지 않습니다. 최신 코드·검증 원본: docs/personal-storage.md, docs/features/FR02-personal-storage-and-account-backup.md, docs/plans/2026-10-12-screen-audit-and-theme.md. 서버 구조·ZIP·소셜 기능을 본문에서 별도 설명하지 않습니다.",
+      "약 40~50초. 지난주에는 커트와 경과를 저장하고 조회하는 기능을 React 입력·목록 화면과 연결하겠다고 말씀드렸습니다. 이번에는 커트 기록을 작성하고 목록과 상세에서 확인한 뒤, 같은 커트에 날짜별 경과를 추가하는 화면을 구현했습니다. 목업과 화면 구상에서 실제 조작하는 흐름으로 넘어간 단계입니다. 기록 유지와 계정 분리는 현재 기기 저장·계정 백업 범위에서 확인했습니다.\n근거: 캡스톤 실제 6주차_캡스톤발표.pptx 12장. 입력·목록과 같은 커트의 경과 추가가 다음 주 예고이며, 재로그인 유지·타인 접근 차단은 완료 기준입니다. 현재 개인 영역은 IndexedDB 기기 보관과 로그인 후 암호화 백업 API를 사용합니다. 별도 커트/경과 도메인 테이블 CRUD와 상담 참여자 권한까지 완료했다고 말하지 않습니다. 최신 코드·검증 원본: docs/personal-storage.md, docs/features/FR02-personal-storage-and-account-backup.md, docs/archive/plans/2026-10-12-screen-audit-and-theme.md. 서버 구조·ZIP·소셜 기능을 본문에서 별도 설명하지 않습니다.",
     );
   }
   {
@@ -306,7 +306,7 @@ async function main() {
       C.muted,
     );
     s.addNotes(
-      "질문 대응용 숨김 장이며 기본 PDF에서는 제외. 수치는 docs/plans/2026-10-12-screen-audit-and-theme.md의 기존 최종 실행 결과를 확인한 것입니다. 이번 PPT 작업에서 전체 102/13/5를 재실행하지 않았습니다. 102는 PC/모바일 전체 화면·기기 보관/ZIP/테마 범위이며 커트·경과만의 테스트 개수나 사용자 만족도 점수가 아닙니다. 계정 백업은 개인 자료를 암호화 저장·복원하는 API이며 별도 커트/경과 도메인 CRUD와 구분합니다. 현재 캡처에서 새로 확인한 범위는 개인 기록 작성→경과 추가→새로고침→목록·상세 재진입, PC/모바일 첫 화면입니다.\nNAS: docs/nas-preview.md의 최신 실행 기록에 따르면 20261011-flow 태그 컨테이너와 MySQL을 cwsn에 설치하고 SSH 터널로 PC/모바일 내부 시연했습니다. 기존 Docker 전달 이미지와 NAS 내부 시연은 10/11 스냅샷입니다. 10/12 최신 UI를 NAS에 재빌드·반영했거나 외부 HTTPS 주소가 연결됐다고 주장하지 않습니다. NPM 호스트·DNS·TLS·조원 계정 발급·Git 최신 변경 업로드·조원 피드백은 문서상 후속입니다. 실제 Google/네이버 동의·실물 모바일/Safari·스크린리더는 기존 검증 범위 밖입니다.\n자료 기준: 현재 로컬 작업 트리, 실제 6주차 발표 12장, personal-storage.md, FR02, focused-task-flow.md, screen-audit-and-theme.md, nas-preview.md. 발표 본문에 서버 구조·ZIP·소셜·도커 전반을 추가하지 않습니다.",
+      "질문 대응용 숨김 장이며 기본 PDF에서는 제외. 수치는 docs/archive/plans/2026-10-12-screen-audit-and-theme.md의 기존 최종 실행 결과를 확인한 것입니다. 이번 PPT 작업에서 전체 102/13/5를 재실행하지 않았습니다. 102는 PC/모바일 전체 화면·기기 보관/ZIP/테마 범위이며 커트·경과만의 테스트 개수나 사용자 만족도 점수가 아닙니다. 계정 백업은 개인 자료를 암호화 저장·복원하는 API이며 별도 커트/경과 도메인 CRUD와 구분합니다. 현재 캡처에서 새로 확인한 범위는 개인 기록 작성→경과 추가→새로고침→목록·상세 재진입, PC/모바일 첫 화면입니다.\nNAS: docs/archive/deployment/2026-10-12-nas-history.md의 10/11 실행 기록 기준으로 20261011-flow 태그 컨테이너와 MySQL을 cwsn에 설치하고 SSH 터널로 PC/모바일 내부 시연했습니다. 기존 Docker 전달 이미지와 NAS 내부 시연은 10/11 스냅샷입니다. 10/12 최신 UI를 NAS에 재빌드·반영했거나 외부 HTTPS 주소가 연결됐다고 주장하지 않습니다. NPM 호스트·DNS·TLS·조원 계정 발급·Git 최신 변경 업로드·조원 피드백은 문서상 후속입니다. 실제 Google/네이버 동의·실물 모바일/Safari·스크린리더는 기존 검증 범위 밖입니다.\n자료 기준: 현재 로컬 작업 트리, 실제 6주차 발표 12장, personal-storage.md, FR02, focused-task-flow.md, screen-audit-and-theme.md, nas-preview.md. 발표 본문에 서버 구조·ZIP·소셜·도커 전반을 추가하지 않습니다.",
     );
   }
   await pptx.writeFile({ fileName: OUTPUT, compression: true });

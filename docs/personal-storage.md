@@ -63,14 +63,14 @@ Google OIDC와 네이버 OAuth2는 기존 SALU 세션·ROLE_MEMBER·ACTIVE·CSRF
 
 별도 터미널에서 `scripts/storage-test-server.sh` 실행(8083, salu_test 임시 계정). 이후 frontend에서 `npm run test:auth`, `npm run test:storage`. fixture/키는 /tmp에 두고 서버 종료 시 회원과 백업을 함께 정리. 화면 검증 `npm run test:e2e`는 Spring 없이 기기 보관과 별도 예시를 검증. 인증 검사 trace/video/screenshot에 비밀번호나 CSRF 저장 없음.
 
-현재 실행 결과는 [FR02](features/FR02-personal-storage-and-account-backup.md)의 검증 기록 참고. 저장 오류 표시 복구와 모바일 작성의 후속 검증은 [작성 흐름 개선](plans/2026-10-11-mobile-writing-flow.md). 상담 전송·커뮤니티·네이티브 앱·가입 API는 이번 완료 범위에 포함하지 않음.
+현재 실행 결과는 [FR02](features/FR02-personal-storage-and-account-backup.md)의 검증 기록 참고. 저장 오류 표시 복구와 모바일 작성의 후속 검증은 [작성 흐름 개선](archive/plans/2026-10-11-mobile-writing-flow.md). 상담 전송·커뮤니티·네이티브 앱은 후속. 가입 API는 FR03 구현이며 실제 새 가입 검증은 보류.
 
 ### HTTP 시연 주소의 ID 생성
 
-2026-10-12 일반 HTTP 호스트에서 기록 저장 실패 재현. `crypto.randomUUID`는 해당 환경에 없어 공통 `newId()`에서 `crypto.getRandomValues` 기반 UUID v4를 사용하도록 보완. 기존 기록 ID·ZIP·서버 저장 형식 유지. HTTPS·localhost에서는 기존 randomUUID 사용. 기록·사진·경과·준비·복원·동기화 모두 같은 생성 함수 적용. 상세 원인과 검증은 [집중 작업 흐름](plans/2026-10-12-focused-task-flow.md#http-기록-저장-오류-보완) 참조. NAS 이미지 반영은 별도 배포 필요.
+2026-10-12 일반 HTTP 호스트에서 기록 저장 실패 재현. `crypto.randomUUID`는 해당 환경에 없어 공통 `newId()`에서 `crypto.getRandomValues` 기반 UUID v4를 사용하도록 보완. 기존 기록 ID·ZIP·서버 저장 형식 유지. HTTPS·localhost에서는 기존 randomUUID 사용. 기록·사진·경과·준비·복원·동기화 모두 같은 생성 함수 적용. 상세 원인과 검증은 [집중 작업 흐름](archive/plans/2026-10-12-focused-task-flow.md#http-기록-저장-오류-보완) 참조. NAS `20261012-fdda7e5` 반영 완료.
 
 
-2026-10-12 저장 상태 표시 보완: 다른 기기와 변경 충돌 시 ‘변경 확인 필요’로 표시하고 복구본 만들기로 안내. 기기 저장 실패는 계속 우선 표시하며, 미전송 자료·충돌이 남아 있으면 서버 저장 성공으로 표시하지 않음. 실제 두 브라우저 충돌 복구와 오류 우선순위 5개 검증 통과. ZIP 복원 초안은 현재 초안을 보존하며 선택한 초안의 작성 화면으로 직접 이동. 저장/API/암호화 형식 변경 없음. 상세 화면·검증 기록은 [화면 구분과 전체 검증](plans/2026-10-12-screen-audit-and-theme.md).
+2026-10-12 저장 상태 표시 보완: 다른 기기와 변경 충돌 시 ‘변경 확인 필요’로 표시하고 복구본 만들기로 안내. 기기 저장 실패는 계속 우선 표시하며, 미전송 자료·충돌이 남아 있으면 서버 저장 성공으로 표시하지 않음. 실제 두 브라우저 충돌 복구와 오류 우선순위 5개 검증 통과. ZIP 복원 초안은 현재 초안을 보존하며 선택한 초안의 작성 화면으로 직접 이동. 저장/API/암호화 형식 변경 없음. 상세 화면·검증 기록은 [화면 구분과 전체 검증](archive/plans/2026-10-12-screen-audit-and-theme.md).
 
 2026-10-12 입력 성능 보완: 입력마다 전체 커트의 revision 항목을 다시 구성하던 처리를 줄임. 상태와 해당 커트의 초안 참조가 그대로인 항목은 기존 payload 사용. 재분류가 필요할 때도 경과·사진·준비본·요청을 한 번에 커트별로 묶음. 사진 URL이 바뀐 객체와 그 상위 경로만 복사하며, 저장 완료 시 이미 화면에서 쓰던 데이터 참조를 보존. 저장 상태 표시만 바뀌면 폼 context 값을 다시 만들지 않음. 한국 날짜 포매터는 재사용하되 호출 때마다 현재 시각을 읽음.
 

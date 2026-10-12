@@ -1,5 +1,7 @@
 # SALU 준비 단계 검증
 
+> 당시 계획·승인 범위·검증 근거를 보존한 기록. 현재 구현 상태는 [문서 안내](../../README.md)와 점검표 기준.
+
 ## 2026-10-05 로그인 추가 검증
 
 공통 기반 다음 작업으로 로컬 로그인·세션 조회·로그아웃 구현. Salon 보안 정적 재점검은 salon-security-audit.md에 범위·근거·한계 기록. 기존 Salon 파일·DB 수정 없음.
@@ -34,7 +36,7 @@
 
 현재 범위는 공통 기반. 회원가입/로그인과 기록·사진·상담 등 업무 기능은 구현하지 않음. 트랜잭션 예제와 HTTP 오류 발생용 경로는 src/test에만 존재. 이 검증으로 향후 업무 Service의 소유권·동시성·파일 복구까지 검증했다고 주장하지 않음.
 
-재실행: [로컬 실행 환경](local-runtime.md). DB 시작 후 scripts/verify-backend.sh로 실제 DB 통합 검증, 서버/화면 실행 후 verify-api.py와 frontend E2E 사용. 기본 mvnw verify는 DB 통합 검증을 건너뛰므로 이를 대신하지 않음.
+재실행: [로컬 실행 환경](../../local-runtime.md). DB 시작 후 scripts/verify-backend.sh로 실제 DB 통합 검증, 서버/화면 실행 후 verify-api.py와 frontend E2E 사용. 기본 mvnw verify는 DB 통합 검증을 건너뛰므로 이를 대신하지 않음.
 
 ## 이전 준비 단계 기록 · 2026-10-04
 

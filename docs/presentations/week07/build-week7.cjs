@@ -123,7 +123,7 @@ async function main() {
     text(s, '커트 → 경과 → 필요한 자료 선택\n→ 요청 작성 → 전송 전 미리보기', 6.13, 4.6, 6.14, .92, 20, C.ink);
     rect(s, 5.89, 5.84, 6.79, .82, C.peach);
     text(s, '재접속 보존 · 실제 전송은 미구현', 6.12, 6.04, 6.34, .39, 18, C.coral, true);
-    notes(s, '화면은 저장소 docs/screenshots의 실제 React 브라우저 캡처 일부입니다. 커트와 경과의 작성·수정, 자료 선택, 상대 지정, 과거 선택본을 보존하는 미리보기는 메모리 예시로 구현했습니다. 인증만 실제 Spring 서버와 연결되어 있습니다. 기록 영구 저장·사진 업로드·상담 전송·디자이너 답변은 미구현입니다. 근거: docs/features/FR01-current-state-review.md, docs/login.md, docs/prototype-plan.md. 기존 화면 검증을 기기 저장이나 실제 상담 검증으로 설명하지 않습니다.');
+    notes(s, '화면은 저장소 docs/screenshots의 실제 React 브라우저 캡처 일부입니다. 커트와 경과의 작성·수정, 자료 선택, 상대 지정, 과거 선택본을 보존하는 미리보기는 메모리 예시로 구현했습니다. 인증만 실제 Spring 서버와 연결되어 있습니다. 기록 영구 저장·사진 업로드·상담 전송·디자이너 답변은 미구현입니다. 근거: docs/archive/reviews/FR01-current-state-review.md, docs/login.md, docs/prototype-plan.md. 기존 화면 검증을 기기 저장이나 실제 상담 검증으로 설명하지 않습니다.');
   }
   {
     const s = base('첫 접속에서는 기록할지, 둘러볼지 고릅니다',

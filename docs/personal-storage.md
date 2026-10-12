@@ -1,6 +1,6 @@
 # 기기 보관·파일 백업·계정 자동 저장
 
-2026-10-11 구현. 현재 계약의 원본. 2026-10-10 검토안의 수동 서버 백업 제안 대신, 사용자가 선택한 **로그인 없이 기기 보관 + 로그인 후 자동 서버 저장** 적용.
+개인 자료의 기기 보관·복사본 복원·계정 자동 저장 계약. 진행 로그와 검증 실행 결과는 로컬 관리.
 
 ## 사용 흐름
 
@@ -12,7 +12,7 @@
 - 같은 기기의 다른 탭은 저장 세대 번호와 BroadcastChannel로 변경 확인. 오래된 탭의 덮어쓰기 거부. 실패한 입력은 ZIP으로 내보낸 뒤 재접속 가능.
 - 다른 기기의 같은 기록 변경은 revision 충돌로 보존. `기록 저장·백업 → 복구본 만들기`에서 로컬 변경을 새 ID의 복구본으로 추가하고 원래 항목에 서버 최신본 적용.
 
-브라우저 데이터 삭제·시크릿 모드·저장 공간 부족까지 기기 보관이 보장되지는 않음. 보관 권한 요청과 ZIP/계정 저장 제공. PWA 설치·오프라인 첫 실행·네이티브 저장은 후속 단계.
+브라우저 데이터 삭제·시크릿 모드·저장 공간 부족까지 기기 보관이 보장되지는 않음. 별도 보관 권한 요청 없이 ZIP/계정 저장 제공. PWA 설치·오프라인 첫 실행·네이티브 저장은 후속 단계.
 
 ## ZIP
 
@@ -51,7 +51,7 @@ Backend `backup` 패키지의 Controller/Service/Mapper, Flyway V2/V3. V1 원본
 
 Google OIDC와 네이버 OAuth2는 기존 SALU 세션·ROLE_MEMBER·ACTIVE·CSRF·세션 교체 계약 사용. `/api/auth/oauth2/providers`가 완전한 client 설정이 있는 제공자만 반환. `/api/auth/oauth2/authorize/{provider}` → `/api/auth/oauth2/callback/{provider}` → 고정 `/auth/complete`. 실패는 고정 `/login?socialError=1`. 출발 전 기기 초안 저장 완료를 기다림.
 
-`.env.example`의 SALU_GOOGLE/NAVER_CLIENT_ID·CLIENT_SECRET·PUBLIC_ORIGIN 설정. 제공자 관리자 화면에 정확히 `{PUBLIC_ORIGIN}/api/auth/oauth2/callback/google` 또는 `/naver` 등록. Salon의 코드 흐름만 참고하며 Salon secret과 등록을 복사하지 않음. client가 없는 상태에서는 로그인 버튼 비노출, 로컬 로그인 계속 사용.
+`.env.example`의 SALU_GOOGLE/NAVER_CLIENT_ID·CLIENT_SECRET·PUBLIC_ORIGIN 설정. 제공자 관리자 화면에 정확히 `{PUBLIC_ORIGIN}/api/auth/oauth2/callback/google` 또는 `/naver` 등록. 기존 서비스의 코드 흐름만 참고하며 비밀 값·등록 정보를 Git으로 공유하지 않음. client가 없는 상태에서는 로그인 버튼 비노출, 로컬 로그인 계속 사용.
 
 신원은 provider+subject로 식별. 이메일로 자동 병합하지 않음. 소셜 신규 회원의 이메일·비밀번호는 nullable. `/account`의 명시적 연결은 CSRF·현재 principal/storageContext·제공자·5분 만료·OAuth state를 검증하고 다른 소유자의 소셜 신원을 이동하지 않음.
 
@@ -63,21 +63,10 @@ Google OIDC와 네이버 OAuth2는 기존 SALU 세션·ROLE_MEMBER·ACTIVE·CSRF
 
 별도 터미널에서 `scripts/storage-test-server.sh` 실행(8083, salu_test 임시 계정). 이후 frontend에서 `npm run test:auth`, `npm run test:storage`. fixture/키는 /tmp에 두고 서버 종료 시 회원과 백업을 함께 정리. 화면 검증 `npm run test:e2e`는 Spring 없이 기기 보관과 별도 예시를 검증. 인증 검사 trace/video/screenshot에 비밀번호나 CSRF 저장 없음.
 
-현재 실행 결과는 [FR02](features/FR02-personal-storage-and-account-backup.md)의 검증 기록 참고. 저장 오류 표시 복구와 모바일 작성의 후속 검증은 [작성 흐름 개선](archive/plans/2026-10-11-mobile-writing-flow.md). 상담 전송·커뮤니티·네이티브 앱은 후속. 가입 API는 FR03 구현이며 실제 새 가입 검증은 보류.
+## 저장과 입력 보존
 
-### HTTP 시연 주소의 ID 생성
+일반 HTTP에서도 `crypto.randomUUID` 지원 여부를 확인하고 필요 시 `crypto.getRandomValues` 기반 UUID v4 사용. 기존 자료 ID·ZIP·서버 저장 형식 유지.
 
-2026-10-12 일반 HTTP 호스트에서 기록 저장 실패 재현. `crypto.randomUUID`는 해당 환경에 없어 공통 `newId()`에서 `crypto.getRandomValues` 기반 UUID v4를 사용하도록 보완. 기존 기록 ID·ZIP·서버 저장 형식 유지. HTTPS·localhost에서는 기존 randomUUID 사용. 기록·사진·경과·준비·복원·동기화 모두 같은 생성 함수 적용. 상세 원인과 검증은 [집중 작업 흐름](archive/plans/2026-10-12-focused-task-flow.md#http-기록-저장-오류-보완) 참조. NAS `20261012-fdda7e5` 반영 완료.
+기기 저장 중 추가 입력은 화면의 최신 초안에 유지하고 다음 저장에 포함. 서버 충돌·대기·기기 실패가 남으면 서버 저장 성공으로 표시하지 않음. ZIP 복원은 현재 초안을 보존하며 복원한 초안에서 작성 재개 가능.
 
-
-2026-10-12 저장 상태 표시 보완: 다른 기기와 변경 충돌 시 ‘변경 확인 필요’로 표시하고 복구본 만들기로 안내. 기기 저장 실패는 계속 우선 표시하며, 미전송 자료·충돌이 남아 있으면 서버 저장 성공으로 표시하지 않음. 실제 두 브라우저 충돌 복구와 오류 우선순위 5개 검증 통과. ZIP 복원 초안은 현재 초안을 보존하며 선택한 초안의 작성 화면으로 직접 이동. 저장/API/암호화 형식 변경 없음. 상세 화면·검증 기록은 [화면 구분과 전체 검증](archive/plans/2026-10-12-screen-audit-and-theme.md).
-
-2026-10-12 입력 성능 보완: 입력마다 전체 커트의 revision 항목을 다시 구성하던 처리를 줄임. 상태와 해당 커트의 초안 참조가 그대로인 항목은 기존 payload 사용. 재분류가 필요할 때도 경과·사진·준비본·요청을 한 번에 커트별로 묶음. 사진 URL이 바뀐 객체와 그 상위 경로만 복사하며, 저장 완료 시 이미 화면에서 쓰던 데이터 참조를 보존. 저장 상태 표시만 바뀌면 폼 context 값을 다시 만들지 않음. 한국 날짜 포매터는 재사용하되 호출 때마다 현재 시각을 읽음.
-
-자동 기기 저장의 시작 시점과 트랜잭션·대기열·draftVersion·실패 시 입력 보존 계약 유지. 저장 중 추가 입력은 최신 초안을 화면에 유지하고 다음 기기 저장에 포함. IndexedDB schema·암호화 백업 API·로그인 계약 변경 없음. 전체 workspace를 IndexedDB에 기록하는 비용은 남아 있으므로 이 변경을 저장 구조 전체의 성능 보장으로 해석하지 않음.
-
-성능 측정: 사용자 브라우저와 분리한 비영구 Playwright context에 커트 200개·경과 1,000개를 만들고 390×844 화면·CPU 4배 감속 조건에서 30자 입력. 전체 저장 준비의 동기 연산 합계 약 4,907ms → 196ms. 사용자 키 입력 한 번의 응답 시간이나 실제 태블릿 측정값이 아님. 같은 부하의 별도 CPU 분석에서 React 개발용 JSX 검사 비용도 확인했으며 개발 모드보다 빌드본의 긴 작업 시간이 작았음. 실제 태블릿 한글 IME·운영 NAS의 최신 수정본은 별도 확인 범위.
-
-브라우저 검증: Browser plugin 미제공으로 기존 Playwright 사용. `/records/new` → 좋았던 점 연속 입력 → 기기 저장 완료에서 SALU 페이지·작성 폼·입력값 유지, 런타임 오류와 개발 오류 overlay 없음. 빌드본 모바일 화면 증거 `/tmp/salu-typing-production-mobile.png`. 좋았던 점·불편한 점의 이전 저장 완료를 지연한 동안에도 최신 입력·focus·커서·사진을 유지하고 재접속 후 복원하는 회귀 검증 추가. 기기 저장/복원 14개와 실제 Spring·salu_test 두 브라우저 자동 백업/충돌/오류 5개 통과. 미국 브라우저 시간대에서도 한국 자정 전후 새 초안 날짜 갱신 확인. 최종 `npm run test:e2e -- --workers=2 --timeout=30000` PC·모바일 106개 통과(7.2분), `npm run test:storage` 실제 서버 5개 통과(1.3분). 빌드·포맷·`git diff --check` 통과. NAS 재배포·Git 업로드는 이 작업에서 수행하지 않음.
-
-2026-10-12 계정 보관 안내 정리: 상단 정상 저장 상태의 백업 링크와 기기 영구 보관 권한 버튼 제거. 기기 저장 자체는 유지. 내 기록·내 계정의 `기록 저장·백업`에서 로그인 전 저장 한계, 로그인/회원가입, 계정 자동 저장, ZIP 복사본을 구분. 자세한 범위와 검증 보류 항목은 [FR03](features/FR03-account-signup-and-storage-navigation.md).
+자동 저장 시 전체 기록을 매 입력마다 불필요하게 재분류하지 않음. 저장 완료가 현재 focus·커서·사진·최신 입력을 바꾸지 않도록 실제 입력/재접속 검증 필요.

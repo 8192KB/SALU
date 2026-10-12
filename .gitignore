@@ -13,3 +13,17 @@
 .DS_Store
 **/__pycache__/
 *.pyc
+
+# Markdown: essential project contracts and agent skills only
+*.md
+*.MD
+!/README.md
+!/AGENTS.md
+!/.agents/skills/frontend-design/SKILL.md
+!/docs/development-contract.md
+!/docs/login.md
+!/docs/personal-storage.md
+
+# Local reports, history, presentation notes and generated critiques
+/.local/
+/.impeccable/

@@ -1,8 +1,8 @@
 # SALU 작업 기준
 
 - `~/.agents/AI_INSTRUCTIONS.md`, `~/.agents/HOST.md`, Codex의 `~/.codex/AGENTS.md`를 먼저 확인
-- 작업 전 `docs/development-contract.md`와 해당 기능의 검증 기록 확인
-- 현재 승인 범위: FR04의 SALU 자체 미용실/공개 디자이너 등록·선택·앱 달력·공통 완료 화면 포함. 초기 React 화면·Spring 인증·이메일 회원가입·IndexedDB 개인 기록/사진/전체 초안·ZIP 복사본 복원·로그인 후 자동 암호화 백업·Google OIDC/네이버 OAuth2 및 명시적 연결. docs/personal-storage.md와 FR02의 계약 적용. 예시 체험은 메모리 전용. 실제 소셜 제공자 client 설정/동의 검증·도메인 기록 CRUD·상담 전송·커뮤니티·앱은 후속.
+- 작업 전 `docs/development-contract.md` 확인. 해당 기능의 로컬 검증 기록이 있으면 함께 확인
+- 현재 승인 범위: SALU 자체 미용실/공개 디자이너 등록·선택·앱 달력·공통 완료 화면 포함. 초기 React 화면·Spring 인증·이메일 회원가입·IndexedDB 개인 기록/사진/전체 초안·ZIP 복사본 복원·로그인 후 자동 암호화 백업·Google OIDC/네이버 OAuth2 및 명시적 연결. docs/personal-storage.md의 계약 적용. 예시 체험은 메모리 전용. 실제 소셜 제공자 client 설정/동의 검증·도메인 기록 CRUD·상담 전송·커뮤니티·앱은 후속.
 - 기존 인증 backend와 검증 기록 보존. test:e2e는 서버 없는 화면 검증, test:auth는 실제 Spring 인증, test:storage는 실제 자동 저장 검증. 두 브라우저 검증은 storage-test-server.sh의 salu_test 임시 계정 사용. 예시 화면 검증을 업무 DB·전송 검증으로 주장하지 않음
 - Controller는 입력/응답, Service는 업무·소유권·트랜잭션, Mapper는 SQL 담당
 - URL 인증/역할 규칙은 SecurityConfig에 집중. 자원 소유권·상담 참여자 검사는 해당 Service에서 수행
@@ -15,4 +15,6 @@
 - .env·비밀번호·원문 요청·SQL 오류를 응답/로그/Git에 넣지 않음. 적용한 Flyway migration 수정·기존 Salon/DB 초기화 금지
 - 변경한 공통 동작은 빌드뿐 아니라 실제 서버/API·DB·브라우저에서 확인. 테스트 결과로 구현되지 않은 기능을 완료 처리하지 않음
 
-- 로그인 변경 전 docs/login.md와 docs/salon-security-audit.md 확인. 요청 role/memberId 사용 금지, ACTIVE 상태·전체 CSRF·세션 교체·JSON 실패 계약 유지
+- 로그인 변경 전 docs/login.md 확인. 로컬 docs/salon-security-audit.md가 있으면 참고. 요청 role/memberId 사용 금지, ACTIVE 상태·전체 CSRF·세션 교체·JSON 실패 계약 유지
+
+- Git의 Markdown은 README·작업 지침·스킬·개발/인증/저장 계약만 유지. 진행상황·할 일·기능 검토·구버전·운영/배포 안내·발표 메모는 로컬 보관, Git 추적 제외. 새 공유 문서는 .gitignore 허용 목록을 명시적으로 갱신

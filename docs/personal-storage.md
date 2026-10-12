@@ -102,15 +102,13 @@
 - 실제 제공자 동의/콜백은 SALU client 설정 후 별도 검증 필요
 - 테스트용 제공자 검증을 실제 Google/네이버 계정 검증으로 주장하지 않음
 
-## 검증
+## 검증 기준
 
-- `scripts/verify-backend.sh`: 실제 salu_test + 임시 fixture, 자동 테스트 트랜잭션 없이 커밋/롤백·암호문·복호화·소유권·revision·mutation·CSRF·세션·OAuth callback/state/nonce/ACTIVE 검증
-- 테스트 API/제공자/fixture는 src/test에만 배치
-
-- 별도 터미널에서 `scripts/storage-test-server.sh` 실행(8083, salu_test 임시 계정)
-- 이후 frontend에서 `npm run test:auth`, `npm run test:storage`. fixture/키는 /tmp에 두고 서버 종료 시 회원과 백업을 함께 정리
-- 화면 검증 `npm run test:e2e`는 Spring 없이 기기 보관과 별도 예시를 검증
-- 인증 검사 trace/video/screenshot에 비밀번호나 CSRF 저장 없음
+- 로컬 테스트 전용 DB·임시 fixture로 커밋/롤백·암호문·복호화·소유권·revision·mutation 검사
+- CSRF·storageContext·세션·OAuth state/nonce·ACTIVE 상태 확인
+- 두 브라우저에서 계정 백업·복원·충돌 확인, 화면 전용 검증과 실제 서버 검증 구분
+- 테스트 API·제공자·fixture는 로컬 전용, 운영 jar 제외
+- 비밀번호·CSRF가 포함된 trace·영상·스크린샷 저장 금지
 
 ## 저장과 입력 보존
 

@@ -11,7 +11,7 @@ artifact="$project_root/backend/target/salu-backend-0.1.0-SNAPSHOT.jar"
 [[ -f "$artifact" ]] || { printf '실행 준비: 백엔드 빌드 필요\n' >&2; exit 1; }
 tool_home="$(mktemp -d)"
 trap 'rm -rf -- "$tool_home"' EXIT
-python - "$artifact" "$tool_home" <<'EXTRACT'
+python3 - "$artifact" "$tool_home" <<'EXTRACT'
 import sys, zipfile
 from pathlib import Path
 with zipfile.ZipFile(sys.argv[1]) as z:

@@ -10,14 +10,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "test:e2e": "playwright test",
-    "format": "prettier --write src tests scripts *.ts *.json",
-    "format:check": "prettier --check src tests scripts *.ts *.json",
-    "capture": "node scripts/capture-prototype.mjs",
-    "test:auth": "playwright test --config playwright.auth.config.ts",
+    "format": "prettier --write src scripts *.ts *.json",
+    "format:check": "prettier --check src scripts *.ts *.json",
     "dev:prototype": "vite --mode prototype",
-    "schema:backup": "node scripts/generate-backup-schema.mjs",
-    "test:storage": "playwright test --config playwright.storage.config.ts"
+    "schema:backup": "node scripts/generate-backup-schema.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.3",
@@ -28,7 +24,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@playwright/test": "1.63.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

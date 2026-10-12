@@ -45,36 +45,15 @@
 - DB 장애에도 유효 CSRF 로그아웃 가능
 - 공개 health는 기존503/HealthResponse 계약 유지
 
-## 검증
+## 검증 기준
 
-```bash
-./scripts/verify-backend.sh
-python scripts/verify-api.py
-cd frontend
-npm run build
-npm run test:e2e
-npm run test:auth
-npm run test:storage
-```
-
-- 실제 DB 테스트는 salu_test 전용 생성 계정을 각 테스트 후 삭제
-- 운영 jar에 테스트 API/테이블/보안 완화 없음
-- 일반 mvnw verify는 실제 DB 테스트를 건너뛰므로 verify-backend 사용
-- `test:e2e`는 서버 없는 화면 전용 검증, `test:auth`·`test:storage` 실행 전에 별도 터미널에서 `scripts/storage-test-server.sh` 시작
-- 서버 8083·salu_test·/tmp/salu-storage-fixture.json 임시 계정 사용
-- 테스트 종료 후 서버도 종료하면 회원/백업 fixture 삭제
-- 파일 누락/오류는 skip이 아닌 실패
-- 실제 비밀번호·token이 포함될 trace·영상·스크린샷은 저장하지 않음
-
-- 검증 범위: 세션 ID 변경/이전 세션 replay 차단, CSRF 로그인·로그아웃 필수/이전 token 차단, 새로고침 로그인 유지, 로그아웃 후401, 잘못된 입력·중복 parameter·긴 다국어 비밀번호400, 계정 상태 차단/로그인 중 탈퇴 후 세션 무효화, 고정 실패 응답/해시 비노출, IP 제한/헤더 위조, DB 장애·복구, 모바일 화면
-- 기존 참고 코드의 role/memberId 신뢰·CSRF 예외·평문 로그를 이식하지 않음
-
-- 실제 DB 장애 검증은 개발 서버를 켠 상태에서 아래 명령 실행
-- SALU 전용 로컬 MySQL을 잠시 중단하고 finally에서 재시작하므로 다른 SALU 테스트와 동시에 실행하지 않음
-
-```bash
-python scripts/verify-login-db-recovery.py --db-outage
-```
+- 검증 코드는 로컬에 보관, 운영 jar에는 테스트 API·테이블·보안 완화를 포함하지 않음
+- 테스트 전용 DB와 임시 계정 사용, 비밀번호·CSRF가 포함된 trace·영상·스크린샷 저장 금지
+- 세션 ID 교체·이전 세션/CSRF 차단, 로그인 유지·로그아웃 후 401 확인
+- 잘못된 입력·중복 parameter·긴 비밀번호·비활성 계정·인증 중 상태 변경 검사
+- 고정 실패 응답·해시 비노출, IP 제한·헤더 위조, DB 장애·복구 확인
+- 기존 코드의 role/memberId 신뢰·CSRF 예외·평문 로그를 이식하지 않음
+- 실제 DB 장애 검증은 다른 검증과 분리, SALU 전용 DB만 중단하고 반드시 복구
 
 ## React 계정 경계
 

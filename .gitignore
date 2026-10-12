@@ -1,7 +1,6 @@
 .env
 .env.*
 !.env.example
-!.env.nas.example
 **/target/
 **/node_modules/
 **/dist/
@@ -32,3 +31,16 @@
 /docs/presentations/
 /docs/screenshots/
 /frontend/scripts/audit-*.mjs
+
+# Private deployment, local verification and Linux-specific runtime helpers
+/compose.nas.yml
+/.env.nas.example
+/backend/src/test/
+/frontend/tests/
+/frontend/playwright*.config.ts
+/frontend/scripts/capture-prototype.mjs
+/scripts/mysql-local.sh
+/scripts/storage-test-server.sh
+/scripts/verify-backend.sh
+/scripts/verify-api.py
+/scripts/verify-login-db-recovery.py

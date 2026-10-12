@@ -1,6 +1,7 @@
 # SALU 작업 기준
 
 - `~/.agents/AI_INSTRUCTIONS.md`, `~/.agents/HOST.md`, Codex의 `~/.codex/AGENTS.md`를 먼저 확인
+- 로컬 `.local/AGENTS.md`가 있으면 작업 전에 읽고 개인 검증 절차 적용
 - 작업 전 `docs/development-contract.md` 확인. 해당 기능의 로컬 검증 기록이 있으면 함께 확인
 - 현재 승인 범위: SALU 자체 미용실/공개 디자이너 등록·선택·앱 달력·공통 완료 화면 포함. 초기 React 화면·Spring 인증·이메일 회원가입·IndexedDB 개인 기록/사진/전체 초안·ZIP 복사본 복원·로그인 후 자동 암호화 백업·Google OIDC/네이버 OAuth2 및 명시적 연결. docs/personal-storage.md의 계약 적용. 예시 체험은 메모리 전용. 실제 소셜 제공자 client 설정/동의 검증·도메인 기록 CRUD·상담 전송·커뮤니티·앱은 후속.
 - 기존 인증 backend와 로컬 검증 기록 보존. 테스트·Playwright·검증 도구·Linux 전용 DB 도구·NAS 설정은 로컬 전용이며 Git 공유 제외. 로컬 검증 환경이 있으면 화면·실제 인증·저장/API/DB 검증을 구분하고, 예시 화면 통과를 업무 DB·전송 검증으로 주장하지 않음

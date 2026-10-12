@@ -1,16 +1,20 @@
+import { getPublicDesigner } from '../directory-cache';
+import { newId } from './ids';
 import { fixtures } from './fixtures';
 import { today, validDate } from './dates';
 import { AREAS, INTENTS } from './types';
 import { draftFromPreview, materialSource, selectedCount } from './request-flow';
+import type { WorkspaceMode } from '../workspace';
 import type {
   RequestDraft,
+  RequestPreview,
   CutRecord,
   CutDraft,
   PhotoDraft,
   ProgressDraft,
   ProgressEntry,
-  PrototypeRepository,
   PrototypeState,
+  PrototypeRepository,
 } from './types';
 
 export class InputError extends Error {
@@ -18,6 +22,67 @@ export class InputError extends Error {
     super(Object.values(fields)[0]);
   }
 }
+export function prepareRequest(
+  state: PrototypeState,
+  draft: RequestDraft,
+): Omit<RequestPreview, 'id' | 'createdAt'> {
+  const source = materialSource(state, draft);
+  const selected =
+    draft.designerSnapshot?.id === draft.designerId ? draft.designerSnapshot : undefined;
+  const designer =
+    state.designers.find((value) => value.id === draft.designerId) ??
+    getPublicDesigner(draft.designerId) ??
+    (selected
+      ? { ...selected, affiliations: [{ salonName: selected.salonName, current: true }] }
+      : undefined);
+  if (!source || (draft.designerId && !designer))
+    throw new InputError({ form: '기록과 디자이너를 다시 선택해 주세요.' });
+  const cut = source.cut;
+  const progress = draft.progressIds.map((value) =>
+    source.progress.find((entry) => entry.id === value && entry.cutId === cut.id),
+  );
+  const photos = draft.photoIds.map((value) =>
+    source.photos.find((photo) => photo.id === value && photo.cutId === cut.id),
+  );
+  if (
+    progress.some((value) => !value) ||
+    photos.some((value) => !value) ||
+    (draft.includeGoodNote && !cut.goodNote)
+  )
+    throw new InputError({
+      materials: '선택한 자료를 찾을 수 없어요. 자료를 다시 확인해 주세요.',
+    });
+  if (designer && !draft.includeGoodNote && !progress.length && !photos.length)
+    throw new InputError({ materials: '상담에 사용할 자료를 하나 이상 선택해 주세요.' });
+  if (
+    !draft.requests.length ||
+    draft.requests.some(
+      (item) =>
+        !Object.hasOwn(AREAS, item.area) ||
+        !Object.hasOwn(INTENTS, item.intent) ||
+        !item.content.trim(),
+    )
+  )
+    throw new InputError({ requests: '부위별 원하는 내용을 모두 적어 주세요.' });
+  return structuredClone({
+    designer: designer
+      ? {
+          id: designer.id,
+          name: designer.name,
+          salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
+        }
+      : undefined,
+    cut: { id: cut.id, cutDate: cut.cutDate, service: cut.service, areas: cut.areas },
+    goodNote: draft.includeGoodNote ? cut.goodNote : undefined,
+    progress: progress.filter((value) => value !== undefined),
+    photos: photos.filter((value) => value !== undefined),
+    requests: draft.requests.map((item) => ({ ...item, content: item.content.trim() })),
+    homeStyling: draft.homeStyling.trim(),
+    additionalQuestion: draft.additionalQuestion.trim(),
+    sourceDraft: draft,
+  });
+}
+
 export function newCutDraft(): CutDraft {
   return {
     cutDate: today(),
@@ -33,17 +98,27 @@ export function newCutDraft(): CutDraft {
 export function newProgressDraft(): ProgressDraft {
   return { observedOn: today(), areas: [], discomfort: '', styling: '', question: '', photos: [] };
 }
-const id = (prefix: string) => `${prefix}-${crypto.randomUUID()}`;
+const id = (prefix: string) => `${prefix}-${newId()}`;
 const checkAreas = (values: string[]) =>
   values.length > 0 && values.every((value) => Object.hasOwn(AREAS, value));
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
-export function createMemoryRepository(): PrototypeRepository {
-  let state: PrototypeState = fixtures();
+export function createMemoryRepository(
+  seed: WorkspaceMode = 'empty',
+  options: {
+    beforeCommit?: (state: PrototypeState) => Promise<void>;
+  } = {},
+): PrototypeRepository & { hydrate(state: PrototypeState, photoUrls?: string[]): void } {
+  const initialState = (): PrototypeState =>
+    seed === 'example'
+      ? fixtures()
+      : { cuts: [], progress: [], photos: [], designers: [], previews: [] };
+  let state: PrototypeState = initialState();
   let generation = 0;
   const listeners = new Set<() => void>();
   const urls = new Set<string>();
-  const publish = (next: PrototypeState) => {
+  const publish = async (next: PrototypeState) => {
+    await options.beforeCommit?.(next);
     state = next;
     listeners.forEach((listener) => listener());
   };
@@ -62,13 +137,13 @@ export function createMemoryRepository(): PrototypeRepository {
       cutId &&
       state.progress.some((entry) => entry.cutId === cutId && entry.observedOn < input.cutDate)
     )
-      fields.cutDate = '이미 남긴 경과 날짜보다 늦은 커트 날짜로 바꿀 수 없습니다.';
+      fields.cutDate = '이미 남긴 경과 날짜보다 늦은 커트 날짜로 바꿀 수 없어요.';
     if (!input.service.trim()) fields.service = '시술을 입력해 주세요.';
     if (!checkAreas(input.areas)) fields.areas = '부위를 하나 이상 선택해 주세요.';
     if (input.price && (!/^\d+$/.test(input.price) || !Number.isSafeInteger(Number(input.price))))
       fields.price = '가격은 0 이상의 정수로 입력해 주세요.';
     const designer = state.designers.find((value) => value.id === input.designerProfileId);
-    if (input.designerProfileId && !designer)
+    if (seed === 'example' && input.designerProfileId && !designer)
       fields.designerProfileId = '연결할 디자이너 프로필을 다시 선택해 주세요.';
     if (Object.keys(fields).length) throw new InputError(fields);
     return {
@@ -77,8 +152,9 @@ export function createMemoryRepository(): PrototypeRepository {
       areas: [...new Set(input.areas)],
       goodNote: input.goodNote.trim(),
       salonName: input.salonName.trim(),
-      designerName: designer?.name ?? input.designerName.trim(),
-      designerProfileId: designer?.id,
+      designerName: input.designerName.trim(),
+      designerProfileId: input.designerProfileId,
+      salonId: input.salonId,
       price: input.price ? Number(input.price) : undefined,
     };
   };
@@ -104,6 +180,11 @@ export function createMemoryRepository(): PrototypeRepository {
   };
 
   return {
+    hydrate(next: PrototypeState, photoUrls: string[] = []) {
+      state = next;
+      photoUrls.forEach((url) => urls.add(url));
+      listeners.forEach((listener) => listener());
+    },
     getSnapshot: () => state,
     subscribe(listener) {
       listeners.add(listener);
@@ -117,14 +198,14 @@ export function createMemoryRepository(): PrototypeRepository {
       assertPhotos(input.photos);
       const cut: CutRecord = { id: id('cut'), ...values };
       const photos = input.photos.map((photo) => ({ ...photo, cutId: cut.id, date: cut.cutDate }));
-      publish({ ...state, cuts: [cut, ...state.cuts], photos: [...state.photos, ...photos] });
+      await publish({ ...state, cuts: [cut, ...state.cuts], photos: [...state.photos, ...photos] });
       return cut;
     },
     async updateCut(cutId, input) {
       if (!state.cuts.some((cut) => cut.id === cutId))
-        throw new InputError({ form: '커트 기록을 찾을 수 없습니다.' });
+        throw new InputError({ form: '커트 기록을 찾을 수 없어요.' });
       const cut: CutRecord = { id: cutId, ...cutValues(input, cutId) };
-      publish({
+      await publish({
         ...state,
         cuts: state.cuts.map((value) => (value.id === cutId ? cut : value)),
         photos: state.photos.map((photo) =>
@@ -136,7 +217,9 @@ export function createMemoryRepository(): PrototypeRepository {
     async addProgress(cutId, input) {
       const cut = state.cuts.find((value) => value.id === cutId);
       if (!cut)
-        throw new InputError({ form: '커트 기록이 없어졌습니다. 내 기록에서 다시 시작해 주세요.' });
+        throw new InputError({
+          form: '커트 기록을 찾을 수 없어요. 내 기록에서 다시 시작해 주세요.',
+        });
       const values = progressValues(cut, input);
       assertPhotos(input.photos);
       const entry: ProgressEntry = { id: id('progress'), cutId, ...values };
@@ -146,7 +229,7 @@ export function createMemoryRepository(): PrototypeRepository {
         progressId: entry.id,
         date: entry.observedOn,
       }));
-      publish({
+      await publish({
         ...state,
         progress: [...state.progress, entry],
         photos: [...state.photos, ...photos],
@@ -159,9 +242,9 @@ export function createMemoryRepository(): PrototypeRepository {
         (value) => value.id === progressId && value.cutId === cutId,
       );
       if (!cut || !original)
-        throw new InputError({ form: '이 커트의 경과 기록을 찾을 수 없습니다.' });
+        throw new InputError({ form: '이 커트의 경과 기록을 찾을 수 없어요.' });
       const entry: ProgressEntry = { id: progressId, cutId, ...progressValues(cut, input) };
-      publish({
+      await publish({
         ...state,
         progress: state.progress.map((value) => (value.id === progressId ? entry : value)),
         photos: state.photos.map((photo) =>
@@ -173,57 +256,12 @@ export function createMemoryRepository(): PrototypeRepository {
       return entry;
     },
     async createPreview(draft: RequestDraft) {
-      const source = materialSource(state, draft);
-      const designer = state.designers.find((value) => value.id === draft.designerId);
-      if (!source || (draft.designerId && !designer))
-        throw new InputError({ form: '기록과 디자이너를 다시 선택해 주세요.' });
-      const cut = source.cut;
-      const progress = draft.progressIds.map((value) =>
-        source.progress.find((entry) => entry.id === value && entry.cutId === cut.id),
-      );
-      const photos = draft.photoIds.map((value) =>
-        source.photos.find((photo) => photo.id === value && photo.cutId === cut.id),
-      );
-      if (
-        progress.some((value) => !value) ||
-        photos.some((value) => !value) ||
-        (draft.includeGoodNote && !cut.goodNote)
-      )
-        throw new InputError({
-          materials: '선택한 자료를 찾을 수 없습니다. 자료를 다시 확인해 주세요.',
-        });
-      if (designer && !draft.includeGoodNote && !progress.length && !photos.length)
-        throw new InputError({ materials: '상담에 사용할 자료를 하나 이상 선택해 주세요.' });
-      if (
-        !draft.requests.length ||
-        draft.requests.some(
-          (item) =>
-            !Object.hasOwn(AREAS, item.area) ||
-            !Object.hasOwn(INTENTS, item.intent) ||
-            !item.content.trim(),
-        )
-      )
-        throw new InputError({ requests: '부위별 요청 내용을 모두 적어 주세요.' });
-      const preview = structuredClone({
+      const preview = {
+        ...prepareRequest(state, draft),
         id: id('preview'),
         createdAt: new Date().toISOString(),
-        designer: designer
-          ? {
-              id: designer.id,
-              name: designer.name,
-              salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
-            }
-          : undefined,
-        cut: { id: cut.id, cutDate: cut.cutDate, service: cut.service, areas: cut.areas },
-        goodNote: draft.includeGoodNote ? cut.goodNote : undefined,
-        progress: progress.filter((value) => value !== undefined),
-        photos: photos.filter((value) => value !== undefined),
-        requests: draft.requests.map((item) => ({ ...item, content: item.content.trim() })),
-        homeStyling: draft.homeStyling.trim(),
-        additionalQuestion: draft.additionalQuestion.trim(),
-        sourceDraft: draft,
-      });
-      publish({ ...state, previews: [...state.previews, preview] });
+      };
+      await publish({ ...state, previews: [...state.previews, preview] });
       return preview;
     },
     async createPreviewForDesigner(previewId, designerId) {
@@ -244,13 +282,13 @@ export function createMemoryRepository(): PrototypeRepository {
         },
         sourceDraft: draftFromPreview(source, designer.id),
       });
-      publish({ ...state, previews: [...state.previews, preview] });
+      await publish({ ...state, previews: [...state.previews, preview] });
       return preview;
     },
     async preparePhotos(files, existingCount) {
       const start = generation;
       if (existingCount + files.length > 6)
-        throw new InputError({ photos: '사진은 한 번에 최대 6장까지 선택할 수 있습니다.' });
+        throw new InputError({ photos: '사진은 한 번에 최대 6장까지 선택할 수 있어요.' });
       if (
         files.some(
           (file) =>
@@ -276,7 +314,7 @@ export function createMemoryRepository(): PrototypeRepository {
       } catch {
         prepared.forEach((photo) => release(photo.url));
         throw new InputError({
-          photos: '사진을 읽을 수 없습니다. 실제 이미지 파일을 다시 선택해 주세요.',
+          photos: '사진을 읽을 수 없어요. 이미지 파일을 다시 선택해 주세요.',
         });
       }
     },
@@ -287,7 +325,7 @@ export function createMemoryRepository(): PrototypeRepository {
       generation++;
       urls.forEach((url) => URL.revokeObjectURL(url));
       urls.clear();
-      publish(fixtures());
+      void publish(initialState());
     },
     dispose() {
       generation++;

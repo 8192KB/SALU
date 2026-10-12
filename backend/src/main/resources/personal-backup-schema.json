@@ -1,0 +1,1208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "state": {
+      "type": "object",
+      "properties": {
+        "cuts": {
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "cutDate": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "service": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "goodNote": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "designerName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "designerProfileId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "price": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "id",
+              "cutDate",
+              "service",
+              "areas",
+              "goodNote",
+              "salonName",
+              "designerName"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "progress": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "cutId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "observedOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "discomfort": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "styling": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "question": {
+                "type": "string",
+                "maxLength": 10000
+              }
+            },
+            "required": [
+              "id",
+              "cutId",
+              "observedOn",
+              "areas",
+              "discomfort",
+              "styling",
+              "question"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "photos": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "url": {
+                "default": "",
+                "type": "string",
+                "maxLength": 500
+              },
+              "caption": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "cutId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "progressId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              }
+            },
+            "required": [
+              "id",
+              "url",
+              "caption",
+              "cutId",
+              "date"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "designers": {
+          "minItems": 0,
+          "maxItems": 0,
+          "type": "array",
+          "items": {
+            "not": {}
+          }
+        },
+        "previews": {
+          "maxItems": 10000,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "designer": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "salonName": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "salonName"
+                ],
+                "additionalProperties": false
+              },
+              "cut": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "cutDate": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "service": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "areas": {
+                    "maxItems": 6,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "FRONT",
+                        "SIDE",
+                        "TOP",
+                        "BACK",
+                        "ENDS",
+                        "WHOLE"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "cutDate",
+                  "service",
+                  "areas"
+                ],
+                "additionalProperties": false
+              },
+              "goodNote": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "progress": {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "cutId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "observedOn": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "areas": {
+                      "maxItems": 6,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "FRONT",
+                          "SIDE",
+                          "TOP",
+                          "BACK",
+                          "ENDS",
+                          "WHOLE"
+                        ]
+                      }
+                    },
+                    "discomfort": {
+                      "type": "string",
+                      "maxLength": 10000
+                    },
+                    "styling": {
+                      "type": "string",
+                      "maxLength": 10000
+                    },
+                    "question": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "cutId",
+                    "observedOn",
+                    "areas",
+                    "discomfort",
+                    "styling",
+                    "question"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "photos": {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "url": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 10000
+                    },
+                    "cutId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "progressId": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "date": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "caption",
+                    "cutId",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "requests": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "FRONT",
+                        "SIDE",
+                        "TOP",
+                        "BACK",
+                        "ENDS",
+                        "WHOLE"
+                      ]
+                    },
+                    "intent": {
+                      "type": "string",
+                      "enum": [
+                        "KEEP",
+                        "CHANGE",
+                        "ASK"
+                      ]
+                    },
+                    "content": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "area",
+                    "intent",
+                    "content"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "homeStyling": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "additionalQuestion": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "sourceDraft": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "cutId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "designerId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "designerSnapshot": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                      },
+                      "name": {
+                        "type": "string",
+                        "maxLength": 10000
+                      },
+                      "salonName": {
+                        "type": "string",
+                        "maxLength": 10000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "salonName"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "referencePreviewId": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "includeGoodNote": {
+                    "type": "boolean"
+                  },
+                  "progressIds": {
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    }
+                  },
+                  "photoIds": {
+                    "maxItems": 1000,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    }
+                  },
+                  "requests": {
+                    "maxItems": 100,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                        },
+                        "area": {
+                          "type": "string",
+                          "enum": [
+                            "FRONT",
+                            "SIDE",
+                            "TOP",
+                            "BACK",
+                            "ENDS",
+                            "WHOLE"
+                          ]
+                        },
+                        "intent": {
+                          "type": "string",
+                          "enum": [
+                            "KEEP",
+                            "CHANGE",
+                            "ASK"
+                          ]
+                        },
+                        "content": {
+                          "type": "string",
+                          "maxLength": 10000
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "area",
+                        "intent",
+                        "content"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "homeStyling": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "additionalQuestion": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                },
+                "required": [
+                  "id",
+                  "cutId",
+                  "includeGoodNote",
+                  "progressIds",
+                  "photoIds",
+                  "requests",
+                  "homeStyling",
+                  "additionalQuestion"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "id",
+              "createdAt",
+              "cut",
+              "progress",
+              "photos",
+              "requests",
+              "homeStyling",
+              "additionalQuestion",
+              "sourceDraft"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "cuts",
+        "progress",
+        "photos",
+        "designers",
+        "previews"
+      ],
+      "additionalProperties": false
+    },
+    "drafts": {
+      "type": "object",
+      "properties": {
+        "cutDraft": {
+          "type": "object",
+          "properties": {
+            "cutDate": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "service": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "areas": {
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "FRONT",
+                  "SIDE",
+                  "TOP",
+                  "BACK",
+                  "ENDS",
+                  "WHOLE"
+                ]
+              }
+            },
+            "goodNote": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "salonName": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "salonId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "designerName": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "designerProfileId": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            "price": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "photos": {
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "url": {
+                    "default": "",
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "caption": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                },
+                "required": [
+                  "id",
+                  "url",
+                  "caption"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "cutDate",
+            "service",
+            "areas",
+            "goodNote",
+            "salonName",
+            "designerName",
+            "price",
+            "photos"
+          ],
+          "additionalProperties": false
+        },
+        "progressDrafts": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "observedOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "discomfort": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "styling": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "question": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "photos": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "url": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "caption"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "observedOn",
+              "areas",
+              "discomfort",
+              "styling",
+              "question",
+              "photos"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "cutEdits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "cutDate": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "service": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "goodNote": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "designerName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "designerProfileId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "price": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "photos": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "url": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "caption"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "cutDate",
+              "service",
+              "areas",
+              "goodNote",
+              "salonName",
+              "designerName",
+              "price",
+              "photos"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "progressEdits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "observedOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "discomfort": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "styling": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "question": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "photos": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "url": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "caption"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "observedOn",
+              "areas",
+              "discomfort",
+              "styling",
+              "question",
+              "photos"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "requests": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "cutId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "designerId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "designerSnapshot": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "salonName": {
+                    "type": "string",
+                    "maxLength": 10000
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "salonName"
+                ],
+                "additionalProperties": false
+              },
+              "referencePreviewId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "includeGoodNote": {
+                "type": "boolean"
+              },
+              "progressIds": {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                }
+              },
+              "photoIds": {
+                "maxItems": 1000,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                }
+              },
+              "requests": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "area": {
+                      "type": "string",
+                      "enum": [
+                        "FRONT",
+                        "SIDE",
+                        "TOP",
+                        "BACK",
+                        "ENDS",
+                        "WHOLE"
+                      ]
+                    },
+                    "intent": {
+                      "type": "string",
+                      "enum": [
+                        "KEEP",
+                        "CHANGE",
+                        "ASK"
+                      ]
+                    },
+                    "content": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "area",
+                    "intent",
+                    "content"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "homeStyling": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "additionalQuestion": {
+                "type": "string",
+                "maxLength": 10000
+              }
+            },
+            "required": [
+              "id",
+              "cutId",
+              "includeGoodNote",
+              "progressIds",
+              "photoIds",
+              "requests",
+              "homeStyling",
+              "additionalQuestion"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "currentRequestId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{1,100}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "steps": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "enum": [
+              "materials",
+              "write"
+            ]
+          }
+        },
+        "recoveredCuts": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cutDate": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "service": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "areas": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "FRONT",
+                    "SIDE",
+                    "TOP",
+                    "BACK",
+                    "ENDS",
+                    "WHOLE"
+                  ]
+                }
+              },
+              "goodNote": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "salonId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "designerName": {
+                "type": "string",
+                "maxLength": 10000
+              },
+              "designerProfileId": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$"
+              },
+              "price": {
+                "type": "string",
+                "maxLength": 30
+              },
+              "photos": {
+                "maxItems": 6,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,100}$"
+                    },
+                    "url": {
+                      "default": "",
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "caption": {
+                      "type": "string",
+                      "maxLength": 10000
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "caption"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "cutDate",
+              "service",
+              "areas",
+              "goodNote",
+              "salonName",
+              "designerName",
+              "price",
+              "photos"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "cutDraft",
+        "progressDrafts",
+        "cutEdits",
+        "progressEdits",
+        "requests",
+        "currentRequestId",
+        "steps",
+        "recoveredCuts"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "state",
+    "drafts"
+  ],
+  "additionalProperties": false
+}

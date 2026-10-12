@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.nas.example
 **/target/
 **/node_modules/
 **/dist/

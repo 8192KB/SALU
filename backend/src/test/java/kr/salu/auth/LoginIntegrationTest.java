@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
     "spring.datasource.url=jdbc:mysql://${SALU_DB_HOST:127.0.0.1}:${SALU_DB_PORT:3307}/salu_test?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&connectTimeout=2000&socketTimeout=3000",
-    "spring.datasource.username=salu_test", "spring.flyway.locations=classpath:db/migration,classpath:db/verification"
+    "spring.datasource.username=salu_test", "spring.flyway.locations=classpath:db/migration,classpath:db/verification", "spring.flyway.out-of-order=true"
 })
 @Import(ProbeConfiguration.class)
 @EnabledIfEnvironmentVariable(named = "SALU_RUN_DB_TESTS", matches = "true")

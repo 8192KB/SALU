@@ -25,13 +25,16 @@ try {
     console.log(`캡처: ${name}`);
   };
   await page.goto(baseURL);
+  await page.getByRole('heading', { name: '커트 기록, 남겨볼까요?', exact: true }).waitFor();
+  await capture('home-desktop.png');
+  await page.goto(`${baseURL}/examples/records`);
   await page.getByRole('heading', { name: '나의 커트 기록', exact: true }).waitFor();
   await capture('records-desktop.png');
-  await page.goto(`${baseURL}/designers/designer-jiu`);
+  await page.goto(`${baseURL}/examples/designers/designer-jiu`);
   await page.getByRole('heading', { name: '지우 디자이너', exact: true }).waitFor();
   await capture('designer-desktop.png');
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto(`${baseURL}/records/cut-september`);
+  await page.goto(`${baseURL}/examples/records/cut-september`);
   await page.getByRole('heading', { name: '커트 기록 · 경과', exact: true }).waitFor();
   await capture('record-mobile.png');
   await page.getByRole('link', { name: '디자이너 선택', exact: true }).click();
@@ -50,7 +53,7 @@ try {
   await page
     .getByLabel('요청 내용 2', { exact: true })
     .fill('앞머리 길이는 지난번처럼 유지하고 싶어요.');
-  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
+  await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
   await page.getByRole('heading', { name: '상담 요청 미리보기', exact: true }).waitFor();
   await capture('preview-mobile.png');
   await page.getByRole('link', { name: '원본 기록 보기', exact: true }).click();
@@ -63,7 +66,7 @@ try {
   await page.getByRole('heading', { name: '커트 기록 수정', exact: true }).waitFor();
   await capture('edit-mobile.png');
   await page.getByRole('button', { name: '취소', exact: true }).click();
-  await page.getByRole('button', { name: '이번 요청 정리', exact: true }).click();
+  await page.getByRole('button', { name: '이 기록으로 다음 커트 준비', exact: true }).click();
   await page.getByRole('checkbox', { name: '경과 2026-09-15 선택', exact: true }).check();
   await page.getByRole('button', { name: '요청 작성', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -72,10 +75,10 @@ try {
     await reference.locator('summary').click();
   await reference.getByRole('button', { name: '이 질문을 요청에 추가', exact: true }).click();
   await capture('request-desktop.png');
-  await page.getByRole('button', { name: '미리보기 확인', exact: true }).click();
-  await page.getByRole('heading', { name: '이번 요청 미리보기', exact: true }).waitFor();
-  await page.getByRole('link', { name: '요청 자료 목록', exact: true }).click();
-  await page.getByRole('heading', { name: '요청 자료', exact: true }).waitFor();
+  await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
+  await page.getByRole('heading', { name: '다음 커트 요청 내용', exact: true }).waitFor();
+  await page.getByRole('link', { name: '커트 준비 목록', exact: true }).click();
+  await page.getByRole('heading', { name: '커트 준비', exact: true }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
   await capture('requests-mobile.png');
 } finally {

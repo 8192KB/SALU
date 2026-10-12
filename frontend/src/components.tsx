@@ -1,14 +1,45 @@
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from 'react-router';
+import { Link } from './workspace';
 
 export function Icon({
   name,
   size = 20,
 }: {
-  name: 'cut' | 'arrow' | 'plus' | 'check' | 'photo' | 'chat' | 'user' | 'reset';
+  name:
+    | 'home'
+    | 'cut'
+    | 'arrow'
+    | 'back'
+    | 'plus'
+    | 'check'
+    | 'photo'
+    | 'chat'
+    | 'user'
+    | 'reset'
+    | 'calendar'
+    | 'warning';
   size?: number;
 }) {
   const paths = {
+    warning: (
+      <>
+        <path d="m12 3 10 18H2L12 3Z" />
+        <path d="M12 9v5M12 17h.01" />
+      </>
+    ),
+    home: (
+      <>
+        <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />
+        <path d="M9 21v-8h6v8" />
+      </>
+    ),
+    calendar: (
+      <>
+        <rect x="3" y="5" width="18" height="16" rx="3" />
+        <path d="M7 3v4M17 3v4M3 11h18M7 15h2M13 15h2" />
+      </>
+    ),
     cut: (
       <>
         <circle cx="6" cy="6" r="3" />
@@ -17,6 +48,7 @@ export function Icon({
       </>
     ),
     arrow: <path d="m9 5 7 7-7 7M4 12h12" />,
+    back: <path d="m15 5-7 7 7 7" />,
     plus: <path d="M12 5v14M5 12h14" />,
     check: <path d="m5 12 4 4L19 6" />,
     photo: (
@@ -57,21 +89,24 @@ export function Icon({
 }
 
 export function PageHeading({
-  eyebrow,
   title,
   description,
   action,
+  back,
 }: {
   eyebrow?: string;
   title: string;
   description?: string;
   action?: ReactNode;
+  back?: ReactNode;
 }) {
   return (
     <div className="page-heading">
-      <div>
-        {eyebrow && <p className="eyebrow">{eyebrow}</p>}
-        <h1 tabIndex={-1}>{title}</h1>
+      <div className="heading-content">
+        {back && <div className="heading-back-row">{back}</div>}
+        <div className="heading-title-row">
+          <h1 tabIndex={-1}>{title}</h1>
+        </div>
         {description && <p className="subtext">{description}</p>}
       </div>
       {action}
@@ -79,9 +114,18 @@ export function PageHeading({
   );
 }
 
+export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <Link className="heading-back" to={to}>
+      <Icon name="back" />
+      <span>{children}</span>
+    </Link>
+  );
+}
+
 export function Missing({
-  title = '자료를 찾을 수 없습니다',
-  message = '새로고침하거나 초기화하면 새로 작성한 자료는 사라집니다.',
+  title = '자료를 찾을 수 없어요',
+  message = '내 기록에서 자료를 다시 선택해 주세요.',
 }: {
   title?: string;
   message?: string;
@@ -93,7 +137,7 @@ export function Missing({
       </span>
       <h1 tabIndex={-1}>{title}</h1>
       <p>{message}</p>
-      <Link className="button primary" to="/">
+      <Link className="button primary" to="/records">
         내 기록으로
       </Link>
     </section>
@@ -110,8 +154,48 @@ export function Avatar({ name, large = false }: { name: string; large?: boolean 
 
 export function Alert({ message }: { message: string }) {
   return message ? (
-    <div className="form-error" role="alert">
-      {message}
+    <div className="form-error" role="alert" tabIndex={-1}>
+      <Icon name="warning" />
+      <div>
+        <strong>확인이 필요해요</strong>
+        <p>{message}</p>
+      </div>
     </div>
   ) : null;
+}
+
+export function FieldFeedback({ id, message }: { id?: string; message: string }) {
+  return (
+    <span id={id} className="field-error">
+      <Icon name="warning" size={16} />
+      <span>{message}</span>
+    </span>
+  );
+}
+export function PhotoPlaceholder({ failed = false }: { failed?: boolean }) {
+  return (
+    <span className="photo-placeholder">
+      <Icon name="photo" size={26} />
+      <span>{failed ? '사진을 불러오지 못했어요' : '사진 없음'}</span>
+    </span>
+  );
+}
+export function focusFirstError(form: HTMLFormElement) {
+  requestAnimationFrame(() => {
+    const target = form.querySelector<HTMLElement>(
+      '[aria-invalid="true"], .invalid input, .invalid textarea, .field-error, .form-error',
+    );
+    target?.scrollIntoView({ block: 'center', behavior: 'instant' });
+    target?.focus({ preventScroll: true });
+  });
+}
+
+export function PhotoThumbnail({ src, alt }: { src?: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  return src && !failed ? (
+    <img src={src} alt={alt} onError={() => setFailed(true)} />
+  ) : (
+    <PhotoPlaceholder failed={failed} />
+  );
 }

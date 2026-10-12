@@ -1,14 +1,34 @@
-import { useEffect, useState } from 'react';
+import { draftDesigner, refreshDirectory } from './directory-cache';
+import { useDirectory } from './directory';
+import { useEffect, useRef, useState } from 'react';
+import { Completion } from './completion';
+import { useActivePage } from './main-navigation';
 import type { FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { Alert, Avatar, Icon, Missing, PageHeading } from './components';
-import { Field, PhotoList } from './fields';
+import { useParams, useSearchParams } from 'react-router';
+import { Link, useNavigate, useWorkspace } from './workspace';
+import {
+  Alert,
+  Avatar,
+  BackLink,
+  Icon,
+  Missing,
+  PageHeading,
+  PhotoPlaceholder,
+  PhotoThumbnail,
+  focusFirstError,
+} from './components';
+import { Field, PhotoList, PhotoButton } from './fields';
+import { MaterialChoice } from './material-choice';
+import { AnimatedDetails } from './animated-details';
 import { AreaChips, ProgressBlock } from './record-pages';
 import { usePrototype } from './prototype/context';
+import { prepareRequest } from './prototype/memory-repository';
 import { AREAS, INTENTS } from './prototype/types';
 import type { Area, RequestDraft, DesignerProfile, Intent, RequestItem } from './prototype/types';
 import { cutTitle, daysAfter, displayDate } from './prototype/dates';
 import {
+  completeUrl,
+  reviewUrl,
   draftFromPreview,
   latestMaterials,
   materialSource,
@@ -31,23 +51,20 @@ function profileUrl(id: string, record: string | null, preview?: string | null) 
   if (preview) search.set('preview', preview);
   return `/designers/${id}${search.size ? `?${search}` : ''}`;
 }
-function Steps({ current, personal = false }: { current: number; personal?: boolean }) {
+function Steps({ current }: { current: number }) {
   return (
-    <div className="steps" aria-label="상담 준비 단계">
-      {[personal ? '내 기록' : '디자이너', '자료 선택', '요청 정리', '미리보기'].map(
-        (label, index) => (
-          <span
-            key={label}
-            className={index === current ? 'active' : ''}
-            aria-current={index === current ? 'step' : undefined}
-          >
-            <b>{index + 1}</b>
-            {label}
-            {index < 3 && <span aria-hidden="true">　›</span>}
-          </span>
-        ),
-      )}
-    </div>
+    <ol className="steps" aria-label="커트 준비 단계">
+      {['자료 고르기', '원하는 점 적기', '내용 확인'].map((label, index) => (
+        <li
+          key={label}
+          className={index === current ? 'active' : index < current ? 'done' : ''}
+          aria-current={index === current ? 'step' : undefined}
+        >
+          <b>{index < current ? <Icon name="check" size={14} /> : index + 1}</b>
+          <span>{label}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 function SelectedDesigner({ designer }: { designer: DesignerProfile }) {
@@ -70,7 +87,7 @@ function SelectedMaterials({
   onUse: (area: Area, intent: Intent, content: string) => void;
 }) {
   const { state } = usePrototype();
-  const [open, setOpen] = useState(() => window.matchMedia('(min-width: 701px)').matches);
+  const [initialOpen] = useState(() => window.matchMedia('(min-width: 701px)').matches);
   const source = materialSource(state, draft);
   if (!source) return null;
   const cut = source.cut;
@@ -80,16 +97,20 @@ function SelectedMaterials({
   const photos = source.photos.filter((photo) => draft.photoIds.includes(photo.id));
   return (
     <aside className="sidebar request-reference" aria-label="요청에 첨부할 자료">
-      <section className="panel sticky-summary">
-        <h2>선택한 기록</h2>
-        <p className="reference-cut">{cutTitle(cut.cutDate, cut.service)}</p>
-        <details
-          className="reference-details"
-          open={open}
-          onToggle={(event) => setOpen(event.currentTarget.open)}
+      <section className="sticky-summary">
+        <h2>참고할 지난 기록</h2>
+        <AnimatedDetails
+          className="reference-details optional-fields"
+          defaultOpen={initialOpen}
+          summary={
+            <span className="reference-context">
+              <span>지난 커트 · {displayDate(cut.cutDate)}</span>
+              <span className="reference-count">자료 {selectedCount(draft)}개 보기</span>
+            </span>
+          }
         >
-          <summary>선택한 자료 {selectedCount(draft)}개 보기</summary>
           <div className="reference-body" role="region" aria-label="선택한 자료 내용" tabIndex={0}>
+            <p className="reference-cut">{cutTitle(cut.cutDate, cut.service)}</p>
             {draft.includeGoodNote && cut.goodNote && (
               <article className="reference-entry">
                 <h3>커트 당일 · 좋았던 점</h3>
@@ -97,7 +118,13 @@ function SelectedMaterials({
                 <button
                   className="text-link reference-action"
                   type="button"
-                  onClick={() => onUse(cut.areas[0] ?? 'WHOLE', 'KEEP', cut.goodNote)}
+                  onClick={() =>
+                    onUse(
+                      cut.areas.includes('WHOLE') ? 'WHOLE' : (cut.areas[0] ?? 'WHOLE'),
+                      'KEEP',
+                      cut.goodNote,
+                    )
+                  }
                   disabled={draft.requests.some(
                     (item) => item.content === cut.goodNote && item.intent === 'KEEP',
                   )}
@@ -121,7 +148,13 @@ function SelectedMaterials({
                       <button
                         className="text-link reference-action"
                         type="button"
-                        onClick={() => onUse(entry.areas[0] ?? 'WHOLE', 'ASK', entry.discomfort)}
+                        onClick={() =>
+                          onUse(
+                            entry.areas.includes('WHOLE') ? 'WHOLE' : (entry.areas[0] ?? 'WHOLE'),
+                            'ASK',
+                            entry.discomfort,
+                          )
+                        }
                         disabled={draft.requests.some(
                           (item) => item.content === entry.discomfort && item.intent === 'ASK',
                         )}
@@ -143,7 +176,13 @@ function SelectedMaterials({
                       <button
                         className="text-link reference-action"
                         type="button"
-                        onClick={() => onUse(entry.areas[0] ?? 'WHOLE', 'ASK', entry.question)}
+                        onClick={() =>
+                          onUse(
+                            entry.areas.includes('WHOLE') ? 'WHOLE' : (entry.areas[0] ?? 'WHOLE'),
+                            'ASK',
+                            entry.question,
+                          )
+                        }
                         disabled={draft.requests.some(
                           (item) => item.content === entry.question && item.intent === 'ASK',
                         )}
@@ -155,9 +194,10 @@ function SelectedMaterials({
                 </dl>
               </article>
             ))}
+            {photos.length > 0 && <h3 className="reference-photos-heading">선택한 사진</h3>}
             {photos.map((photo) => (
               <figure className="reference-photo" key={photo.id}>
-                <img src={photo.url} alt={photo.caption} />
+                <PhotoButton photo={photo} cutDate={cut.cutDate} />
                 <figcaption>
                   <strong>{photoOrigin(photo, cut.cutDate)}</strong>
                   <span>{displayDate(photo.date)}</span>
@@ -166,10 +206,8 @@ function SelectedMaterials({
               </figure>
             ))}
           </div>
-        </details>
-        <p className="form-note">
-          선택한 기록은 함께 첨부됩니다. 요청에는 새로 부탁할 내용만 적어 주세요.
-        </p>
+          <p className="form-note">고른 기록은 함께 담아요. 새로 부탁할 내용만 적어 주세요.</p>
+        </AnimatedDetails>
       </section>
     </aside>
   );
@@ -177,31 +215,29 @@ function SelectedMaterials({
 
 export function DesignerList() {
   const { state, requestDraft } = usePrototype();
+  const directory = useDirectory(state);
+  const mode = useWorkspace();
   const [search] = useSearchParams();
   const previewId = search.get('preview');
   const sourcePreview = state.previews.find((value) => value.id === previewId);
   const record = search.get('record') ?? sourcePreview?.cut.id ?? requestDraft?.cutId ?? null;
   if (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
-    return <Missing title="준비한 요청 자료를 찾을 수 없습니다" />;
+    return <Missing title="준비한 요청 자료를 찾을 수 없어요" />;
   if (record && !state.cuts.some((cut) => cut.id === record))
-    return <Missing title="선택한 커트 기록을 찾을 수 없습니다" />;
+    return <Missing title="선택한 커트 기록을 찾을 수 없어요" />;
   return (
     <>
       <PageHeading
         title="디자이너 찾기"
+        back={record ? <BackLink to={`/records/${record}`}>참고할 지난 커트</BackLink> : undefined}
         description={
           sourcePreview
-            ? '준비한 요청 자료를 함께 볼 디자이너를 골라 보세요. 선택만으로 전송되지는 않습니다.'
+            ? '준비한 내용을 보여 주고 싶은 디자이너를 골라 보세요.'
             : '소개와 상담 분야를 보고, 이야기를 나눌 디자이너를 골라 보세요.'
         }
       />
-      {record && (
-        <Link className="back-link" to={`/records/${record}`}>
-          ← 선택한 커트 기록
-        </Link>
-      )}
       <div className="designer-grid">
-        {state.designers.map((designer) => (
+        {directory.designers.map((designer) => (
           <Link
             className="panel designer-card"
             to={profileUrl(designer.id, record, previewId)}
@@ -223,13 +259,38 @@ export function DesignerList() {
             </div>
             <p>{designer.introduction.split('\n')[0]}</p>
             <div className="card-bottom">
-              <span>가상 프로필 · 상담 후기 예시</span>
+              <span>
+                {mode === 'example' ? '가상 프로필 · 상담 후기 예시' : '직접 등록한 프로필'}
+              </span>
               <span>프로필 보기 ↗</span>
             </div>
           </Link>
         ))}
       </div>
-      <p className="form-note">인물·매장·후기는 화면 확인을 위한 가상 자료입니다.</p>
+      {mode === 'example' ? (
+        <p className="form-note">인물·매장·후기는 화면 확인을 위한 가상 자료입니다.</p>
+      ) : (
+        <>
+          {directory.loading && <p role="status">디자이너를 불러오고 있어요.</p>}
+          {directory.error && (
+            <div className="panel">
+              <Alert message={directory.error} />
+              <button className="button" type="button" onClick={() => void refreshDirectory()}>
+                다시 불러오기
+              </button>
+            </div>
+          )}
+          {!directory.loading && !directory.error && !directory.designers.length && (
+            <section className="empty-state">
+              <h2>등록된 디자이너가 없어요</h2>
+              <p>디자이너라면 소개를 등록해 보세요.</p>
+            </section>
+          )}
+          <Link className="button" to="/account/designer">
+            내 디자이너 프로필 등록·관리
+          </Link>
+        </>
+      )}
     </>
   );
 }
@@ -238,58 +299,61 @@ export function DesignerDetail() {
   const { id } = useParams();
   const [search] = useSearchParams();
   const previewId = search.get('preview');
-  const { state, repository, requestDraft, requestDrafts, setRequestDraft } = usePrototype();
+  const { state, requestDraft, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
+  const directory = useDirectory(state);
+  const mode = useWorkspace();
   const sourcePreview = state.previews.find((value) => value.id === previewId);
   const record = search.get('record') ?? sourcePreview?.cut.id ?? requestDraft?.cutId ?? null;
   const navigate = useNavigate();
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const designer = state.designers.find((value) => value.id === id);
+  const designer = directory.designers.find((value) => value.id === id);
+  if (mode !== 'example' && directory.loading)
+    return <p role="status">프로필을 불러오고 있어요.</p>;
+  if (mode !== 'example' && directory.error)
+    return (
+      <section className="panel">
+        <Alert message={directory.error} />
+        <button type="button" className="button" onClick={() => void refreshDirectory()}>
+          다시 불러오기
+        </button>
+      </section>
+    );
   if (
     !designer ||
     (record && !state.cuts.some((cut) => cut.id === record)) ||
     (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
   )
-    return <Missing title="프로필 또는 선택한 기록을 찾을 수 없습니다" />;
+    return <Missing title="프로필 또는 선택한 기록을 찾을 수 없어요" />;
   const existing = unfinishedDrafts(state, requestDrafts).find(
     (draft) => draft.designerId === designer.id && (!record || draft.cutId === record),
   );
-  const prepareForDesigner = async () => {
+  const prepareForDesigner = () => {
     if (!sourcePreview) return;
-    setError('');
-    if (!selectedCount(sourcePreview.sourceDraft)) {
-      const draft = latestMaterials(state, draftFromPreview(sourcePreview, designer.id));
-      setRequestDraft(draft);
-      navigate(materialUrl(draft));
-      return;
-    }
-    setBusy(true);
-    try {
-      const preview = await repository.createPreviewForDesigner(sourcePreview.id, designer.id);
-      setRequestDraft(preview.sourceDraft);
-      navigate(previewUrl(preview));
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : '자료를 다시 확인해 주세요.');
-    } finally {
-      setBusy(false);
-    }
+    const draft = selectedCount(sourcePreview.sourceDraft)
+      ? draftFromPreview(sourcePreview, designer.id)
+      : latestMaterials(state, draftFromPreview(sourcePreview, designer.id));
+    setRequestDraft(draft);
+    navigate(selectedCount(draft) ? reviewUrl(draft) : materialUrl(draft));
   };
   return (
     <>
-      <Link
-        className="back-link"
-        to={`/designers?${new URLSearchParams({ ...(record ? { record } : {}), ...(previewId ? { preview: previewId } : {}) })}`}
-      >
-        ← 디자이너 목록
-      </Link>
-      <Steps current={0} />
-      <div className="two-column">
-        <section>
+      <PageHeading
+        title="디자이너 프로필"
+        back={
+          <BackLink
+            to={`/designers?${new URLSearchParams({ ...(record ? { record } : {}), ...(previewId ? { preview: previewId } : {}) })}`}
+          >
+            디자이너 목록
+          </BackLink>
+        }
+      />
+      <div className="two-column profile-layout">
+        <section className="profile-intro">
           <div className="panel profile-banner">
             <Avatar name={designer.name} large />
-            <div>
-              <h1 tabIndex={-1}>{designer.name} 디자이너</h1>
+            <div className="profile-identity">
+              <h2>{designer.name} 디자이너</h2>
               <p>현재 소속 · {currentSalon(designer)}</p>
+              {mode !== 'example' && <span className="demo-badge">직접 등록한 프로필</span>}
               <div className="chip-row">
                 {designer.specialties.map((value) => (
                   <span className="chip" key={value}>
@@ -298,51 +362,22 @@ export function DesignerDetail() {
                 ))}
               </div>
             </div>
+            <section className="profile-description">
+              <h3>소개</h3>
+              <p>{designer.introduction}</p>
+            </section>
           </div>
-          <section className="panel profile-section" style={{ marginTop: 22 }}>
-            <h2>소개</h2>
-            <p>{designer.introduction}</p>
-          </section>
-          <section className="panel profile-section">
-            <h2>소속 정보</h2>
-            {designer.affiliations.map((value) => (
-              <div className="detail-values" key={value.period}>
-                <strong>{value.salonName}</strong>
-                <span>{value.period}</span>
-                <span>{value.current ? '현재 소속' : '이전 소속'}</span>
-              </div>
-            ))}
-            <p className="muted">소속이 바뀌어도 같은 디자이너 프로필에서 확인하는 방식입니다.</p>
-          </section>
-          <section className="panel profile-section">
-            <div className="section-heading" style={{ marginTop: 0 }}>
-              <h2>상담 후기</h2>
-              <span className="chip">가상 후기</span>
-            </div>
-            {designer.reviewExamples.map((review) => (
-              <article className="review-card" key={review.id}>
-                <span className="review-meta">상담 고객 · {displayDate(review.date)}</span>
-                <p>{review.content}</p>
-              </article>
-            ))}
-          </section>
         </section>
-        <aside className="sidebar">
+        <aside className="sidebar profile-action">
           <section className="panel sticky-summary">
             <h2>기록으로 상담 준비</h2>
-            <p className="muted">원하는 디자이너에게 보여 줄 자료와 이번 요청을 정리하세요.</p>
+            <p className="muted">지난 커트를 보고, 이번에 원하는 스타일을 정리해 보세요.</p>
             {sourcePreview ? (
               <>
                 <p className="source-note">
-                  준비한 요청을 이 디자이너용으로 새로 만듭니다. 개인 준비본과 기존 초안은 그대로
-                  남습니다.
+                  준비한 내용을 이 디자이너용으로 복사해요. 기존 내용은 그대로 남아요.
                 </p>
-                <Alert message={error} />
-                <button
-                  className="button primary full"
-                  disabled={busy}
-                  onClick={prepareForDesigner}
-                >
+                <button className="button primary full" onClick={prepareForDesigner}>
                   {selectedCount(sourcePreview.sourceDraft)
                     ? '이 자료로 상담 준비'
                     : '자료를 추가해서 상담 준비'}
@@ -354,7 +389,11 @@ export function DesignerDetail() {
                 className="button primary full"
                 disabled={!record && !state.cuts.length}
                 onClick={() => {
-                  const draft = newRequestDraft(record ?? state.cuts[0].id, designer.id);
+                  if (!record) {
+                    navigate(`/requests/materials?designer=${encodeURIComponent(designer.id)}`);
+                    return;
+                  }
+                  const draft = newRequestDraft(record, designer.id);
                   setRequestDraft(draft);
                   navigate(materialUrl(draft));
                 }}
@@ -368,7 +407,7 @@ export function DesignerDetail() {
                 <p>이 디자이너에게 작성 중인 내용이 있어요.</p>
                 <Link
                   className={sourcePreview ? 'text-link' : 'button primary full'}
-                  to={materialUrl(existing)}
+                  to={resumeUrl(existing)}
                 >
                   기존 초안 이어쓰기 <Icon name="arrow" size={17} />
                 </Link>
@@ -387,29 +426,69 @@ export function DesignerDetail() {
                 )}
               </div>
             )}
-            <p className="form-note">이번 단계에서는 실제 요청을 전송하지 않습니다.</p>
+            <p className="form-note">상담할 내용을 정리해 보세요. 메시지 보내기는 준비 중이에요.</p>
           </section>
         </aside>
+        <section className="profile-extra" aria-label="디자이너 추가 정보">
+          <section className="panel profile-section profile-reviews">
+            <div className="section-heading">
+              <h2>상담 후기</h2>
+              {mode === 'example' && <span className="demo-badge">가상 후기</span>}
+            </div>
+            {mode !== 'example' ? (
+              <p className="muted">상담 후기 기능은 준비 중이에요.</p>
+            ) : designer.reviewExamples.length ? (
+              designer.reviewExamples.map((review) => (
+                <article className="review-card" key={review.id}>
+                  <div className="review-person">
+                    <Avatar name="고객" />
+                    <strong>상담 고객</strong>
+                    <time dateTime={review.date}>{displayDate(review.date)}</time>
+                  </div>
+                  <p>{review.content}</p>
+                </article>
+              ))
+            ) : (
+              <p className="muted">아직 남겨진 후기가 없어요.</p>
+            )}
+          </section>
+          <AnimatedDetails className="profile-section profile-details" summary="소속 정보">
+            {designer.affiliations.map((value) => (
+              <div className="detail-values" key={value.period}>
+                <strong>{value.salonName}</strong>
+                <span>{value.period}</span>
+                <span>{value.current ? '현재 소속' : '이전 소속'}</span>
+              </div>
+            ))}
+          </AnimatedDetails>
+        </section>
       </div>
     </>
   );
 }
 
 export function MaterialsPage() {
-  const { state, requestDraft, requestDrafts, setRequestDraft, resumeRequestDraft } =
-    usePrototype();
+  const active = useActivePage();
+  const {
+    state,
+    requestDraft,
+    requestDrafts,
+    setRequestDraft,
+    resumeRequestDraft,
+    markRequestStep,
+  } = usePrototype();
+  const directory = useDirectory(state);
   const [search, setSearch] = useSearchParams();
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const draftId = search.get('draft');
-  const explicitDraft = draftId ? requestDrafts[draftId] : undefined;
+  const explicitDraft =
+    draftId && Object.hasOwn(requestDrafts, draftId) ? requestDrafts[draftId] : undefined;
   const designerId = draftId ? explicitDraft?.designerId : (search.get('designer') ?? undefined);
-  const designer = state.designers.find((value) => value.id === designerId);
-  const cutId = draftId
-    ? explicitDraft?.cutId
-    : (search.get('record') ??
-      (requestDraft?.designerId === designerId ? requestDraft?.cutId : undefined) ??
-      state.cuts[0]?.id);
+  const designer =
+    directory.designers.find((value) => value.id === designerId) ??
+    draftDesigner([], explicitDraft);
+  const cutId = draftId ? explicitDraft?.cutId : (search.get('record') ?? undefined);
   const record = state.cuts.find((value) => value.id === cutId);
   const draft = draftId
     ? explicitDraft
@@ -418,22 +497,90 @@ export function MaterialsPage() {
       : undefined;
   const source = draft ? materialSource(state, draft) : null;
   useEffect(() => {
+    if (!active) return;
     if (draftId) {
       if (explicitDraft) setRequestDraft(explicitDraft);
     } else if (record && (!designerId || designer)) {
       resumeRequestDraft(newRequestDraft(record.id, designerId));
     }
     setError('');
-  }, [draftId, explicitDraft, record, designerId, designer, resumeRequestDraft, setRequestDraft]);
+  }, [
+    active,
+    draftId,
+    explicitDraft,
+    record,
+    designerId,
+    designer,
+    resumeRequestDraft,
+    setRequestDraft,
+  ]);
   useEffect(() => {
-    if (!draftId && draft) navigate(materialUrl(draft), { replace: true });
-  }, [draftId, draft, navigate]);
+    if (active && !draftId && draft) navigate(materialUrl(draft), { replace: true });
+  }, [active, draftId, draft, navigate]);
+  useEffect(() => {
+    if (active && draft && source) markRequestStep(draft.id, 'materials');
+  }, [active, draft?.id, Boolean(source), markRequestStep]);
+  if (search.has('draft') && !explicitDraft)
+    return <Missing title="기록 또는 작성 중인 요청을 찾을 수 없어요" />;
+  if (!search.has('draft') && !search.has('record') && (!designerId || designer))
+    return (
+      <>
+        <Link className="back-link" to="/requests">
+          ← 커트 준비
+        </Link>
+        <Steps current={0} />
+        <PageHeading
+          title="참고할 지난 커트를 골라 주세요"
+          description="이 기록을 바탕으로 다음 커트에서 원하는 점을 정리해요."
+        />
+        {state.cuts.length ? (
+          <div className="reference-record-list">
+            {state.cuts.map((cut) => (
+              <Link
+                className="panel reference-record-choice"
+                key={cut.id}
+                to={`/requests/materials?${new URLSearchParams({ record: cut.id, ...(designerId ? { designer: designerId } : {}) })}`}
+              >
+                <div className="reference-record-image">
+                  <PhotoThumbnail
+                    src={
+                      state.photos.find((photo) => photo.cutId === cut.id && !photo.progressId)?.url
+                    }
+                    alt="커트 사진"
+                  />
+                </div>
+                <div>
+                  <time>{displayDate(cut.cutDate)}</time>
+                  <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
+                  <p>{cut.goodNote || '당일 기록과 경과를 참고할 수 있어요.'}</p>
+                </div>
+                <Icon name="arrow" />
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <section className="record-empty">
+            <h2>먼저 커트 기록을 남겨 주세요</h2>
+            <p>날짜와 좋았던 점만 간단히 적어도 시작할 수 있어요.</p>
+            <Link className="button primary" to="/records/new">
+              커트 기록 남기기
+            </Link>
+          </section>
+        )}
+      </>
+    );
   if ((draftId && !explicitDraft) || (designerId && !designer) || (!record && !source))
-    return <Missing title="기록 또는 작성 중인 요청을 찾을 수 없습니다" />;
+    return <Missing title="기록 또는 작성 중인 요청을 찾을 수 없어요" />;
   if (!draft || !source) return <p role="status">자료 확인 중</p>;
   const cut = source.cut;
   const progress = [...source.progress].sort((a, b) => a.observedOn.localeCompare(b.observedOn));
   const photos = source.photos;
+  const eligibleCount = Number(Boolean(cut.goodNote)) + progress.length + photos.length;
+  const allSelected =
+    eligibleCount > 0 &&
+    (!cut.goodNote || draft.includeGoodNote) &&
+    progress.every((entry) => draft.progressIds.includes(entry.id)) &&
+    photos.every((photo) => draft.photoIds.includes(photo.id));
   const update = (input: Partial<RequestDraft>) => {
     setError('');
     setRequestDraft({ ...draft, ...input });
@@ -446,28 +593,23 @@ export function MaterialsPage() {
     });
   return (
     <>
-      <Link
-        className="back-link"
-        to={designer ? profileUrl(designer.id, cut.id) : `/records/${cut.id}`}
-      >
-        {designer ? '← 디자이너 프로필' : '← 내 기록'}
-      </Link>
-      <Steps current={1} personal={!designer} />
       <PageHeading
-        title={designer ? '상담 자료 선택' : '다음 커트 준비'}
-        description={
-          designer
-            ? '보여 주고 싶은 메모와 경과, 사진만 골라 주세요.'
-            : '참고할 기록을 고르고, 다음에 요청할 내용을 정리하세요. 디자이너는 나중에 선택해도 됩니다.'
+        back={
+          <BackLink to={designer ? profileUrl(designer.id, cut.id) : `/records/${cut.id}`}>
+            {designer ? '디자이너 프로필' : '커트 기록으로'}
+          </BackLink>
         }
+        title={designer ? '상담에 참고할 자료 선택' : '참고 자료 선택'}
+        description="함께 담을 메모와 경과, 사진을 골라 주세요."
       />
+      <Steps current={0} />
       <div className="two-column materials-layout">
-        <section className="panel">
+        <section className="material-picker">
           {designer && <SelectedDesigner designer={designer} />}
           {source.frozen && (
             <div className="source-note">
               <strong>미리보기를 만들 때의 자료</strong>
-              <p>원본 기록이 바뀌어도 이 준비 내용은 유지됩니다.</p>
+              <p>기록을 수정해도 여기 담아 둔 내용은 그대로 남아요.</p>
               <button
                 type="button"
                 className="text-link"
@@ -477,88 +619,129 @@ export function MaterialsPage() {
               </button>
             </div>
           )}
-          <Field label="기준 커트">
-            <select
-              value={cut.id}
-              disabled={source.frozen}
-              onChange={(event) =>
-                setSearch({
-                  ...(designer ? { designer: designer.id } : {}),
-                  record: event.target.value,
+          <div className="task-context">
+            <Icon name="check" size={18} />
+            <span>{cutTitle(cut.cutDate, cut.service)}</span>
+          </div>
+          <AnimatedDetails className="source-switch" summary="참고할 커트 바꾸기">
+            <Field label="참고할 지난 커트">
+              <select
+                value={cut.id}
+                disabled={source.frozen}
+                onChange={(event) =>
+                  setSearch({
+                    ...(designer ? { designer: designer.id } : {}),
+                    record: event.target.value,
+                  })
+                }
+              >
+                {state.cuts.map((value) => (
+                  <option key={value.id} value={value.id}>
+                    {cutTitle(value.cutDate, value.service)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </AnimatedDetails>
+          <div className="material-toolbar">
+            <span>선택할 자료 {eligibleCount}개</span>
+            <button
+              type="button"
+              className="text-link"
+              disabled={!eligibleCount}
+              aria-label={allSelected ? '자료 전체 해제' : '자료 전체 선택'}
+              aria-pressed={allSelected}
+              onClick={() =>
+                update({
+                  includeGoodNote: !allSelected && Boolean(cut.goodNote),
+                  progressIds: allSelected ? [] : progress.map((entry) => entry.id),
+                  photoIds: allSelected ? [] : photos.map((photo) => photo.id),
                 })
               }
             >
-              {state.cuts.map((value) => (
-                <option key={value.id} value={value.id}>
-                  {cutTitle(value.cutDate, value.service)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <p className="form-note">다른 커트를 둘러보고 돌아와도 작성 중인 내용은 유지됩니다.</p>
+              {allSelected ? '전체 해제' : '전체 선택'}
+            </button>
+          </div>
+          <div className="material-group">
+            <h3>사진</h3>
+            {photos.map((photo, index) => (
+              <MaterialChoice
+                key={photo.id}
+                name={`사진 ${index + 1} 선택`}
+                title={photoOrigin(photo, cut.cutDate)}
+                summary={`${displayDate(photo.date)} · ${photo.caption}`}
+                checked={draft.photoIds.includes(photo.id)}
+                onChange={() => toggle('photoIds', photo.id)}
+                image={<PhotoButton photo={photo} cutDate={cut.cutDate} />}
+              />
+            ))}
+            {!photos.length && (
+              <div className="material-empty-photo">
+                <PhotoPlaceholder />
+                <p>사진 없이 메모나 경과를 골라도 돼요.</p>
+              </div>
+            )}
+          </div>
           <div className="material-group">
             <h3>커트 당일 메모</h3>
             {cut.goodNote ? (
-              <label className="selectable">
-                <input
-                  aria-label="커트 당일 메모 선택"
-                  type="checkbox"
-                  checked={draft.includeGoodNote}
-                  onChange={(event) => update({ includeGoodNote: event.target.checked })}
-                />
-                <div className="selectable-content">
-                  <strong>좋았던 점</strong>
-                  <p>{cut.goodNote}</p>
-                </div>
-              </label>
+              <MaterialChoice
+                name="커트 당일 메모 선택"
+                title="좋았던 점"
+                summary={cut.goodNote}
+                checked={draft.includeGoodNote}
+                onChange={() => update({ includeGoodNote: !draft.includeGoodNote })}
+                detailLabel="메모 전체 보기"
+                detail={<p>{cut.goodNote}</p>}
+              />
             ) : (
-              <p className="muted">당일에 남긴 메모가 없습니다.</p>
+              <p className="muted">커트 당일 메모가 없어요.</p>
             )}
           </div>
           <div className="material-group">
             <h3>커트 이후 경과</h3>
             {progress.map((entry) => (
-              <label className="selectable" key={entry.id}>
-                <input
-                  aria-label={`경과 ${entry.observedOn} 선택`}
-                  type="checkbox"
-                  checked={draft.progressIds.includes(entry.id)}
-                  onChange={() => toggle('progressIds', entry.id)}
-                />
-                <div className="selectable-content">
-                  <strong>
+              <MaterialChoice
+                key={entry.id}
+                name={`경과 ${entry.observedOn} 선택`}
+                title={
+                  <>
                     {displayDate(entry.observedOn)}{' '}
                     <span className="day-label">D+{daysAfter(cut.cutDate, entry.observedOn)}</span>
-                  </strong>
-                  <p>{entry.areas.map((area) => AREAS[area]).join(' · ')}</p>
-                  {entry.discomfort && <p>불편한 점 · {entry.discomfort}</p>}
-                  {entry.styling && <p>평소 손질 · {entry.styling}</p>}
-                  {entry.question && <p>물어볼 점 · {entry.question}</p>}
-                </div>
-              </label>
+                  </>
+                }
+                summary={entry.discomfort || entry.question || entry.styling}
+                checked={draft.progressIds.includes(entry.id)}
+                onChange={() => toggle('progressIds', entry.id)}
+                detailLabel="경과 자세히 보기"
+                detail={
+                  <>
+                    <AreaChips areas={entry.areas} />
+                    <dl>
+                      {entry.discomfort && (
+                        <div>
+                          <dt>불편한 점</dt>
+                          <dd>{entry.discomfort}</dd>
+                        </div>
+                      )}
+                      {entry.styling && (
+                        <div>
+                          <dt>평소 손질</dt>
+                          <dd>{entry.styling}</dd>
+                        </div>
+                      )}
+                      {entry.question && (
+                        <div>
+                          <dt>물어볼 점</dt>
+                          <dd>{entry.question}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </>
+                }
+              />
             ))}
-            {!progress.length && <p className="muted">아직 경과가 없습니다.</p>}
-          </div>
-          <div className="material-group">
-            <h3>사진</h3>
-            {photos.map((photo, index) => (
-              <label className="selectable" key={photo.id}>
-                <input
-                  aria-label={`사진 ${index + 1} 선택`}
-                  type="checkbox"
-                  checked={draft.photoIds.includes(photo.id)}
-                  onChange={() => toggle('photoIds', photo.id)}
-                />
-                <img src={photo.url} alt={photo.caption} />
-                <div className="selectable-content">
-                  <strong>
-                    {photoOrigin(photo, cut.cutDate)} · {displayDate(photo.date)}
-                  </strong>
-                  <p>{photo.caption}</p>
-                </div>
-              </label>
-            ))}
-            {!photos.length && <p className="muted">사진이 없습니다.</p>}
+            {!progress.length && <p className="muted">아직 남긴 경과가 없어요.</p>}
           </div>
         </section>
         <aside className="sidebar material-selection-bar">
@@ -573,9 +756,9 @@ export function MaterialsPage() {
               메모 {Number(draft.includeGoodNote)} · 경과 {draft.progressIds.length} · 사진{' '}
               {draft.photoIds.length}
             </p>
-            <p className="muted selection-scope">커트 날짜·시술·부위와 선택한 자료만 포함합니다.</p>
+            <p className="muted selection-scope">커트 날짜·시술·부위와 고른 자료만 담아요.</p>
             {!designer && (
-              <p className="muted selection-detail">첨부 자료 없이 요청 내용부터 적어도 됩니다.</p>
+              <p className="muted selection-detail">자료를 고르지 않고 바로 적어도 돼요.</p>
             )}
             <Alert message={error} />
             <button
@@ -586,7 +769,7 @@ export function MaterialsPage() {
                 else navigate(requestUrl(draft));
               }}
             >
-              요청 작성
+              원하는 점 적기
               <Icon name="arrow" />
             </button>
           </section>
@@ -597,29 +780,38 @@ export function MaterialsPage() {
 }
 
 export function RequestPage() {
-  const { state, repository, requestDraft, requestDrafts, setRequestDraft } = usePrototype();
+  const active = useActivePage();
+  const { state, requestDraft, requestDrafts, setRequestDraft, markRequestStep } = usePrototype();
+  const directory = useDirectory(state);
   const [search] = useSearchParams();
-  const draft = search.get('draft') ? requestDrafts[search.get('draft')!] : requestDraft;
+  const draftId = search.get('draft');
+  const draft = search.has('draft')
+    ? draftId && Object.hasOwn(requestDrafts, draftId)
+      ? requestDrafts[draftId]
+      : undefined
+    : requestDraft;
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
   useEffect(() => {
-    if (draft) setRequestDraft(draft);
-  }, [draft, setRequestDraft]);
-  const designer = state.designers.find((value) => value.id === draft?.designerId);
+    if (active && draft) {
+      setRequestDraft(draft);
+      markRequestStep(draft.id, 'write');
+    }
+  }, [active, draft, setRequestDraft, markRequestStep]);
+  const designer = draftDesigner(directory.designers, draft);
   const source = draft ? materialSource(state, draft) : null;
   if (search.has('draft') && !draft)
     return (
       <Missing
-        title="작성 중인 요청을 찾을 수 없습니다"
-        message="새로고침이나 초기화 후에는 초안이 남지 않습니다. 내 기록에서 다시 준비해 주세요."
+        title="작성 중인 요청을 찾을 수 없어요"
+        message="준비할 기록과 초안을 찾을 수 없어요. 내 기록에서 다시 선택해 주세요."
       />
     );
   if (!draft || !source || (draft.designerId && (!designer || !selectedCount(draft))))
     return (
       <Missing
         title="먼저 요청에 사용할 기록을 선택해 주세요"
-        message="내 기록에서 요청 준비를 시작할 수 있습니다."
+        message="내 기록에서 다음 커트를 준비해 보세요."
       />
     );
   const update = (input: Partial<RequestDraft>) => {
@@ -642,64 +834,56 @@ export function RequestPage() {
     update({
       requests: draft.requests.map((value) => (value.id === id ? { ...value, ...input } : value)),
     });
-  async function submit(event: FormEvent) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    setBusy(true);
     try {
-      const preview = await repository.createPreview(draft!);
-      navigate(previewUrl(preview));
+      prepareRequest(state, draft!);
+      navigate(reviewUrl(draft!));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '자료와 요청을 다시 확인해 주세요.');
-    } finally {
-      setBusy(false);
+      focusFirstError(event.currentTarget);
     }
   }
   return (
-    <>
-      <Link className="back-link" to={materialUrl(draft)}>
-        ← 자료 선택
-      </Link>
-      <Steps current={2} personal={!designer} />
+    <section className="request-screen">
       <PageHeading
-        title="이번 요청 정리"
-        description="그대로 둘 부분, 바꿀 부분, 물어볼 점을 부위별로 적어 주세요."
+        back={<BackLink to={materialUrl(draft)}>자료 선택</BackLink>}
+        title="이번 커트에서 원하는 점을 적어 주세요"
+        description="그대로 둘 부분과 바꿀 부분, 궁금한 점을 적어 주세요."
       />
+      <Steps current={1} />
       <div className="two-column request-layout">
-        <form className="panel" onSubmit={submit} noValidate>
-          {designer ? (
-            <SelectedDesigner designer={designer} />
-          ) : (
-            <p className="personal-label">개인 준비본 · 디자이너 선택 전</p>
-          )}
+        <SelectedMaterials draft={draft} onUse={useRecordedText} />
+        <form className="request-editor" onSubmit={submit} noValidate>
+          <h2>이번 요청</h2>
           {source.frozen && (
             <p className="source-note">
-              이 미리보기를 만들 때의 자료를 사용합니다. 최신 기록으로 바꾸려면 자료 선택 화면에서
-              다시 골라 주세요.
+              이전에 담아 둔 자료예요. 최근 기록을 담으려면 ‘자료 다시 고르기’를 눌러 주세요.
             </p>
           )}
           <Alert message={error} />
           {draft.requests.map((item, index) => (
             <section className="request-row" key={item.id}>
-              <div className="request-row-head">
-                <strong>요청 {String(index + 1).padStart(2, '0')}</strong>
-                {draft.requests.length > 1 && (
+              {draft.requests.length > 1 && (
+                <div className="request-row-head">
+                  <strong>원하는 점 {index + 1}</strong>
                   <button
                     className="remove-link"
                     type="button"
-                    aria-label={`요청 ${index + 1} 삭제`}
+                    aria-label={`원하는 점 ${index + 1} 삭제`}
                     onClick={() =>
                       update({ requests: draft.requests.filter((value) => value.id !== item.id) })
                     }
                   >
                     삭제
                   </button>
-                )}
-              </div>
+                </div>
+              )}
               <div className="field-grid">
                 <Field label="부위">
                   <select
-                    aria-label={`요청 부위 ${index + 1}`}
+                    aria-label={`부위 ${index + 1}`}
                     value={item.area}
                     onChange={(event) =>
                       updateRequest(item.id, { area: event.target.value as Area })
@@ -712,9 +896,9 @@ export function RequestPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="요청 종류">
+                <Field label="원하는 변화">
                   <select
-                    aria-label={`요청 종류 ${index + 1}`}
+                    aria-label={`원하는 변화 ${index + 1}`}
                     value={item.intent}
                     onChange={(event) =>
                       updateRequest(item.id, { intent: event.target.value as Intent })
@@ -728,9 +912,9 @@ export function RequestPage() {
                   </select>
                 </Field>
               </div>
-              <Field label="요청 내용">
+              <Field label="원하는 내용">
                 <textarea
-                  aria-label={`요청 내용 ${index + 1}`}
+                  aria-label={`원하는 내용 ${index + 1}`}
                   id={`request-${item.id}`}
                   required
                   maxLength={2000}
@@ -747,67 +931,117 @@ export function RequestPage() {
             onClick={() => update({ requests: [...draft.requests, newRequest()] })}
           >
             <Icon name="plus" size={17} />
-            요청 항목 추가
+            원하는 점 추가
           </button>
-          <div className="form-body" style={{ marginTop: 26 }}>
-            <Field label="집에서 손질" hint="선택 · 기록에 없는 내용만 추가">
-              <textarea
-                maxLength={2000}
-                value={draft.homeStyling}
-                onChange={(event) => update({ homeStyling: event.target.value })}
-                placeholder="드라이만 하고 있어요"
-              />
-            </Field>
-            <Field label="추가 질문" hint="선택 · 기록에 없는 내용만 추가">
-              <textarea
-                maxLength={2000}
-                value={draft.additionalQuestion}
-                onChange={(event) => update({ additionalQuestion: event.target.value })}
-                placeholder="함께 물어볼 내용이 있나요?"
-              />
-            </Field>
-          </div>
-          <div className="form-actions">
-            <Link className="button" to={materialUrl(draft)}>
-              자료 다시 고르기
-            </Link>
-            <button type="submit" className="button primary" disabled={busy}>
-              미리보기 확인
-              <Icon name="arrow" />
+          <AnimatedDetails
+            key={draft.id}
+            className="optional-fields request-options"
+            defaultOpen={Boolean(draft.homeStyling.trim() || draft.additionalQuestion.trim())}
+            summary={
+              <span className="request-options-summary">
+                <span>손질 방법·추가 질문 더 적기</span>
+                <small>
+                  {draft.homeStyling.trim() || draft.additionalQuestion.trim()
+                    ? [
+                        draft.homeStyling.trim() && '손질 방법',
+                        draft.additionalQuestion.trim() && '질문',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ') + ' 작성됨'
+                    : '선택'}
+                </small>
+              </span>
+            }
+          >
+            <div className="form-body">
+              <Field label="집에서 손질" hint="선택 · 고른 기록에 없는 내용만 추가">
+                <textarea
+                  maxLength={2000}
+                  value={draft.homeStyling}
+                  onChange={(event) => update({ homeStyling: event.target.value })}
+                  placeholder="드라이만 하고 있어요"
+                />
+              </Field>
+              <Field label="추가 질문" hint="선택 · 고른 기록에 없는 내용만 추가">
+                <textarea
+                  maxLength={2000}
+                  value={draft.additionalQuestion}
+                  onChange={(event) => update({ additionalQuestion: event.target.value })}
+                  placeholder="함께 물어볼 내용이 있나요?"
+                />
+              </Field>
+            </div>
+          </AnimatedDetails>
+          {designer && (
+            <p className="request-designer-context">
+              <Icon name="user" size={18} />
+              <span>
+                {designer.name} 디자이너 · {currentSalon(designer)}
+              </span>
+            </p>
+          )}
+          <div className="form-actions request-editor-actions">
+            <button type="submit" className="button primary">
+              내용 확인하기 <Icon name="arrow" />
             </button>
           </div>
-          <p className="form-note">
-            아직 실제로 전송하지 않습니다. 다음 화면에서 정리한 내용을 확인합니다.
-          </p>
+          <Link className="text-link request-reselect" to={materialUrl(draft)}>
+            자료 다시 고르기
+          </Link>
         </form>
-        <SelectedMaterials draft={draft} onUse={useRecordedText} />
       </div>
-    </>
+    </section>
   );
 }
 
 export function PreviewPage() {
   const { id } = useParams();
   const { state, setRequestDraft } = usePrototype();
+  const mode = useWorkspace();
   const navigate = useNavigate();
   const preview = state.previews.find((value) => value.id === id);
-  if (!preview) return <Missing title="상담 미리보기를 찾을 수 없습니다" />;
+  if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
   return (
     <>
-      <Steps current={3} personal={!preview.designer} />
-      <div className="preview-banner">
-        <span className="success-symbol">
-          <Icon name="check" size={32} />
-        </span>
-        <h1 tabIndex={-1}>{preview.designer ? '상담 요청 미리보기' : '이번 요청 미리보기'}</h1>
-        <p>
-          {preview.designer
-            ? '선택한 자료와 요청을 정리했어요. 실제 요청은 아직 보내지 않았습니다.'
-            : '다음 커트에서 요청할 내용을 정리했어요. 디자이너는 필요할 때 선택하세요.'}
-        </p>
-      </div>
+      <PageHeading
+        back={<BackLink to="/requests">준비 목록으로</BackLink>}
+        title={preview.designer ? '디자이너에게 보여 줄 내용' : '다음 커트 준비 내용'}
+        description={
+          preview.designer
+            ? '디자이너에게 보여 줄 자료와 원하는 커트를 정리했어요.'
+            : '다음 커트에서 요청할 내용을 정리했어요.'
+        }
+      />
       <div className="two-column">
         <section>
+          <section className="panel preview-block">
+            <h2>다음 커트에서 원하는 점</h2>
+            {preview.requests.map((item) => (
+              <article className="request-summary" key={item.id}>
+                <h3>
+                  {AREAS[item.area]}
+                  <span className="request-chip">{INTENTS[item.intent]}</span>
+                </h3>
+                <p>{item.content}</p>
+              </article>
+            ))}
+            {preview.homeStyling && (
+              <dl>
+                <div>
+                  <dt>집에서 손질</dt>
+                  <dd>{preview.homeStyling}</dd>
+                </div>
+              </dl>
+            )}
+            {preview.additionalQuestion && (
+              <dl>
+                <div>
+                  <dt>추가 질문</dt>
+                  <dd>{preview.additionalQuestion}</dd>
+                </div>
+              </dl>
+            )}
+          </section>
           <section className="panel preview-block">
             {preview.designer ? (
               <div className="selected-designer">
@@ -818,7 +1052,7 @@ export function PreviewPage() {
                 </div>
               </div>
             ) : (
-              <p className="personal-label">개인 준비본 · 디자이너 선택 전</p>
+              <p className="personal-label">개인 커트 준비</p>
             )}
             <h2>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h2>
             <p className="muted">{displayDate(preview.cut.cutDate)}</p>
@@ -851,41 +1085,17 @@ export function PreviewPage() {
               <PhotoList photos={preview.photos} cutDate={preview.cut.cutDate} />
             </section>
           )}
-          <section className="panel preview-block">
-            <h2>이번 요청</h2>
-            {preview.requests.map((item) => (
-              <article className="request-summary" key={item.id}>
-                <h3>
-                  {AREAS[item.area]}
-                  <span className="request-chip">{INTENTS[item.intent]}</span>
-                </h3>
-                <p>{item.content}</p>
-              </article>
-            ))}
-            {preview.homeStyling && (
-              <dl>
-                <div>
-                  <dt>집에서 손질</dt>
-                  <dd>{preview.homeStyling}</dd>
-                </div>
-              </dl>
-            )}
-            {preview.additionalQuestion && (
-              <dl>
-                <div>
-                  <dt>추가 질문</dt>
-                  <dd>{preview.additionalQuestion}</dd>
-                </div>
-              </dl>
-            )}
-          </section>
         </section>
         <aside className="sidebar">
           <section className="panel sticky-summary">
-            <h2>{preview.designer ? '보여 줄 내용 확인' : '다음 요청 준비 완료'}</h2>
+            <h2>{preview.designer ? '보여 줄 내용 확인' : '다음 커트 준비 완료'}</h2>
             <p className="muted">고르지 않은 기록과 사진은 포함하지 않았어요.</p>
+            <Link className="button primary full" to="/requests">
+              준비 목록으로 <Icon name="arrow" />
+            </Link>
             <button
-              className="button primary full"
+              className="button full"
+              style={{ marginTop: 12 }}
               onClick={() => {
                 const draft = draftFromPreview(preview);
                 setRequestDraft(draft);
@@ -894,7 +1104,7 @@ export function PreviewPage() {
             >
               내용 수정
             </button>
-            {!preview.designer && (
+            {mode === 'example' && !preview.designer && (
               <Link
                 className="button full"
                 style={{ marginTop: 12 }}
@@ -910,15 +1120,199 @@ export function PreviewPage() {
             >
               원본 기록 보기
             </Link>
-            <Link className="text-link" style={{ marginTop: 18 }} to="/requests">
-              요청 자료 목록 <Icon name="arrow" size={17} />
-            </Link>
-            <p className="form-note">
-              이 미리보기는 확인한 시점의 자료입니다. 실제 저장·전송은 후속 단계에서 연결합니다.
-            </p>
+            <p className="form-note">정리한 내용은 커트 준비 목록에서 다시 볼 수 있어요.</p>
           </section>
         </aside>
       </div>
     </>
+  );
+}
+
+function PreparationSummary({ prepared }: { prepared: ReturnType<typeof prepareRequest> }) {
+  return (
+    <div className="preparation-summary">
+      <div className="prepared-cut">
+        <div className="prepared-cut-photo">
+          {prepared.photos[0] ? (
+            <PhotoButton photo={prepared.photos[0]} cutDate={prepared.cut.cutDate} />
+          ) : (
+            <PhotoPlaceholder />
+          )}
+        </div>
+        <div>
+          <strong>{cutTitle(prepared.cut.cutDate, prepared.cut.service)}</strong>
+          <p>
+            {prepared.designer
+              ? `${prepared.designer.name} 디자이너에게 보여 줄 내용`
+              : '내 커트 준비'}
+          </p>
+          <span>
+            메모 {Number(Boolean(prepared.goodNote))} · 경과 {prepared.progress.length} · 사진{' '}
+            {prepared.photos.length}
+          </span>
+        </div>
+      </div>
+      <section className="review-requests">
+        <h2>이번 요청</h2>
+        {prepared.requests.map((item) => (
+          <article key={item.id}>
+            <h3>
+              {AREAS[item.area]} <span className="request-chip">{INTENTS[item.intent]}</span>
+            </h3>
+            <p>{item.content}</p>
+          </article>
+        ))}
+      </section>
+      {(prepared.homeStyling || prepared.additionalQuestion) && (
+        <dl>
+          {prepared.homeStyling && (
+            <div>
+              <dt>평소 손질</dt>
+              <dd>{prepared.homeStyling}</dd>
+            </div>
+          )}
+          {prepared.additionalQuestion && (
+            <div>
+              <dt>추가 질문</dt>
+              <dd>{prepared.additionalQuestion}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+      <AnimatedDetails className="review-materials" summary="선택한 자료 확인">
+        {prepared.goodNote && (
+          <section>
+            <h3>좋았던 점</h3>
+            <p>{prepared.goodNote}</p>
+          </section>
+        )}
+        {prepared.progress.map((entry) => (
+          <ProgressBlock key={entry.id} entry={entry} cutDate={prepared.cut.cutDate} />
+        ))}
+        {prepared.photos.length ? (
+          <PhotoList photos={prepared.photos} cutDate={prepared.cut.cutDate} />
+        ) : (
+          <PhotoPlaceholder />
+        )}
+        {!prepared.goodNote && !prepared.progress.length && !prepared.photos.length && (
+          <p>첨부 자료 없이 요청만 정리했어요.</p>
+        )}
+      </AnimatedDetails>
+    </div>
+  );
+}
+
+export function ReviewPage() {
+  const { state, requestDrafts, repository } = usePrototype();
+  const [search] = useSearchParams();
+  const navigate = useNavigate();
+  const lock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const draftId = search.get('draft');
+  const draft =
+    draftId && Object.hasOwn(requestDrafts, draftId) ? requestDrafts[draftId] : undefined;
+  if (!draft) return <Missing title="작성 중인 요청을 찾을 수 없어요" />;
+  let prepared: ReturnType<typeof prepareRequest> | undefined;
+  let validationError = '';
+  try {
+    prepared = prepareRequest(state, draft);
+  } catch (failure) {
+    validationError =
+      failure instanceof Error ? failure.message : '자료와 요청을 다시 확인해 주세요.';
+  }
+  async function save() {
+    if (lock.current || !draft) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const existing = state.previews.find(
+        (value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft),
+      );
+      const preview = existing ?? (await repository.createPreview(draft));
+      navigate(completeUrl(preview), { replace: true, state: { celebrate: !existing } });
+    } catch (failure) {
+      setError(
+        failure instanceof Error ? failure.message : '저장하지 못했어요. 다시 시도해 주세요.',
+      );
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="review-screen">
+      <PageHeading
+        back={<BackLink to={requestUrl(draft)}>요청 작성으로</BackLink>}
+        title="저장할 내용을 확인해 주세요"
+        description="자료와 원하는 점이 맞으면 준비를 마쳐요."
+      />
+      <Steps current={2} />
+      <Alert message={error || validationError} />
+      {prepared && <PreparationSummary prepared={prepared} />}
+      <div className="review-edit-actions">
+        <Link className="text-link" to={materialUrl(draft)}>
+          자료 수정
+        </Link>
+        <Link className="text-link" to={requestUrl(draft)}>
+          요청 수정
+        </Link>
+      </div>
+      <div className="task-primary-actions">
+        <button
+          className="button primary full"
+          disabled={busy || !prepared}
+          aria-busy={busy}
+          onClick={() => void save()}
+        >
+          {busy ? (
+            <>
+              저장하는 중 <span className="button-spinner" aria-hidden="true" />
+            </>
+          ) : (
+            <>
+              준비 저장하기 <Icon name="check" />
+            </>
+          )}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+export function CompletePage() {
+  const { id } = useParams();
+  const { state } = usePrototype();
+  const preview = state.previews.find((value) => value.id === id);
+  if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
+  return (
+    <Completion
+      title="커트 준비를 마쳤어요"
+      primary="준비한 내용 보기"
+      to={previewUrl(preview)}
+      secondary="준비 목록으로"
+      secondaryTo="/requests"
+    >
+      <div className="completed-summary">
+        <div className="prepared-cut-photo">
+          {preview.photos[0] ? (
+            <PhotoButton photo={preview.photos[0]} cutDate={preview.cut.cutDate} />
+          ) : (
+            <PhotoPlaceholder />
+          )}
+        </div>
+        <div>
+          <strong>{cutTitle(preview.cut.cutDate, preview.cut.service)}</strong>
+          <p>{preview.requests[0]?.content}</p>
+          <span>
+            {preview.designer
+              ? `${preview.designer.name} 디자이너에게 보여 줄 준비`
+              : '내 커트 준비'}{' '}
+            · 사진 {preview.photos.length}장
+          </span>
+        </div>
+      </div>
+    </Completion>
   );
 }

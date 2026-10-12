@@ -20,6 +20,7 @@ export type CutRecord = {
   areas: Area[];
   goodNote: string;
   salonName: string;
+  salonId?: Id;
   designerName: string;
   designerProfileId?: Id;
   price?: number;
@@ -34,6 +35,7 @@ export type ProgressEntry = {
   question: string;
 };
 export type DesignerProfile = {
+  salonId?: Id;
   id: Id;
   name: string;
   introduction: string;
@@ -45,6 +47,7 @@ export type RequestItem = { id: Id; area: Area; intent: Intent; content: string 
 export type RequestDraft = {
   id: Id;
   designerId?: Id;
+  designerSnapshot?: { id: Id; name: string; salonName: string };
   referencePreviewId?: Id;
   cutId: Id;
   includeGoodNote: boolean;
@@ -80,6 +83,7 @@ export type CutDraft = {
   areas: Area[];
   goodNote: string;
   salonName: string;
+  salonId?: Id;
   designerName: string;
   designerProfileId?: Id;
   price: string;

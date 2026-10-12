@@ -1,22 +1,32 @@
-import { Link } from 'react-router';
-import { Icon, PageHeading } from './components';
+import { draftDesigner } from './directory-cache';
+import { useDirectory } from './directory';
+import { Link } from './workspace';
+import { Icon, PageHeading, PhotoThumbnail } from './components';
 import { usePrototype } from './prototype/context';
 import { cutTitle } from './prototype/dates';
-import { materialUrl, previewUrl, unfinishedDrafts } from './prototype/request-flow';
+import { previewUrl, unfinishedDrafts } from './prototype/request-flow';
 
 export function RequestList() {
-  const { state, requestDrafts } = usePrototype();
+  const { state, requestDrafts, resumeUrl } = usePrototype();
+  const directory = useDirectory(state);
   const drafts = unfinishedDrafts(state, requestDrafts);
   const previews = [...state.previews].reverse();
   return (
     <>
       <PageHeading
-        title="요청 자료"
-        description="작성 중인 내용과 완성한 준비본을 다시 확인하세요."
+        title="커트 준비"
+        description="지난 기록을 보고, 다음 커트에서 원하는 점을 정리해 보세요."
+        action={
+          state.cuts.length > 0 ? (
+            <Link className="button primary" to="/requests/materials">
+              <Icon name="plus" />새 커트 준비
+            </Link>
+          ) : undefined
+        }
       />
-      <p className="form-note list-notice">
-        개인 준비본과 전송 전 미리보기입니다. 디자이너에게 보낸 상담 내역은 아닙니다.
-      </p>
+      <Link className="button" to="/designers">
+        디자이너 찾기
+      </Link>
       {drafts.length > 0 && (
         <section className="request-list-section">
           <div className="section-heading">
@@ -26,16 +36,22 @@ export function RequestList() {
           <div className="saved-request-grid">
             {drafts.map((draft) => {
               const cut = state.cuts.find((value) => value.id === draft.cutId);
-              const designer = state.designers.find((value) => value.id === draft.designerId);
+              const designer = draftDesigner(directory.designers, draft);
+              const photo = state.photos.find(
+                (value) => value.cutId === draft.cutId && !value.progressId,
+              );
               return (
-                <Link className="panel saved-request-card" key={draft.id} to={materialUrl(draft)}>
+                <Link className="panel saved-request-card" key={draft.id} to={resumeUrl(draft)}>
+                  <div className="saved-request-photo">
+                    <PhotoThumbnail src={photo?.url} alt="준비할 커트 사진" />
+                  </div>
                   <span className="request-status">
                     작성 중 · {designer ? `${designer.name} 디자이너` : '개인 준비'}
                   </span>
                   <h3>{cut ? cutTitle(cut.cutDate, cut.service) : '이전 커트의 요청'}</h3>
                   <p>
                     {draft.requests.find((item) => item.content.trim())?.content ||
-                      '자료를 선택했어요. 요청 내용을 이어서 적어 주세요.'}
+                      '자료를 골랐어요. 원하는 점을 이어서 적어 주세요.'}
                   </p>
                   <span className="text-link">
                     이어서 작성 <Icon name="arrow" size={17} />
@@ -48,15 +64,20 @@ export function RequestList() {
       )}
       <section className="request-list-section">
         <div className="section-heading">
-          <h2>만든 요청 자료</h2>
+          <h2>준비한 내용</h2>
           <span className="count-label">{previews.length}개</span>
         </div>
         {previews.length ? (
           <div className="saved-request-grid">
             {previews.map((preview) => (
               <Link className="panel saved-request-card" key={preview.id} to={previewUrl(preview)}>
+                <div className="saved-request-photo">
+                  <PhotoThumbnail src={preview.photos[0]?.url} alt="준비한 커트 사진" />
+                </div>
                 <span className="request-status">
-                  {preview.designer ? `${preview.designer.name} 디자이너 · 전송 전` : '개인 준비본'}
+                  {preview.designer
+                    ? `${preview.designer.name} 디자이너 · 상담 준비`
+                    : '내 커트 준비'}
                 </span>
                 <h3>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h3>
                 <p>{preview.requests[0]?.content}</p>
@@ -84,8 +105,12 @@ export function RequestList() {
             <p className="muted">
               내 기록을 보고 그대로 둘 부분과 바꿀 부분, 물어볼 점을 정리해 보세요.
             </p>
-            <Link className="button primary" to="/">
-              내 기록에서 준비하기 <Icon name="arrow" />
+            <Link
+              className="button"
+              to={state.cuts.length ? '/requests/materials' : '/records/new'}
+            >
+              {state.cuts.length ? '참고할 기록 고르기' : '먼저 커트 기록 남기기'}{' '}
+              <Icon name="arrow" />
             </Link>
           </section>
         )}

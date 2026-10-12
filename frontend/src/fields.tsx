@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { FieldFeedback } from './components';
 import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
 import { Icon } from './components';
@@ -36,15 +37,11 @@ export function Field({
     : children;
   return (
     <label className={`field ${error ? 'invalid' : ''}`}>
-      <span>
+      <span className="field-label">
         <span id={labelId}>{label}</span> {hint && <small id={`${labelId}-hint`}>{hint}</small>}
       </span>
       {control}
-      {error && (
-        <span id={`${labelId}-error`} className="field-error">
-          {error}
-        </span>
-      )}
+      {error && <FieldFeedback id={`${labelId}-error`} message={error} />}
     </label>
   );
 }
@@ -58,30 +55,46 @@ export function AreaChoices({
   onChange: (values: Area[]) => void;
   error?: string;
 }) {
+  const areas = (Object.keys(AREAS) as Area[]).filter((area) => area !== 'WHOLE');
+  const selected = values.includes('WHOLE') ? areas : values;
+  const allSelected = areas.every((area) => selected.includes(area));
   return (
     <fieldset>
       <legend>부위</legend>
       <div className="choice-pills">
-        {(Object.entries(AREAS) as [Area, string][]).map(([key, label]) => (
+        <label>
+          <input
+            type="checkbox"
+            aria-label="전체"
+            checked={allSelected}
+            ref={(input) => {
+              if (input) input.indeterminate = selected.length > 0 && !allSelected;
+            }}
+            onChange={(event) => onChange(event.target.checked ? ['WHOLE', ...areas] : [])}
+          />
+          <span>{allSelected && '✓ '}전체 선택</span>
+        </label>
+        {areas.map((key) => (
           <label key={key}>
             <input
               type="checkbox"
-              aria-label={label}
-              checked={values.includes(key)}
-              onChange={() =>
-                onChange(
-                  values.includes(key) ? values.filter((value) => value !== key) : [...values, key],
-                )
-              }
+              aria-label={AREAS[key]}
+              checked={selected.includes(key)}
+              onChange={() => {
+                const next = selected.includes(key)
+                  ? selected.filter((value) => value !== key)
+                  : [...selected, key];
+                onChange(areas.every((area) => next.includes(area)) ? ['WHOLE', ...areas] : next);
+              }}
             />
             <span>
-              {values.includes(key) && '✓ '}
-              {label}
+              {selected.includes(key) && '✓ '}
+              {AREAS[key]}
             </span>
           </label>
         ))}
       </div>
-      {error && <p className="field-error">{error}</p>}
+      {error && <FieldFeedback message={error} />}
     </fieldset>
   );
 }

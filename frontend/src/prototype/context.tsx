@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from 'react';
@@ -17,10 +18,15 @@ import type {
   PrototypeRepository,
   PrototypeState,
 } from './types';
-import { requestTarget } from './request-flow';
+import { materialUrl, requestTarget, requestUrl, hasDraftContent } from './request-flow';
+import type { WorkspaceMode } from '../workspace';
+import { PersonalStore } from './personal-store';
+import type { Drafts } from './storage-model';
 
 type PrototypeContextValue = {
   repository: PrototypeRepository;
+  storage?: PersonalStore;
+  ready: boolean;
   state: PrototypeState;
   cutDraft: CutDraft;
   setCutDraft: Dispatch<SetStateAction<CutDraft>>;
@@ -34,6 +40,9 @@ type PrototypeContextValue = {
   requestDrafts: Record<string, RequestDraft>;
   setRequestDraft: Dispatch<SetStateAction<RequestDraft | null>>;
   resumeRequestDraft: (initial: RequestDraft) => void;
+  markRequestStep: (id: string, step: 'materials' | 'write') => void;
+  resumeUrl: (draft: RequestDraft) => string;
+  hasWork: boolean;
   reset: () => void;
 };
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
@@ -43,8 +52,14 @@ type RequestDraftState = {
   targets: Record<string, string>;
 };
 
-export function PrototypeProvider({ children }: { children: ReactNode }) {
-  const [repository] = useState(createMemoryRepository);
+function MemoryPrototypeProvider({
+  children,
+  seed = 'empty',
+}: {
+  children: ReactNode;
+  seed?: WorkspaceMode;
+}) {
+  const [repository] = useState(() => createMemoryRepository(seed));
   const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot);
   const [cutDraft, setCutDraft] = useState(newCutDraft);
   const [progressDrafts, setProgressDrafts] = useState<Record<string, ProgressDraft>>({});
@@ -56,6 +71,35 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
     targets: {},
   });
   const requestDraft = requestDrafts.current;
+  const [requestSteps, setRequestSteps] = useState<Record<string, 'materials' | 'write'>>({});
+  const markRequestStep = useCallback((id: string, step: 'materials' | 'write') => {
+    setRequestSteps((previous) => (previous[id] === step ? previous : { ...previous, [id]: step }));
+  }, []);
+  const resumeUrl = (draft: RequestDraft) =>
+    requestSteps[draft.id] === 'write' ? requestUrl(draft) : materialUrl(draft);
+  const hasWork = Boolean(
+    state.cuts.length ||
+    state.previews.length ||
+    cutDraft.areas.length ||
+    cutDraft.goodNote ||
+    cutDraft.salonName ||
+    cutDraft.designerName ||
+    cutDraft.price ||
+    cutDraft.photos.length ||
+    cutDraft.cutDate !== newCutDraft().cutDate ||
+    cutDraft.service !== '커트' ||
+    Object.keys(cutEdits).length ||
+    Object.keys(progressEdits).length ||
+    Object.values(progressDrafts).some(
+      (draft) =>
+        draft.areas.length ||
+        draft.discomfort ||
+        draft.styling ||
+        draft.question ||
+        draft.photos.length,
+    ) ||
+    Object.values(requestDrafts.saved).some(hasDraftContent),
+  );
   const setRequestDraft = useCallback<Dispatch<SetStateAction<RequestDraft | null>>>(
     (action) =>
       setRequestDrafts((previous) => {
@@ -94,11 +138,13 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
     setCutEdits({});
     setProgressEdits({});
     setRequestDrafts({ current: null, saved: {}, targets: {} });
+    setRequestSteps({});
   };
   return (
     <PrototypeContext.Provider
       value={{
         repository,
+        ready: true,
         state,
         cutDraft,
         setCutDraft,
@@ -112,12 +158,135 @@ export function PrototypeProvider({ children }: { children: ReactNode }) {
         requestDrafts: requestDrafts.saved,
         setRequestDraft,
         resumeRequestDraft,
+        markRequestStep,
+        resumeUrl,
+        hasWork,
         reset,
       }}
     >
       {children}
     </PrototypeContext.Provider>
   );
+}
+
+export function PrototypeProvider({
+  children,
+  seed = 'empty',
+  scope = 'guest',
+}: {
+  children: ReactNode;
+  seed?: WorkspaceMode;
+  scope?: string;
+}) {
+  return seed === 'example' ? (
+    <MemoryPrototypeProvider seed={seed}>{children}</MemoryPrototypeProvider>
+  ) : (
+    <PersonalPrototypeProvider key={scope} scope={scope}>
+      {children}
+    </PersonalPrototypeProvider>
+  );
+}
+function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; scope: string }) {
+  const [storage] = useState(() => new PersonalStore(scope));
+  const view = useSyncExternalStore(storage.subscribe, storage.getSnapshot);
+  const { bundle, ready } = view;
+  const drafts = bundle.drafts;
+  const setter = useCallback(
+    <K extends keyof Drafts>(key: K, action: SetStateAction<Drafts[K]>) =>
+      storage.updateDrafts((previous) => ({
+        ...previous,
+        [key]:
+          typeof action === 'function'
+            ? (action as (v: Drafts[K]) => Drafts[K])(previous[key])
+            : action,
+      })),
+    [storage],
+  );
+  const setRequestDraft = useCallback<Dispatch<SetStateAction<RequestDraft | null>>>(
+    (action) =>
+      storage.updateDrafts((previous) => {
+        const current = previous.currentRequestId
+          ? previous.requests[previous.currentRequestId]
+          : null;
+        const next = typeof action === 'function' ? action(current) : action;
+        if (next === current) return previous;
+        return {
+          ...previous,
+          currentRequestId: next?.id ?? null,
+          requests: next ? { ...previous.requests, [next.id]: next } : previous.requests,
+        };
+      }),
+    [storage],
+  );
+  const resumeRequestDraft = useCallback(
+    (initial: RequestDraft) =>
+      storage.updateDrafts((previous) => {
+        const saved = Object.values(previous.requests)
+          .reverse()
+          .find((d) => requestTarget(d) === requestTarget(initial));
+        const next = saved ?? initial;
+        if (previous.currentRequestId === next.id) return previous;
+        return {
+          ...previous,
+          currentRequestId: next.id,
+          requests: { ...previous.requests, [next.id]: next },
+        };
+      }),
+    [storage],
+  );
+  const markRequestStep = useCallback(
+    (id: string, step: 'materials' | 'write') =>
+      storage.updateDrafts((previous) =>
+        previous.steps[id] === step
+          ? previous
+          : { ...previous, steps: { ...previous.steps, [id]: step } },
+      ),
+    [storage],
+  );
+  useEffect(() => {
+    void storage.load();
+    const save = () => {
+      void storage.flush().catch(() => {});
+    };
+    window.addEventListener('pagehide', save);
+    document.addEventListener('visibilitychange', save);
+    return () => {
+      window.removeEventListener('pagehide', save);
+      document.removeEventListener('visibilitychange', save);
+      storage.dispose();
+    };
+  }, [storage]);
+  const value = useMemo<PrototypeContextValue>(
+    () => ({
+      repository: storage.repository,
+      storage,
+      ready,
+      state: bundle.state,
+      cutDraft: drafts.cutDraft,
+      setCutDraft: (v) => setter('cutDraft', v),
+      progressDrafts: drafts.progressDrafts,
+      setProgressDrafts: (v) => setter('progressDrafts', v),
+      cutEdits: drafts.cutEdits,
+      setCutEdits: (v) => setter('cutEdits', v),
+      progressEdits: drafts.progressEdits,
+      setProgressEdits: (v) => setter('progressEdits', v),
+      requestDraft: drafts.currentRequestId ? drafts.requests[drafts.currentRequestId] : null,
+      requestDrafts: drafts.requests,
+      setRequestDraft,
+      resumeRequestDraft,
+      markRequestStep,
+      resumeUrl: (d) => (drafts.steps[d.id] === 'write' ? requestUrl(d) : materialUrl(d)),
+      hasWork: Boolean(
+        bundle.state.cuts.length ||
+        drafts.cutDraft.areas.length ||
+        drafts.cutDraft.photos.length ||
+        Object.values(drafts.requests).some(hasDraftContent),
+      ),
+      reset: () => storage.repository.reset(),
+    }),
+    [bundle, ready, storage, setter, setRequestDraft, resumeRequestDraft, markRequestStep],
+  );
+  return <PrototypeContext.Provider value={value}>{children}</PrototypeContext.Provider>;
 }
 
 export function usePrototype() {

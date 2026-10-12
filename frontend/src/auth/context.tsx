@@ -12,7 +12,7 @@ type AuthState =
 type AuthContextValue = {
   state: AuthState;
   initialized: boolean;
-  memoryEpoch: number;
+  activeMember: SessionMember | null;
   pending: boolean;
   checking: boolean;
   actionError: string;
@@ -23,27 +23,23 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const prototypeOnly = import.meta.env.VITE_SALU_AUTH_MODE === 'prototype';
 const errorText = (error: unknown) =>
-  error instanceof Error ? error.message : '로그인 상태를 확인할 수 없습니다.';
+  error instanceof Error ? error.message : '로그인 상태를 확인할 수 없어요.';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     status: prototypeOnly ? 'prototype' : 'checking',
   });
   const [initialized, setInitialized] = useState(prototypeOnly);
-  const [memoryEpoch, setMemoryEpoch] = useState(0);
+  const [activeMember, setActiveMember] = useState<SessionMember | null>(null);
   const [pending, setPending] = useState(false);
   const [checking, setChecking] = useState(false);
   const [actionError, setActionError] = useState('');
-  const identity = useRef<string | null | undefined>(undefined);
   const generation = useRef(0);
   const operation = useRef(false);
   const lastCheck = useRef(0);
 
-  const confirm = useCallback((member: SessionMember | null, clearMemory = false) => {
-    const nextId = member?.id ?? null;
-    if (clearMemory || (identity.current !== undefined && identity.current !== nextId))
-      setMemoryEpoch((value) => value + 1);
-    identity.current = nextId;
+  const confirm = useCallback((member: SessionMember | null) => {
+    setActiveMember(member);
     setState(member ? { status: 'authenticated', member } : { status: 'guest' });
     setInitialized(true);
     setActionError('');
@@ -90,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActionError('');
     try {
       const member = await loginRequest(email, password);
-      if (generation.current === current) confirm(member, true);
+      if (generation.current === current) confirm(member);
     } finally {
       operation.current = false;
       if (generation.current === current) setPending(false);
@@ -106,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActionError('');
     try {
       await logoutRequest();
-      if (generation.current === current) confirm(null, true);
+      if (generation.current === current) confirm(null);
       return true;
     } catch (error) {
       if (generation.current === current) setActionError(errorText(error));
@@ -122,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         state,
         initialized,
-        memoryEpoch,
+        activeMember,
         pending,
         checking,
         actionError,

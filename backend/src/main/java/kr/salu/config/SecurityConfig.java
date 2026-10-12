@@ -2,6 +2,7 @@ package kr.salu.config;
 
 import jakarta.servlet.DispatcherType;
 import kr.salu.auth.*;
+import kr.salu.auth.social.*;
 import kr.salu.member.MemberMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,14 +22,14 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class SecurityConfig {
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper json, UserDetailsService users, PasswordEncoder encoder, MemberMapper members) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectMapper json, UserDetailsService users, PasswordEncoder encoder, MemberMapper members, org.springframework.beans.factory.ObjectProvider<SocialClients> clientProvider, org.springframework.beans.factory.ObjectProvider<SocialFlow> flowProvider) throws Exception {
         var provider = new DaoAuthenticationProvider(users);
         provider.setPasswordEncoder(encoder);
         http.authenticationProvider(provider)
             .authorizeHttpRequests(authorize -> authorize
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/health", "/api/csrf").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/health", "/api/csrf", "/api/salons", "/api/designers", "/api/designers/*", "/api/auth/oauth2/providers", "/api/auth/oauth2/authorize/*", "/api/auth/oauth2/callback/*").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
                 .anyRequest().authenticated())
             .formLogin(login -> login.loginPage("/api/auth/me").loginProcessingUrl("/api/auth/login")
                 .usernameParameter("email").passwordParameter("password")
@@ -50,6 +51,13 @@ public class SecurityConfig {
                 .accessDeniedHandler((request, response, exception) -> AuthJson.error(response, json, 403,
                     exception instanceof CsrfException ? "CSRF_INVALID" : "ACCESS_DENIED",
                     exception instanceof CsrfException ? "CSRF 토큰을 다시 받아 요청하세요." : "접근 권한이 없습니다.")));
+        var clients=clientProvider.getIfAvailable(); var social=flowProvider.getIfAvailable();
+        if(clients!=null && clients.enabled()) http.oauth2Login(oauth -> oauth.clientRegistrationRepository(clients).loginPage("/api/auth/me")
+            .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(social))
+            .redirectionEndpoint(endpoint -> endpoint.baseUri("/api/auth/oauth2/callback/*"))
+            .userInfoEndpoint(info -> info.userService(social::oauth).oidcUserService(social::oidc))
+            .successHandler((request,response,auth) -> { request.getSession().removeAttribute(SocialFlow.LINK); response.setHeader("Cache-Control","no-store"); response.sendRedirect("/auth/complete"); })
+            .failureHandler((request,response,error) -> { if(request.getSession(false)!=null) request.getSession(false).removeAttribute(SocialFlow.LINK); response.setHeader("Cache-Control","no-store"); response.sendRedirect("/login?socialError=1"); }));
         return http.build();
     }
     @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }

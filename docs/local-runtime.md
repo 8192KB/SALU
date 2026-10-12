@@ -10,7 +10,7 @@ cd /home/chuwe/soldesk/SALU
 ./scripts/mysql-local.sh status
 ```
 
-DB가 이미 실행 중이면 status만 사용. 다른 터미널에서 `./scripts/backend-dev.sh`, 프론트 디렉터리에서 `npm run dev`. 화면 주소 `http://127.0.0.1:5174`. DB 종료는 `./scripts/mysql-local.sh stop`, 서버·React 종료는 각각 터미널의 Ctrl+C.
+DB가 이미 실행 중이면 status만 사용. 다른 터미널에서 `./scripts/backend-dev.sh`, 프론트 디렉터리에서 `npm run dev`. 화면 주소는 로컬에서 `http://127.0.0.1:5174`, 내부망에서는 이 PC의 내부 IP와 `:5174`를 사용. Vite 개발·미리보기 서버는 `0.0.0.0`에 바인딩. DB 종료는 `./scripts/mysql-local.sh stop`, 서버·React 종료는 각각 터미널의 Ctrl+C.
 
 자동 시작 서비스 등록 없음. 재부팅 후 파일은 보존되지만 프로세스는 위 명령으로 다시 실행. `init`은 처음 구성할 때만 사용하고 기존 datadir가 있으면 중단. DB 비밀번호는 기존 루트 .env 사용.
 
@@ -21,7 +21,7 @@ DB가 이미 실행 중이면 status만 사용. 다른 터미널에서 `./script
 | Maven 의존성 | `~/.m2/repository` |
 | Chromium | `~/.cache/ms-playwright` |
 
-`SALU_RUNTIME_HOME`, `SALU_MYSQL_HOME`, `SALU_MYSQL_BASEDIR`로 별도 절대 경로 지정 가능. 로컬 DB 스크립트가 필요한 library 경로를 구성하므로 기존 /tmp 경로를 export하지 않음. 사진 저장 설정은 별개이며 사진 기능은 아직 없음.
+`SALU_RUNTIME_HOME`, `SALU_MYSQL_HOME`, `SALU_MYSQL_BASEDIR`로 별도 절대 경로 지정 가능. 로컬 DB 스크립트가 필요한 library 경로를 구성하므로 기존 /tmp 경로를 export하지 않음. 사진은 현재 브라우저 IndexedDB와 계정 암호화 백업에 보관. 사진 도메인 API·외부 파일 보관은 후속 범위.
 
 ## 필수 검증 명령
 
@@ -51,3 +51,23 @@ Chromium만 복구할 때는 `frontend`에서 `npx playwright install chromium`.
 ## 로그인 확인
 
 현재 로컬 로그인도 실행 가능. 개발 계정 생성·보관 파일과 전체 로그인 E2E 명령은 [login.md](login.md) 참고. 계정 파일을 프론트 환경변수나 Git에 넣지 않음.
+
+
+## 내부망 로그인 연결 확인
+
+태블릿에서 웹은 열리지만 로그인 서버 오류가 나면 프론트 주소의 `/api/health`를 먼저 확인. Vite가 같은 주소의 `/api`를 로컬 Spring 8081로 연결하므로 Spring이 꺼져 있으면 502가 발생. backend의 외부 포트를 따로 열 필요 없음.
+
+```bash
+curl --noproxy '*' -i http://192.168.1.85:5174/api/health
+curl --noproxy '*' -i http://192.168.1.85:5174/api/auth/me
+```
+
+2026-10-12 재확인: Spring 정지 상태에서 502 재현, 기존 `.env`로 `scripts/backend-dev.sh` 실행 후 health 200·비로그인 me 401 확인. 기존 DB·migration 변경 없음. 실행한 Spring은 태블릿 재확인을 위해 유지. 재부팅하거나 실행 터미널을 종료하면 다시 실행 필요.
+
+## FR04 반영과 화면 캐시 복구
+
+2026-10-12 최신 Spring·Vite를 재시작하여 내부망 `192.168.1.85:5174`에 반영. salu_dev에 V4 정식 migration 적용, 공개 디렉터리 API 및 health 연결 확인. 기존 개인 기록은 IndexedDB/계정 백업 그대로 사용.
+
+파일 갱신 도중 Vite가 빈 TSX 변환 결과를 캐시하면 브라우저에 `DateField ... does not provide an export`가 나타날 수 있음. 실제 파일과 빌드가 정상인지 먼저 확인하고 해당 SALU Vite 프로세스를 정상 종료한 뒤 `npm run dev`로 재실행. DB 재설정이나 개인 브라우저 자료 삭제는 필요 없음.
+
+현재 실행 로그: `/tmp/salu-fr04-runtime.log`, `/tmp/salu-fr04-frontend-runtime.log`. 테스트용 8083 서버와 임시 회원·매장은 검증 후 종료/정리. 실제 NAS에는 이번 변경 미반영.

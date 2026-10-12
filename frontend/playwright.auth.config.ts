@@ -23,7 +23,7 @@ export default defineConfig({
     ? undefined
     : {
         command: 'npm run dev -- --port 5187',
-        env: { VITE_SALU_AUTH_MODE: 'server' },
+        env: { VITE_SALU_AUTH_MODE: 'server', SALU_SERVER_PORT: '8083' },
         url: baseURL,
         reuseExistingServer: false,
         timeout: 15_000,

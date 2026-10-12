@@ -36,6 +36,14 @@ server:
     include-stacktrace: never
 salu:
   photo-root: ${SALU_PHOTO_ROOT}
+  backup-key-file: ${SALU_BACKUP_KEY_FILE:}
+  backup-key-id: ${SALU_BACKUP_KEY_ID:v1}
+  public-origin: ${SALU_PUBLIC_ORIGIN:http://127.0.0.1:5174}
+  oauth:
+    google-id: ${SALU_GOOGLE_CLIENT_ID:}
+    google-secret: ${SALU_GOOGLE_CLIENT_SECRET:}
+    naver-id: ${SALU_NAVER_CLIENT_ID:}
+    naver-secret: ${SALU_NAVER_CLIENT_SECRET:}
 mybatis:
   configuration:
     map-underscore-to-camel-case: true

@@ -5,7 +5,14 @@ const baseURL = process.env.SALU_E2E_URL ?? 'http://127.0.0.1:5185';
 export default defineConfig({
   testDir: './tests',
   outputDir: './test-results/prototype',
-  testMatch: 'prototype.spec.ts',
+  testMatch: [
+    'prototype.spec.ts',
+    'persistence.spec.ts',
+    'navigation.spec.ts',
+    'focused-flow.spec.ts',
+    'theme.spec.ts',
+    'clear-flow.spec.ts',
+  ],
   timeout: 20_000,
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,

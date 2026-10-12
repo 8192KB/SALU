@@ -9,7 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
 @TestConfiguration(proxyBeanMethods = false)
-@MapperScan(basePackageClasses = {HealthMapper.class, kr.salu.member.MemberMapper.class, TransactionProbeMapper.class})
+@MapperScan(basePackageClasses = {HealthMapper.class, kr.salu.directory.DirectoryMapper.class, kr.salu.member.MemberMapper.class, TransactionProbeMapper.class, kr.salu.backup.BackupMapper.class, kr.salu.auth.social.SocialMapper.class})
 public class ProbeConfiguration {
     @Bean
     ProbeController probeController() { return new ProbeController(); }

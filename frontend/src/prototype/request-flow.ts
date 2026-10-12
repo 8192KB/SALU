@@ -1,3 +1,5 @@
+import { getPublicDesigner } from '../directory-cache';
+import { newId } from './ids';
 import { daysAfter } from './dates';
 import type {
   Area,
@@ -11,13 +13,21 @@ import type {
 } from './types';
 
 export function newRequest(area: Area = 'SIDE', intent: Intent = 'ASK', content = ''): RequestItem {
-  return { id: crypto.randomUUID(), area, intent, content };
+  return { id: newId(), area, intent, content };
 }
 export function newRequestDraft(cutId: string, designerId?: string): RequestDraft {
+  const designer = getPublicDesigner(designerId);
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     cutId,
     designerId,
+    designerSnapshot: designer
+      ? {
+          id: designer.id,
+          name: designer.name,
+          salonName: designer.affiliations.find((value) => value.current)?.salonName ?? '',
+        }
+      : undefined,
     includeGoodNote: false,
     progressIds: [],
     photoIds: [],
@@ -32,8 +42,11 @@ export function draftFromPreview(
 ): RequestDraft {
   return {
     ...structuredClone(preview.sourceDraft),
-    id: crypto.randomUUID(),
+    id: newId(),
     designerId,
+    designerSnapshot:
+      newRequestDraft(preview.cut.id, designerId).designerSnapshot ??
+      (designerId === preview.designer?.id ? preview.designer : undefined),
     referencePreviewId: preview.id,
   };
 }
@@ -109,4 +122,11 @@ export function latestMaterials(state: PrototypeState, draft: RequestDraft): Req
       state.photos.some((photo) => photo.id === id && photo.cutId === draft.cutId),
     ),
   };
+}
+
+export function reviewUrl(draft: Pick<RequestDraft, 'id'>) {
+  return `/requests/review?draft=${encodeURIComponent(draft.id)}`;
+}
+export function completeUrl(preview: Pick<RequestPreview, 'id'>) {
+  return `/requests/complete/${encodeURIComponent(preview.id)}`;
 }

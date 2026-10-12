@@ -2,10 +2,15 @@
 
 개인 커트·경과 기록에서 필요한 자료를 골라 디자이너와 상담하는 서비스.
 
-현재 React에서 **Spring 로그인·회원 확인·로그아웃** 연결. 커트·경과·사진·요청 자료는 메모리 예시이며 서버 저장·상담 전송은 다음 개발 단계.
+현재 React에서 **로그인 없이 기기 보관·ZIP 백업/복원·로그인 후 계정 자동 저장** 제공. 소개 홈과 개인 기록, 별도 예시 체험을 분리. Google·네이버 로그인은 SALU client 설정 시 활성화. 상담 실제 전송·커뮤니티·앱은 후속 단계.
 
 ## 먼저 볼 문서
 
+- [사용자 지적사항 점검표](docs/issue-tracker.md): 구현·검증·실기기 확인·NAS 반영을 따로 관리
+- [명확한 흐름과 실제 디렉터리](docs/features/FR04-clear-flow-and-public-directory.md): 앱 달력·공통 저장 결과·미용실/디자이너 등록·선택
+- [NAS 조원 시연과 피드백](docs/nas-preview.md): Docker 구성·이미지 이전·HTTPS 연결·공유 순서, 발표 자료는 피드백 후 제작
+- [기기 보관·계정 자동 저장](docs/personal-storage.md): 현재 저장·복원·암호화·소셜 로그인 계약과 실행/복구
+- [FR02 구현/검증](docs/features/FR02-personal-storage-and-account-backup.md): 승인한 계획의 구현 결과
 - [7주차 발표 예시안](docs/presentations/week07/README.md): 검증 전 PPTX·PDF, 현재 구현과 기기 저장 방향·발표 범위 구분
 - [기기 기록·PPT 대조·발표 범위 검토](docs/plans/2026-10-10-local-records-and-week7-review.md): 로그인 없는 개인 보관, 선택 계정 연결, 파일 복원과 후속 상담
 - [로그인 연결과 검증](docs/login.md): 실제 계정·세션·CSRF·오류 복구
@@ -24,6 +29,7 @@
 ```bash
 cd /home/chuwe/soldesk/SALU
 ./scripts/mysql-local.sh start
+python3 scripts/init-backup-key.py
 ./scripts/backend-dev.sh
 ```
 
@@ -35,9 +41,9 @@ npm ci
 npm run dev
 ```
 
-React <http://127.0.0.1:5174>, Spring <http://127.0.0.1:8081/api/health>. 같은 origin의 `/api`를 Vite가 Spring으로 전달. 상단 로그인 버튼 또는 `/login`에서 등록된 계정 사용. 회원가입·디자이너 권한 부여는 아직 없음.
+React <http://127.0.0.1:5174>, Spring <http://127.0.0.1:8081/api/health>. 같은 origin의 `/api`를 Vite가 Spring으로 전달. 상단 로그인 버튼 또는 `/login`에서 등록된 계정 사용. 이메일 회원가입 화면 제공(실제 가입 검증은 보류). 로그인 후 `/account/designer`에서 자신의 디자이너 프로필과 미용실 등록 가능. 가입만으로 디자이너 목록에 표시되지 않으며 공개 프로필 등록 필요. 프로필은 자가 등록이며 별도 검증/상담 권한 부여는 후속.
 
-로그인은 새로고침 후 유지되지만 **작성한 예시 기록은 새로고침·로그인·로그아웃 시 초기화**. 서버 장애는 비로그인으로 단정하지 않고 재확인 가능. 예시 기록을 실제 회원 데이터로 자동 업로드하지 않음.
+개인 기록과 사진·작성 초안은 새로고침 후에도 기기에 보관. 로그인하면 기기 자료를 계정 공간에 연결하고 이후 자동 서버 저장. 로그아웃하면 계정 자료를 숨기며 삭제하지 않음. 서버 장애 중 기기 작성 가능. 예시 자료는 서버에 업로드하지 않음.
 
 ### Spring 없이 화면만 확인
 
@@ -47,7 +53,7 @@ npm ci
 npm run dev:prototype
 ```
 
-명시적 화면 전용 모드. 로그인과 `/api` 호출 없음. 커트 → 경과 → 개인 요청 준비 → 미리보기 → 선택적 디자이너 연결 흐름 확인. 목록·기록에서 자료 재진입, 기록 수정·사진 확대·초기화 가능.
+명시적 화면 전용 모드. 로그인과 `/api` 호출 없음. `/` 소개 홈, `/records` 개인 기록, `/examples/records` 가상 자료 체험. 예시 진입·초기화·종료는 개인 작업 유지. 커트 → 경과 → 개인 요청 준비 → 미리보기 → 선택적 디자이너 연결 흐름 확인. 목록·기록에서 자료 재진입, 기록 수정·사진 확대·초기화 가능.
 
 ### 빌드와 미리보기
 
@@ -67,10 +73,11 @@ npx playwright install chromium
 npm run build
 npm run format:check
 npm run test:e2e
-SALU_E2E_LOGIN_FILE=../.env.dev-login.json npm run test:auth
+npm run test:auth
+npm run test:storage
 ```
 
-`test:e2e`는 명시적 화면 전용 모드의 PC·모바일 44개(2026-10-10 재실행). `test:auth`는 실제 Spring·DB·등록된 계정 필요, 인증/복구 9개. 계정 파일이 없으면 완료로 건너뛰지 않고 실패. 실제 계정의 비밀번호·CSRF를 담을 trace·영상·스크린샷 저장 안 함. 자세한 결과는 [로그인 문서](docs/login.md)와 [현재 구현 검토](docs/features/FR01-current-state-review.md).
+`test:e2e`는 Spring 없는 PC·모바일 화면/기기 보관 검증. 실제 인증과 자동 저장 검증 전, 별도 터미널에서 `./scripts/storage-test-server.sh` 실행. `test:auth`와 `test:storage`는 차례로 실행. 같은 서버에서 연속 로그인 요청이 분당 제한에 걸리면 1분 후 재실행하며 보안 제한을 낮추지 않음. 두 검증은 테스트 서버8083·salu_test·/tmp 임시 계정 사용. 기존 개발/Salon 회원이나 개인 자료를 테스트 fixture로 쓰지 않음. 인증 trace·영상·스크린샷 저장 없음. 최신 결과와 정확한 범위는 [FR02](docs/features/FR02-personal-storage-and-account-backup.md), 과거 결과는 [FR01](docs/features/FR01-current-state-review.md) 참고.
 
 백엔드를 변경할 때에는 별도 통합 검증:
 
@@ -79,13 +86,13 @@ SALU_E2E_LOGIN_FILE=../.env.dev-login.json npm run test:auth
 python3 scripts/verify-api.py
 ```
 
-DB 통합 검증은 `salu_test` 전용. 이번 React 연결 결과를 업무 DB·상담 구현 완료로 표시하지 않음.
+DB 통합 검증은 `salu_test` 전용. 개인 자료의 암호화 백업 API를 검증하며, 이를 상담 전송·기록 도메인 CRUD 전체 구현 완료로 표시하지 않음.
 
 ## 화면과 코드
 
 [로그인 PC](docs/screenshots/login-desktop.png) · [로그인 모바일](docs/screenshots/login-mobile.png) · [기록 목록 PC](docs/screenshots/records-desktop.png) · [커트·경과 모바일](docs/screenshots/record-mobile.png) · [디자이너 PC](docs/screenshots/designer-desktop.png) · [상담 미리보기 모바일](docs/screenshots/preview-mobile.png)
 
-가상 자료의 실제 브라우저 캡처. 개발 서버 실행 후 `frontend`의 `npm run capture`로 재생성. 화면·사용자·후기 예시는 운영/사용성 평가 결과가 아님.
+위 이미지는 홈·흐름 개선 전 가상 화면의 브라우저 캡처. 현재 동선은 [화면 계획](docs/prototype-plan.md) 참고. 개발 서버 실행 후 `frontend`의 `npm run capture`로 재생성. 화면·사용자·후기 예시는 운영/사용성 평가 결과가 아님.
 
 ```text
 SALU/
@@ -93,7 +100,8 @@ SALU/
 ├── backend/     Java 17 · Spring Boot · MyBatis · 인증 기반
 ├── docs/        화면 계획·후속 개발 계약·검증·원본 지도
 ├── scripts/     로컬 Spring·MySQL 실행과 검증
-└── compose.yml  개발 DB 설정 (앱 컨테이너는 후속)
+├── compose.yml      기존 개발 DB 설정
+└── compose.nas.yml  웹·Spring·독립 DB의 NAS 시연 구성
 ```
 
 기존 준비본은 첫 커밋 `8bcace5`. 이후 실제 기능 작업과 검증을 순서대로 커밋. GitHub 원격은 사용자가 만든 비공개 [8192KB/SALU](https://github.com/8192KB/SALU). 2026-10-10 현재 소스 이력과 발표·계획 문서를 main·feature/spring-auth에 업로드 확인. 조원 초대·NAS 배포는 아직 수행하지 않음. 후속 공동 작업은 기능 브랜치 → PR 검토 → main 통합.

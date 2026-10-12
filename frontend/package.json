@@ -15,12 +15,17 @@
     "format:check": "prettier --check src tests scripts *.ts *.json",
     "capture": "node scripts/capture-prototype.mjs",
     "test:auth": "playwright test --config playwright.auth.config.ts",
-    "dev:prototype": "vite --mode prototype"
+    "dev:prototype": "vite --mode prototype",
+    "schema:backup": "node scripts/generate-backup-schema.mjs",
+    "test:storage": "playwright test --config playwright.storage.config.ts"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
+    "idb": "^8.0.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-router": "8.4.0"
+    "react-router": "8.4.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",

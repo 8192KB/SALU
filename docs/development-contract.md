@@ -1,14 +1,26 @@
 # SALU 개발 기준
 
-현재 작업: PPT 기준 React 초기 화면과 실제 Spring 인증 연결. 기본 실행에서 로그인·회원 확인·로그아웃·CSRF는 서버 연결, 업무 기록은 메모리 예시. `dev:prototype`만 서버 호출 없는 화면 전용 모드. 기록 DB·사진 업로드·상담 전송은 후속. 개인 준비·선택 자료·전송 전 미리보기의 화면 기준은 [prototype-plan.md](prototype-plan.md), 실제 저장·전송 계획은 아래 후속 업무 구현 계약 참고.
+2026-10-12 승인: [FR04](features/FR04-clear-flow-and-public-directory.md)의 명확한 완료 흐름·앱 달력·터치 메뉴·SALU 자체 미용실/공개 디자이너 등록 및 선택. 실제 상담·후기는 후속. 모든 사용자 지적의 상태와 증거는 [지적사항 점검표](issue-tracker.md)에서 관리.
 
-2026-10-10 후속 제안: 로그인 없는 기기 기록·파일 백업·선택 계정 연결은 [검토안](plans/2026-10-10-local-records-and-week7-review.md)에서 검토 중. 아래 내용은 현재 코드와 서버 중심 후속 설계의 기준. 새 기기 저장 모드의 구현·수명·계정 관계는 아직 확정/구현되지 않음.
+현재 작업: 소개 홈·개인/예시 분리·기록/경과·커트 준비 화면, Spring 인증·이메일 회원가입, 기기 보관·ZIP 복사본 복원·계정 자동 저장·조건부 Google/네이버 로그인 구현. 현재 저장 계약은 [personal-storage.md](personal-storage.md), 승인과 실행 결과는 [FR02](features/FR02-personal-storage-and-account-backup.md).
+
+커트 준비의 핵심 입력 우선 배치·선택 정보 접기·저장 오류 복구·대비와 문구 정리는 [모바일 작성 흐름 개선](plans/2026-10-11-mobile-writing-flow.md)에 승인 범위와 최종 검증 기록 보관.
+
+조원 목업을 반영한 공통 앱 화면·기록/프로필/자료 요약·자료 전체 선택은 [앱 화면 개편](plans/2026-10-11-app-ui-refinement.md)에 구현 기준과 검증 기록 보관. 기존 입력·선택·스냅샷·저장 계약 유지. 운영 NAS 반영은 별도 배포 단계.
+
+2026-10-11 화면 조작·문구 정리와 이전 담당자(이름·매장) 재선택 구현은 [프론트 검토](plans/2026-10-11-frontend-polish-review.md) 참고. 실제 SALU 등록 디자이너 선택도 사용자가 필요성을 확인했으며, 공개 프로필 목록·등록/관리·ID 연결/저장 계약을 이어 구현할 범위. 개인 기록의 담당자 이름만으로 프로필을 자동 연결하지 않음.
+
+사용자가 로그인 없는 기기 저장과 로그인 후 전체 개인 자료 자동 서버 저장을 확정. 이전 2026-10-10 검토안의 수동 백업 제안은 과거 조사 기록. 아래 도메인 기록·디자이너·상담 설계는 후속 기준이며, 현재 암호화 백업 API와 구분. 예시는 계속 메모리 전용이고 자동 업로드 금지.
+
+화면 구분·기기 설정을 따르는 테마·내부망 연결 복구·전체 화면/오류 검토는 [화면 구분과 전체 검증](plans/2026-10-12-screen-audit-and-theme.md)에 구현과 최종 결과 기록. 실제 제공자 동의·NAS 반영은 별도 범위.
+
+2026-10-12 이메일 회원가입·구글/네이버 설정 연결·보관 안내 정리는 [FR03](features/FR03-account-signup-and-storage-navigation.md) 참고. 실제 제공자 동의·callback과 새 가입의 DB/브라우저 검증은 사용자 지시로 이후 진행.
 
 ## 기술과 코드 구조
 
 Java 17, Spring Boot 4.1.1, MyBatis Starter 4.1.0, MySQL 8.4 LTS. React 19, Vite 8, TypeScript 7, React Router 8.4.0. Maven Wrapper와 npm lockfile로 빌드 기준 고정.
 
-하나의 Spring Boot 서버에서 `kr.salu` 아래 기능별 패키지 사용. 현재 `config`, `auth`, `member` 인증 조회, `health`, `common.error` 구현. 다음 단계에 `record`, `designer`, `consultation`, `review`, `community`, `photo` 추가. 각 기능 안에 controller·service·mapper·요청/응답 DTO 배치. 기능 코드 없이 빈 클래스를 먼저 만들지 않음.
+하나의 Spring Boot 서버에서 `kr.salu` 아래 기능별 패키지 사용. 현재 `config`, `auth`/social, `member`, `backup`, `health`, `common.error`, `directory` 구현. 공개 디렉터리는 개인 암호화 백업과 분리. 다음 단계에 `record`, `designer`, `consultation`, `review`, `community`, `photo` 추가. 각 기능 안에 controller·service·mapper·요청/응답 DTO 배치. 기능 코드 없이 빈 클래스를 먼저 만들지 않음.
 
 Controller는 입력·응답, Service는 소유권·참여자 검사와 트랜잭션, MyBatis Mapper는 조회·저장 담당. DB 객체를 React에 그대로 노출하지 않고 DTO로 공개 범위를 한정. 목록·상세·사진·수정·삭제 모두 권한 검사 대상.
 
@@ -31,27 +43,29 @@ Salon의 `CLAUDE.md:47-48`, `docs/발표.md:575-591`, `docs/websocket.md:263`에
 
 원문 예외·SQL·입력/비밀번호는 응답과 로그에 넣지 않음. 예상 밖 오류 로그는 예외 타입과 발생 위치만 기록. 모든 IllegalArgumentException을 무조건 400으로 바꾸지 않으며, 의도한 입력/업무 실패만 ApiException의 명시적 factory 사용. API DTO에는 `@Valid`와 제약 적용.
 
-로그인은 단일 SELECT 인증이며 다중 변경 업무 Service는 아직 없음. 현재 `@Transactional` 적용 예제는 src/test의 검증용 Service. 다음 업무 Service는 아래 기준 적용.
+로컬 로그인은 단일 SELECT 인증. BackupService와 SocialIdentityService는 실제 트랜잭션 Service이며 커밋/롤백을 salu_test에서 검증. 다음 업무 Service도 아래 기준 적용.
 
 - 여러 DB 변경을 한 작업으로 묶는 Service 메서드에 Spring `@Transactional` 적용. 조회 전용은 필요 시 `readOnly=true`
 - 기본 RuntimeException/Error 롤백. checked exception도 변경을 취소해야 하면 `rollbackFor` 명시
 - 같은 객체 안의 내부 호출만으로 새 트랜잭션이 생긴다고 가정하지 않음. Spring proxy를 경유하는 Service 호출로 구성
 - 예외를 삼켜 성공으로 반환하거나 부분 저장을 남기지 않음. 조건부 UPDATE의 0행·중복 key는 해당 업무 실패로 처리
-- 파일·외부 HTTP·STOMP 전송은 DB 롤백으로 복구되지 않음. 해당 기능 전에 커밋 후 전송·파일 정리·실패 재처리 기준 확정. outbox 등의 업무 구현은 현재 범위 밖
+- 파일·외부 HTTP·STOMP 전송은 DB 롤백으로 복구되지 않음. 해당 기능 전에 커밋 후 전송·파일 정리·실패 재처리 기준 확정. 현재 백업은 기기 dirty/mutation 큐로 재시도하며 서버 사진도 암호화 BLOB로 동일 DB에 보관. 외부 파일·상담 전송 outbox는 후속
 - 실제 검증은 테스트 자체의 @Transactional 자동 롤백을 사용하지 않고 Service 종료 후 별도 DB 조회로 commit/rollback 확인
 
-`scripts/verify-backend.sh`는 별도 `salu_test`와 제한된 테스트 계정 사용. 회원 테이블 V1과 테스트 전용 V900만 적용. 테스트용 Controller·보안 허용 경로·Mapper·테이블은 src/test에만 배치하고 일반 jar·salu_dev에는 포함하지 않음.
+`scripts/verify-backend.sh`는 별도 `salu_test`와 제한된 테스트 계정 사용. 회원 V1, 백업/소셜 V2·V3, 공개 디렉터리 V4와 테스트 전용 V900 적용. V900보다 번호가 작은 새 정식 migration을 추가할 수 있도록 out-of-order는 테스트 설정에서만 활성화. 테스트용 Controller·보안 허용 경로·Mapper·테이블은 src/test에만 배치하고 일반 jar·salu_dev에는 포함하지 않음.
 
 ## 검증 범위와 다음 단계
 
 기존 backend를 변경할 때: 서버 빌드, MySQL·Flyway, 실제 HTTP 오류·세션·CSRF, DB 커밋/롤백·중단/복구, 일반 jar에서 테스트 코드 제외 확인. 화면 전용 gate는 frontend 빌드·브라우저 E2E·API 요청 없음. 인증 연결은 실제 Spring·DB에서 별도 test:auth 실행. backend 변경 없이는 전체 DB 기반 검증을 반복하지 않음. 기존 검증 결과는 docs/verification.md와 docs/login.md에 보관.
 
-현재 로그인·세션·로그아웃 검증은 docs/login.md 참고. 기록 화면은 메모리 예시이며 인증은 실제 서버 연결. 이후 가입·기록 연결 → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
+현재 로그인·세션·로그아웃 검증은 docs/login.md, 기기 보관·계정 자동 저장 검증은 FR02 참고. 개인 기록은 비로그인 상태에서도 기기에 보관하며 로그인하면 계정 백업에 연결. 예시는 별도 메모리 영역에서 체험. 이후 가입·기록 도메인 API → 기본 디자이너 프로필·상담 → 실시간 대화·소속 이력·상담 후기 → 공개 사례 순서로 구현. 각 기능의 소유권·참여자·동시성·파일/외부 전송 검증은 해당 기능을 구현할 때 수행. 공통 테스트 통과로 이 기능들의 완료를 주장하지 않음.
 
 
 ## 계정과 데이터 관계
 
-회원 계정은 로그인과 모든 개인 기록의 소유 주체. 디자이너도 같은 계정으로 자신의 개인 기록 사용. 고객과 디자이너를 배타적인 계정 종류로 구분하지 않음. 디자이너 프로필은 계정 하나에 최대 하나 연결하고, 변경되지 않는 별도 디자이너 개인 ID 부여.
+아래 관계는 후속 도메인 자료의 설계. 현재 기기 개인 자료는 로그인 시 principal 소유의 암호화 백업 공간으로 연결되며, 도메인 CUT_RECORD/CONSULTATION 테이블은 아직 생성하지 않음.
+
+회원 계정은 로그인과 서버에 저장할 개인 기록의 소유 주체. 디자이너도 같은 계정으로 자신의 개인 기록 사용. 고객과 디자이너를 배타적인 계정 종류로 구분하지 않음. 디자이너 프로필은 계정 하나에 최대 하나 연결하고, 변경되지 않는 별도 디자이너 개인 ID 부여.
 
 ```mermaid
 erDiagram
@@ -70,7 +84,7 @@ erDiagram
     DESIGNER_PROFILE ||--o{ REVIEW_CONCEPT : retains
 ```
 
-관계도는 설계 개념이며 실제 DB 테이블은 현재 `members`와 Flyway 이력만 존재. 특히 `REVIEW_CONCEPT`는 관계 표현이며 후기 테이블 정의가 아님.
+관계도는 후속 도메인 설계 개념. 현재 DB에는 `members`, `social_identities`, 개인 백업 항목·mutation·사진·사진 참조, Flyway 이력이 존재. `salons`, `designer_profiles`, 현재 소속 `designer_affiliations`도 V4로 추가. 소속 이력·상담·후기는 아직 후속. 특히 `REVIEW_CONCEPT`는 관계 표현이며 후기 테이블 정의가 아님.
 
 | 대상 | 연결 기준 | 다음 기능 구현 시 제약 |
 |---|---|---|
@@ -84,11 +98,13 @@ erDiagram
 | 개인 후기 | 작성 member ID·대상 디자이너 개인 ID | 소속 변경 후 대상 유지. 첫 버전은 답변 받은 고객의 상담 후기. 작성·중복·수정/삭제 제안은 아래 계약 참고. 실제 DDL은 해당 기능 단계에 작성 |
 | 커뮤니티 공개 자료 | 게시글 ID + 공개 선택본 | 원본은 비공개 유지. 공개 사진은 별도 저장본/식별자로 관리. 원본의 private URL 재사용 금지 |
 
-처음 적용할 `V1__create_members.sql`은 ID·email·password_hash·display_name·status·생성/수정 시각만 정의. OAuth, 관리자, 휴면/탈퇴 개인정보 처리, 디자이너 검증은 필요 시 새 migration으로 추가. 이미 적용한 migration은 수정하지 않고 다음 버전으로 변경. 이메일은 MySQL unique constraint로 중복 방지하며 애플리케이션 정규화 정책과 함께 사용.
+적용한 `V1__create_members.sql`은 ID·email·password_hash·display_name·status·생성/수정 시각을 정의. V2에서 소셜 신원·암호화 백업을 추가하고 소셜 회원의 email/password_hash를 nullable로 변경. V3에서 소유자별 백업 사진 참조를 추가. 관리자, 휴면/탈퇴 개인정보 처리, 디자이너 검증은 필요 시 새 migration으로 추가. 이미 적용한 migration은 수정하지 않고 다음 버전으로 변경. 로컬 회원의 이메일은 MySQL unique constraint와 애플리케이션 정규화 정책으로 중복 방지.
 
 상담 첨부 snapshot은 이후 원본 수정이 이미 전송한 내용을 바꾸지 않는 기준. 선택 사진 접근은 상담 참여자 검사로 제한. 사진 삭제·동의 철회 후 기존 상담 자료의 보존/가림 정책은 사진·상담 기능 구현 전에 결정. 공개 철회는 공개 사본의 접근 종료를 포함하고 원본의 소유자 접근은 유지.
 
 ## 접근 권한
+
+다음 표는 후속 서버 API·저장 파일의 접근 계약. 현재 비로그인 기기 작성과 가상 예시 체험은 서버 개인 자료를 읽지 않으며, 서버의 인증·소유권 규칙을 완화하지 않음. 로그인한 사용자의 현재 암호화 백업은 principal과 storageContext로 접근 제한.
 
 | 요청자 | 개인 기록·원본 사진 | 상담·선택 첨부 | 커뮤니티 공개본 | 프로필·후기 |
 |---|---|---|---|---|
@@ -99,7 +115,7 @@ erDiagram
 
 디자이너 여부만으로 다른 회원의 기록 접근 허용 금지. 매장 관리자는 준비 범위에 없고 매장 소속을 상담 참여 권한으로 사용하지 않음. ID를 바꾼 상세/파일 요청, 첨부 대상 위조, 다른 상담으로 메시지 전송을 각 기능의 통합 검증에 포함.
 
-사진은 `SALU_PHOTO_ROOT` 절대 경로에 저장. 저장 경로는 배포 폴더 밖. 파일 크기·MIME·실제 signature 검증 후 UUID 저장명 사용. 원본 파일명·경로를 공개 응답에 반환하지 않음. private/public 저장 공간과 접근 경로를 구분하고 `/upload/**` 공개 매핑을 만들지 않음. 이번 준비 단계에서 사진 저장 디렉터리를 생성하거나 업로드 API를 제공하지 않음.
+후속 상담·공개 사진은 `SALU_PHOTO_ROOT` 절대 경로에 저장할 계획. 저장 경로는 배포 폴더 밖. 파일 크기·MIME·실제 signature 검증 후 UUID 저장명 사용. 원본 파일명·경로를 공개 응답에 반환하지 않음. private/public 저장 공간과 접근 경로를 구분하고 `/upload/**` 공개 매핑을 만들지 않음. 현재 개인 백업 사진 API는 실제 이미지를 검증한 뒤 암호화 BLOB로 MySQL에 저장하며 외부 사진 디렉터리를 사용하지 않음.
 
 ## 세션·CSRF와 API 계약
 
@@ -281,10 +297,18 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 - 기능 단위 브랜치와 작업 범위 합의. 같은 화면/Service를 동시 수정하지 않고 타입·인터페이스를 먼저 PR에서 합의
 - PR 기본 gate: frontend npm ci/build/화면 전용 E2E. 인증 연결 변경은 실제 Spring·등록된 테스트 계정으로 test:auth 추가. 백엔드 변경 PR에는 Java 17 Maven verify와 독립 MySQL 통합 검증 추가. 실제 DB 검증 skip을 통과로 기록하지 않음
 - `.env.example`만 공유. DB·회원 fixture·사진·비밀번호·운영 로그 제외. CI secret은 환경별 분리
-- 컨테이너는 후속 단계에 web(Nginx+React dist), backend(JRE17+jar), MySQL 구성. 개발도 같은 Docker Compose 경로를 마련하고 호스트별 MySQL 스크립트는 대체 경로로 정리
+- 2026-10-11 web(Nginx+React dist)·backend(JRE17+jar) Dockerfile과 독립 MySQL의 `compose.nas.yml` 준비, 격리 salu_test 컨테이너·PC/모바일·계정 백업 흐름 확인. 기존 개발 DB Compose와 호스트 실행은 유지. 실제 NAS 설치·HTTPS 연결은 후속. [NAS 시연·피드백](nas-preview.md) 기준
 - 배포 기본안: cwsn NAS, `salu.doyul.dev`, 기존 Nginx Proxy Manager 사용. 실제 확인한 proxy network `nginx-proxy-manager_default`에 SALU web만 연결. backend/DB는 SALU 전용 내부 network
 - GHCR 이미지에 commit SHA 태그. CI 이미지 생성과 실제 배포 분리, 첫 배포는 검토 후 수동. SPA 경로는 index.html로 fallback, 같은 origin `/api` proxy, HTTPS cookie Secure, STOMP 연결 추가 때 Upgrade header 적용
 - SALU 전용 DB/photo volume·백업 사용. 기존 Nextcloud·DB·proxy 컨테이너와 volume 변경 금지
 - 게시 전 공유 범위·DNS/TLS·환경변수·migration·사진 경로·backup/restore 확인. 이전 SHA 이미지로 앱 복구하고 DB schema 호환성은 migration 단위로 확인. 적용 migration 삭제/수정으로 rollback하지 않음
 
-현재 완료는 로컬 초기 화면·Spring 인증 연결·계획 검토·7주차 발표 예시안과 GitHub 원격 업로드까지. 기기 저장·복원은 검증 전이며 조원 초대·main 보호·CI·Docker 앱 구성·DNS·실제 배포는 후속. 각 단계에서 실행·검증한 뒤 완료로 기록.
+현재 완료는 초기 화면·Spring 인증·기기 저장/ZIP·계정 자동 저장·소셜 로그인 코드와 격리 검증, Docker 앱 구성·로컬 컨테이너 실행 검증. 실제 소셜 제공자 설정·동의 확인과 조원 초대·main 보호·CI·NAS 환경 설정·DNS/TLS·실제 배포는 후속. 발표 자료는 NAS 조원 시연·피드백과 화면 수정 뒤 제작. 각 단계에서 실행·검증한 뒤 완료로 기록.
+
+
+2026-10-11 사용자 승인으로 cwsn NAS에 `salu-preview` 설치·실행. 최신 웹/Spring `20261011-flow`와 SALU 전용 MySQL 8.4.11 모두 healthy, 신규 DB Flyway 1~3 성공. 기존 NAS 서비스 보존. SSH 터널 기반 PC·모바일 비로그인 기록·사진·경과 재조회 검증 완료. NPM host·DNS/TLS·외부 HTTPS·운영 계정 발급·Git 업로드는 후속. 상세 설정·Nginx 담당자 전달 내용은 [NAS 시연 기록](nas-preview.md#nas-실행-기록--2026-10-11-최신-화면-반영).
+
+
+### 2026-10-12 집중 작업 흐름 반영
+
+사용자 승인으로 기록·경과 입력과 커트 준비의 작업 화면에서 주 메뉴를 숨기고, 나가기/재개로 입력·사진 처리 상태를 보존. 준비는 저장 전 확인 → 저장 성공 결과 → 보관한 내용으로 분리. 확인 진입만으로 snapshot을 생성하지 않으며, 실제 기기 저장 성공 후 완료 표시. 예시의 완료는 메모리 체험 범위. 인증·서버 DB·ZIP 계약과 실제 상담 전송 후속 범위 유지. 구현·검증 결과는 [집중 작업 흐름](plans/2026-10-12-focused-task-flow.md) 참조. NAS·Git 원격 반영은 별도 실행 필요.

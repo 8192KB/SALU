@@ -312,3 +312,5 @@ Salon Capstone 상담은 HTTP REST이며 STOMP는 별도 채팅 구현. 두 경�
 ### 2026-10-12 집중 작업 흐름 반영
 
 사용자 승인으로 기록·경과 입력과 커트 준비의 작업 화면에서 주 메뉴를 숨기고, 나가기/재개로 입력·사진 처리 상태를 보존. 준비는 저장 전 확인 → 저장 성공 결과 → 보관한 내용으로 분리. 확인 진입만으로 snapshot을 생성하지 않으며, 실제 기기 저장 성공 후 완료 표시. 예시의 완료는 메모리 체험 범위. 인증·서버 DB·ZIP 계약과 실제 상담 전송 후속 범위 유지. 구현·검증 결과는 [집중 작업 흐름](plans/2026-10-12-focused-task-flow.md) 참조. NAS·Git 원격 반영은 별도 실행 필요.
+
+현재 배포(2026-10-12): feature/personal-storage-backup의 source fdda7e5, NAS 20261012-fdda7e5·HTTPS 연결·V4 적용 완료. [실행 기록](nas-preview.md)과 [조원 안내](team-preview-message.md) 참고. 소셜 실제 동의·새 가입 검증·실제 상담/후기는 계속 별도 범위.

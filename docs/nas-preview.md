@@ -1,6 +1,6 @@
 # NAS 조원 시연과 피드백
 
-최신 실행 기록은 문서 아래 날짜별 기록 참고. 2026-10-11 최초 계획: 발표 자료 제작은 조원 시연·피드백과 화면 수정 뒤 진행. 기존 PPTX/PDF는 이전 초안으로 보존.
+현재 배포: `20261012-fdda7e5`, https://salu.doyul.dev 정상. 최신 실행 기록은 문서 아래 날짜별 기록 참고. 2026-10-11 최초 계획: 발표 자료 제작은 조원 시연·피드백과 화면 수정 뒤 진행. 기존 PPTX/PDF는 이전 초안으로 보존.
 
 ## 공유 순서
 
@@ -177,3 +177,25 @@ NAS 브라우저 검증: Browser plugin not available → 기존 Playwright, 임
 - 앱 교체 전 SALU DB dump·Compose·환경파일·암호화 키를 NAS의 권한 제한 release 디렉터리에 보관. 새 V4는 테이블 추가 migration, 이전 V1~V3 불변.
 - 기존 설정의 빈 Google/Naver 값을 승인된 Git 제외 OAuth 설정으로 연결. 개발자 콘솔 callback 허용·외부 동의 검증은 계속 보류.
 - 검증·커밋·이미지 태그·체크섬·배포 결과는 아래 최종 실행 기록에 추가.
+
+## 2026-10-12 배포 완료
+
+- 소스 기준 commit `fdda7e5`, 앱 변경 `e14fd7c`, 작업 브랜치 `feature/personal-storage-backup` GitHub push 완료. main 병합 없음.
+- 새 이미지: `salu-web:20261012-fdda7e5`, `salu-backend:20261012-fdda7e5`, amd64. Docker image label에 revision fdda7e5 포함.
+- 이미지 gzip 약 146 MiB, 양쪽 SHA-256 `59b717da5d7581f7a10ff0f150643cd5b8faba6c365fc76b1b4d34932a27328a` 일치. MySQL 이미지 재전송/교체 없음.
+- NAS release 경로 `/home/chuwe/salu-preview/releases/20261012-fdda7e5`(700). 기존 DB dump·환경·Compose·암호화 키 복구본 보관. 비밀 파일 권한 600, Git 제외.
+- Compose의 기존 DB 설정·proxy network·host port 미공개 검사를 통과한 뒤 `up -d --no-deps --no-build --pull never --wait backend web`로 두 앱만 교체. 이전 이미지 태그 20261011-flow 보존.
+- 웹·Spring·MySQL healthy. V1~V4 성공. 기존 DB 컨테이너 ID와 volume 유지, 회원/개인 백업/사진 개수 변경 없음. 기존 암호화 키 bytes 동일 확인. 기존 Nextcloud·NPM 및 별도 DB 변경 없음.
+- `/api/health` 200, server/database UP, 공개 `/api/salons`·`/api/designers` 200. 새 등록 전에는 빈 목록이 정상.
+- Google/Naver 비밀 설정 연결 완료, 공개 providers는 google/naver. 콜백 등록·실제 외부 동의와 이메일 새 가입 검증은 보류. 키 연결·버튼 표시는 실제 소셜 로그인 성공 검증을 의미하지 않음.
+- Browser plugin 미제공 → Playwright로 공개 HTTPS 검증. 390×844 폰, 820×1180 세로 태블릿, 1180×820 가로 태블릿, 1440×1000 PC. 로그인 없이 커트/사진/경과 저장·재접속·앱 달력 선택·각 저장 결과·커트 준비·메뉴 위치 확인. 관련 실행 오류/가로 넘침 없음. 사용자 DB로의 테스트 API 쓰기 없음. 실물 폰/Safari는 별도 확인 필요.
+- 검증 증거 `/tmp/salu-release-20261012-fdda7e5/qa/result.json`, home/calendar/complete/record/login-{phone,tablet-portrait,tablet-landscape,desktop}.png. 실제 가입·제공자 동의·계정 복원은 이 NAS 화면 검증에 포함되지 않음(계정/복원은 별도 salu_test 통과).
+
+### 이후 수정본 배포
+
+1. 변경 코드 검토·해당 검증 → 기능 브랜치 commit/push.
+2. 해당 commit SHA 태그로 web/backend 중 변경한 이미지 빌드. SQL 변경은 새 Flyway migration 추가, 적용된 파일 수정 금지.
+3. SSH 전송과 체크섬 → 기존 DB/환경/키 복구본 → 태그 변경 → 필요한 앱만 재생성. DB volume 삭제·초기화 없음.
+4. 공개 HTTPS의 새 화면·API와 DB 보존 확인 후 점검표/배포 기록 갱신, 조원에게 링크 전달.
+
+앱 복구 시 release의 env.before/compose.before.yml과 이전 이미지 사용. V4를 이미 적용한 DB에 이전 backend의 Flyway 호환성은 별도 확인해야 하므로 무조건 태그 변경만으로 DB까지 복구됐다고 판단하지 않음. DB 복원은 이후 사용자 변경이 없는지 확인한 뒤 정식 복구 절차로 진행하며 적용 migration을 삭제하지 않음.

@@ -25,3 +25,5 @@ NAS의 현재 공개 주소는 `https://salu.doyul.dev`, 배포 컨테이너의 
 기존 설정의 구글 redirect는 다른 프로젝트 주소였음. 키 존재와 SALU callback 허용은 별개. 사용자 지시에 따라 실제 Google/네이버 동의·callback 검증 보류. 이메일 소유 확인 메일·비밀번호 재설정은 이 구현에 포함하지 않음. 회원가입의 새 실제 DB/API·브라우저 검증도 후속이며, 기존 로그인·자동 백업 통과 기록을 새 가입 완료 검증으로 주장하지 않음.
 
 현재 기본 검사: React 빌드, backend 단위 검증 통과. 실제 DB 통합 검증은 일반 Maven 실행에서 제외되는 기존 계약 유지. React 빌드·포맷·`git diff --check` 통과. 프론트 번들에 OAuth 값이 포함되지 않는지 검사. 새 코드와 키 설정으로 로컬 Spring 재시작 후 Vite proxy의 health200, 제공자 목록 google/naver 확인. 실제 가입·제공자 로그인·화면 조작 검증은 수행하지 않음. NAS 배포 및 원격 설정 변경 없음.
+
+2026-10-12 NAS 배포 갱신: 기존 Git 제외 OAuth 설정으로 Google/Naver 값을 NAS에 연결, providers 목록과 로그인 버튼 표시 확인. 기존 암호화 키·DB 설정 유지. 소스 fdda7e5, 배포 태그 20261012-fdda7e5. 실제 제공자 동의/callback·새 회원가입 검증은 계속 보류.

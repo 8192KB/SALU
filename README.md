@@ -2,6 +2,8 @@
 
 개인 커트·경과 기록에서 필요한 자료를 골라 디자이너와 상담하는 서비스.
 
+시연 주소: **https://salu.doyul.dev**. 배포 버전 `20261012-fdda7e5`, 최신 개발 코드는 `feature/personal-storage-backup` 브랜치. [조원 전달 문구](docs/team-preview-message.md).
+
 현재 React에서 **로그인 없이 기기 보관·ZIP 백업/복원·로그인 후 계정 자동 저장** 제공. 소개 홈과 개인 기록, 별도 예시 체험을 분리. Google·네이버 로그인은 SALU client 설정 시 활성화. 상담 실제 전송·커뮤니티·앱은 후속 단계.
 
 ## 먼저 볼 문서

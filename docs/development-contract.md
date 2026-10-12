@@ -1,10 +1,10 @@
 # SALU 개발 계약
 
-이 문서는 구현에 필요한 공통 기준. 진행상황·할 일·검증 실행 로그와 개인 운영 정보는 로컬 문서에서 관리.
+코드 구조와 화면 흐름, 권한·저장·검증에 적용하는 공통 규칙입니다.
 
 ## 구조
 
-React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전은 Maven Wrapper·pom.xml·npm lockfile 기준.
+- React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전은 Maven Wrapper·pom.xml·npm lockfile 기준
 
 - Controller: 입력 검증·응답 DTO
 - Service: 업무 규칙·소유권·참여자·트랜잭션
@@ -12,7 +12,10 @@ React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전�
 - `SecurityConfig`: URL 인증·역할·CSRF·세션·Security filter 오류
 - `GlobalExceptionHandler`: MVC 공통 오류
 
-기능별 패키지에 controller/service/mapper/DTO 배치. DB 객체를 그대로 공개하지 않음. 빈 기능 클래스를 미리 만들지 않음. 기존 Salon에서 로직을 참고해도 초기 SQL·환경 값·DB·전체 업무 코드를 복사하지 않음.
+- 기능별 패키지에 controller/service/mapper/DTO 배치
+- DB 객체를 그대로 공개하지 않음
+- 빈 기능 클래스를 미리 만들지 않음
+- 기존 Salon에서 로직을 참고해도 초기 SQL·환경 값·DB·전체 업무 코드를 복사하지 않음
 
 ## 화면과 자료
 
@@ -39,7 +42,8 @@ React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전�
 
 ## 오류와 권한
 
-공통 오류는 `ApiError(code, message)`. Security와 MVC의 형식 일치. Controller별 try-catch·redirect·새 오류 형식 금지.
+- 공통 오류는 `ApiError(code, message)`. Security와 MVC의 형식 일치
+- Controller별 try-catch·redirect·새 오류 형식 금지
 
 | 상태 | 처리 |
 |---|---|
@@ -52,9 +56,15 @@ React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전�
 | 크기/형식 | 413 / UPLOAD_TOO_LARGE, 415 / UNSUPPORTED_MEDIA_TYPE |
 | 예상 밖 오류 | 500 / INTERNAL_ERROR, 고정 문구 |
 
-원문 입력·비밀번호·SQL·내부 예외를 응답/로그에 넣지 않음. 의도한 업무 오류만 명시적으로 변환. 예외를 모두 400이나 성공 응답으로 바꾸지 않음.
+- 원문 입력·비밀번호·SQL·내부 예외를 응답/로그에 넣지 않음
+- 의도한 업무 오류만 명시적으로 변환
+- 예외를 모두 400이나 성공 응답으로 바꾸지 않음
 
-서버 개인 자료는 principal 소유자 기준. 요청 role/memberId로 권한 부여 금지. 디자이너 또는 매장 소속만으로 다른 사용자의 기록 접근 허용 금지. 후속 상담의 상세·사진·메시지는 Service의 참여자 검사 필요. 공개 사진은 원본의 private URL을 재사용하지 않음.
+- 서버 개인 자료는 principal 소유자 기준
+- 요청 role/memberId로 권한 부여 금지
+- 디자이너 또는 매장 소속만으로 다른 사용자의 기록 접근 허용 금지
+- 후속 상담의 상세·사진·메시지는 Service의 참여자 검사 필요
+- 공개 사진은 원본의 private URL을 재사용하지 않음
 
 ## 트랜잭션과 데이터 보존
 
@@ -66,11 +76,18 @@ React·TypeScript·Vite, Java 17·Spring Boot·MyBatis·MySQL. 의존성 버전�
 
 ## 인증·저장·검증
 
-[인증 계약](login.md), [개인 저장 계약](personal-storage.md) 적용. 기기 저장와 계정 백업은 도메인 커트 CRUD/상담 전송 완료의 근거가 아님. 새 가입·외부 소셜 동의/콜백은 별도 실제 검증 필요.
+- [인증 계약](login.md), [개인 저장 계약](personal-storage.md) 적용
+- 기기 저장과 계정 백업은 도메인 커트 CRUD/상담 전송 완료의 근거가 아님
+- 새 가입·외부 소셜 동의/콜백은 별도 실제 검증 필요
 
 - `test:e2e`: 서버 없는 화면·기기 저장·예시 분리
 - `test:auth`: 실제 Spring 인증
 - `test:storage`: 실제 자동 백업·복원·계정 분리
 - `scripts/verify-backend.sh`: 실제 `salu_test` HTTP·DB·Service 커밋/롤백
 
-테스트 메서드 자체의 `@Transactional`로 Service 커밋을 가리지 않음. 테스트 API·테이블·보안 완화는 `src/test`에만 배치, 일반 jar 제외. 업무 DB·사용자 자료로 검증 금지. 두 브라우저 검증에는 storage-test-server의 임시 계정 사용. skip이나 예시 화면 통과를 실제 기능 완료로 기록하지 않음. 변경한 공통 동작은 빌드뿐 아니라 해당 API·DB·브라우저에서 확인.
+- 테스트 메서드 자체의 `@Transactional`로 Service 커밋을 가리지 않음
+- 테스트 API·테이블·보안 완화는 `src/test`에만 배치, 일반 jar 제외
+- 업무 DB·사용자 자료로 검증 금지
+- 두 브라우저 검증에는 storage-test-server의 임시 계정 사용
+- skip이나 예시 화면 통과를 실제 기능 완료로 기록하지 않음
+- 변경한 공통 동작은 빌드뿐 아니라 해당 API·DB·브라우저에서 확인

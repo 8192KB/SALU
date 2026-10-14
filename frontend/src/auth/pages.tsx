@@ -1,21 +1,41 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Alert, BackLink, Icon, PageHeading } from '../components';
 import { Field } from '../fields';
 import { Dialog } from '../dialog';
 import { useAuth } from './context';
 import { usePrototype } from '../prototype/context';
-import { backupRequest, signup } from './api';
+import { ApiFailure, backupRequest, signup } from './api';
 import { flushPersonalStores } from '../prototype/personal-store';
 
+// 로그인 뒤 돌아갈 앱 안 주소. 외부 주소와 계정 화면은 받지 않음
+export function safeReturnPath(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\'))
+    return null;
+  return /^\/(login|signup|auth)(\/|\?|$)/.test(value) ? null : value;
+}
+export function useLoginPath() {
+  const location = useLocation();
+  const next = safeReturnPath(`${location.pathname}${location.search}`);
+  return next && next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login';
+}
+
 export function AccountControls() {
-  const { state, pending, logout } = useAuth();
+  const { state, activeMember, pending, logout } = useAuth();
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const [open, setOpen] = useState(false);
   const [storageError, setStorageError] = useState('');
+  const { storage } = usePrototype();
+  const unsent =
+    open && storage
+      ? Object.entries(storage.getItems()).filter(
+          ([id, item]) => id !== 'new-cut-draft' && (item.dirty || item.conflict),
+        ).length
+      : 0;
   if (state.status === 'prototype') return <span className="member-label">나의 헤어 기록</span>;
   return (
-    <div className="account-controls" aria-label="계정">
+    <div className="account-controls" role="group" aria-label="계정">
       {state.status === 'authenticated' ? (
         <>
           <Link className="account-name" to="/account" title={state.member.displayName}>
@@ -35,8 +55,10 @@ export function AccountControls() {
         </>
       ) : state.status === 'checking' ? (
         <span className="muted">계정 확인 중</span>
+      ) : state.status === 'unavailable' && activeMember ? (
+        <span className="muted">{activeMember.displayName}님 · 연결 확인 중</span>
       ) : (
-        <Link className="button account-button" to="/login">
+        <Link className="button account-button" to={loginPath}>
           <Icon name="user" size={16} />
           {state.status === 'unavailable' ? '계정 확인' : '로그인'}
         </Link>
@@ -50,6 +72,12 @@ export function AccountControls() {
       >
         <Alert message={storageError} />
         <p>계정 기록은 이 화면에서 숨겨집니다. 다시 로그인하면 이어서 사용할 수 있어요.</p>
+        {unsent > 0 && (
+          <p>
+            서버에 아직 올리지 못한 기록 {unsent}건이 있어요. 이 기기에서 다시 로그인해야 서버에
+            올라가고 다른 기기에서도 보여요.
+          </p>
+        )}
         <div className="dialog-actions">
           <button
             type="button"
@@ -84,8 +112,27 @@ export function AccountControls() {
 }
 
 export function SessionNotice({ compact = false }: { compact?: boolean }) {
-  const { state, actionError, refresh, pending, checking } = useAuth();
+  const { state, actionError, sessionChange, clearSessionChange, refresh, pending, checking } =
+    useAuth();
+  const loginPath = useLoginPath();
   const message = state.status === 'unavailable' ? state.message : actionError;
+  if (!message && sessionChange)
+    return (
+      <div className={`session-notice${compact ? ' compact-session' : ''}`} role="alert">
+        <div className="session-error-content">
+          <Icon name="warning" />
+          <span>{sessionChange}</span>
+        </div>
+        {state.status !== 'authenticated' && (
+          <Link className="button account-button" to={loginPath} onClick={clearSessionChange}>
+            다시 로그인
+          </Link>
+        )}
+        <button type="button" className="button account-button" onClick={clearSessionChange}>
+          닫기
+        </button>
+      </div>
+    );
   if (!message) return null;
   return (
     <div className={`session-notice${compact ? ' compact-session' : ''}`} role="alert">
@@ -110,26 +157,61 @@ export function SessionNotice({ compact = false }: { compact?: boolean }) {
   );
 }
 
+const RETURN_KEY = 'salu-return';
+// 소셜 로그인은 서버의 고정 주소로 돌아오므로 출발 전 돌아갈 화면을 탭에 남김
+function keepReturnPath(path: string | null) {
+  try {
+    if (path) sessionStorage.setItem(RETURN_KEY, path);
+    else sessionStorage.removeItem(RETURN_KEY);
+  } catch {
+    /* 돌아갈 화면을 남기지 못하면 홈으로 감 */
+  }
+}
+function takeReturnPath() {
+  try {
+    const value = sessionStorage.getItem(RETURN_KEY);
+    sessionStorage.removeItem(RETURN_KEY);
+    return safeReturnPath(value);
+  } catch {
+    return null;
+  }
+}
+function completePath(next: string | null) {
+  return next ? `/auth/complete?next=${encodeURIComponent(next)}` : '/auth/complete';
+}
+
 export function LoginPage() {
   const { state, pending, checking, login, refresh } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const next = safeReturnPath(params.get('next'));
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(
     params.has('socialError') ? '소셜 로그인을 완료하지 못했어요. 다시 시도해 주세요.' : '',
   );
+  const [credentialError, setCredentialError] = useState(false);
+  const { storage, state: records } = usePrototype();
+  const guestRecords = storage?.scope === 'guest' ? records.cuts.length : 0;
+  const passwordInput = useRef<HTMLInputElement>(null);
   const performLogin = async () => {
     if (pending || checking) return;
     setError('');
     try {
       await flushPersonalStores();
       await login(email.trim(), password);
-      navigate('/');
+      navigate(completePath(next), { replace: true });
     } catch (failure) {
+      setCredentialError(
+        failure instanceof ApiFailure &&
+          failure.status < 500 &&
+          failure.status !== 0 &&
+          failure.code !== 'CSRF_INVALID',
+      );
       setError(
         failure instanceof Error ? failure.message : '로그인하지 못했어요. 다시 시도해 주세요.',
       );
+      requestAnimationFrame(() => passwordInput.current?.focus());
     } finally {
       setPassword('');
     }
@@ -137,7 +219,11 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <PageHeading
-        back={<BackLink to="/records">내 기록으로 돌아가기</BackLink>}
+        back={
+          <BackLink to={next ?? '/records'}>
+            {next ? '이전 화면으로 돌아가기' : '내 기록으로 돌아가기'}
+          </BackLink>
+        }
         title="로그인"
         description="SALU 계정으로 로그인해 주세요."
       />
@@ -149,14 +235,23 @@ export function LoginPage() {
             홈으로
           </Link>
         </section>
+      ) : state.status === 'authenticated' && params.has('socialError') ? (
+        // 로그인한 사람의 소셜 계정 연결 실패도 서버가 이 주소로 보냄
+        <section className="panel">
+          <h2>계정을 연결하지 못했어요</h2>
+          <p>이미 다른 SALU 계정에 연결된 소셜 계정이거나 연결 시간이 지났을 수 있어요.</p>
+          <Link className="button primary" to="/account" replace>
+            내 계정에서 다시 연결
+          </Link>
+        </section>
       ) : state.status === 'authenticated' ? (
         <section className="panel">
           <h2>이미 로그인했어요</h2>
           <p>
             {state.member.displayName}님 · {state.member.email}
           </p>
-          <Link className="button primary" to="/">
-            홈으로
+          <Link className="button primary" to={next ?? '/'} replace>
+            {next ? '이전 화면으로' : '홈으로'}
           </Link>
         </section>
       ) : (
@@ -170,6 +265,12 @@ export function LoginPage() {
         >
           {!error && <SessionNotice />}
           <Alert message={error} />
+          {guestRecords > 0 && (
+            <p>
+              이 기기에 로그인 전에 남긴 기록 {guestRecords}건이 있어요. 로그인하면 이 기록을
+              계정으로 옮겨요.
+            </p>
+          )}
           <Field label="이메일">
             <input
               name="email"
@@ -188,6 +289,7 @@ export function LoginPage() {
               type="password"
               autoComplete="current-password"
               required
+              ref={passwordInput}
               value={password}
               disabled={pending}
               onChange={(event) => setPassword(event.target.value)}
@@ -196,7 +298,7 @@ export function LoginPage() {
           <button type="submit" className="button primary full" disabled={pending || checking}>
             {pending ? '로그인 중' : '로그인'}
           </button>
-          {error && (
+          {error && !credentialError && (
             <button
               type="button"
               className="text-link"
@@ -211,7 +313,9 @@ export function LoginPage() {
           )}
         </form>
       )}
-      {state.status !== 'prototype' && state.status !== 'authenticated' && <SocialButtons />}
+      {state.status !== 'prototype' && state.status !== 'authenticated' && (
+        <SocialButtons returnTo={next} />
+      )}
       {state.status !== 'prototype' && state.status !== 'authenticated' && (
         <p className="auth-switch">
           아직 계정이 없나요? <Link to="/signup">회원가입</Link>
@@ -278,7 +382,7 @@ export function SignupPage() {
               await signup(email.trim(), displayName.trim(), password);
               setCreated(true);
               await login(email.trim(), password);
-              navigate('/');
+              navigate(completePath(null), { replace: true });
             } catch (failure) {
               setError(
                 failure instanceof Error
@@ -350,8 +454,17 @@ export function SignupPage() {
   );
 }
 
-function SocialButtons({ link = false }: { link?: boolean }) {
+function SocialButtons({
+  link = false,
+  returnTo = null,
+}: {
+  link?: boolean;
+  returnTo?: string | null;
+}) {
   const { state } = useAuth();
+  const current = link && state.status === 'authenticated' ? state.member : null;
+  // 창으로 돌아올 때마다 로그인 상태 객체가 새로 만들어져도 같은 계정이면 다시 불러오지 않음
+  const linkMember = useMemo(() => current, [current?.storageContext]);
   const [providers, setProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
@@ -383,21 +496,20 @@ function SocialButtons({ link = false }: { link?: boolean }) {
       .catch(() => {
         throw new Error('간편 로그인을 불러오지 못했어요. 다시 시도해 주세요.');
       });
-    const readLinked =
-      link && state.status === 'authenticated'
-        ? backupRequest('/api/auth/oauth2/linked', state.member, {}, controller.signal)
-            .then(async (response) => {
-              const values: unknown = await response.json();
-              if (!Array.isArray(values)) throw new Error('linked');
-              return values.filter(
-                (value): value is string =>
-                  typeof value === 'string' && ['google', 'naver'].includes(value),
-              );
-            })
-            .catch(() => {
-              throw new Error('연결한 계정을 확인하지 못했어요. 다시 불러와 주세요.');
-            })
-        : Promise.resolve<string[]>([]);
+    const readLinked = linkMember
+      ? backupRequest('/api/auth/oauth2/linked', linkMember, {}, controller.signal)
+          .then(async (response) => {
+            const values: unknown = await response.json();
+            if (!Array.isArray(values)) throw new Error('linked');
+            return values.filter(
+              (value): value is string =>
+                typeof value === 'string' && ['google', 'naver'].includes(value),
+            );
+          })
+          .catch(() => {
+            throw new Error('연결한 계정을 확인하지 못했어요. 다시 불러와 주세요.');
+          })
+      : Promise.resolve<string[]>([]);
     void Promise.all([readProviders, readLinked])
       .then(([configured, identities]) => {
         if (controller.signal.aborted) return;
@@ -415,7 +527,7 @@ function SocialButtons({ link = false }: { link?: boolean }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [link, state, retry]);
+  }, [linkMember, retry]);
   if (loading)
     return (
       <p className="working-notice" role="status">
@@ -454,6 +566,7 @@ function SocialButtons({ link = false }: { link?: boolean }) {
                     })
                   ).json()
                 ).url;
+              keepReturnPath(link ? '/account?linked=1' : returnTo);
               window.location.assign(url);
             } catch {
               setBusy(false);
@@ -474,6 +587,8 @@ function SocialButtons({ link = false }: { link?: boolean }) {
 }
 export function AccountPage() {
   const { state } = useAuth();
+  const [params] = useSearchParams();
+  const linkedNotice = params.has('linked');
   if (state.status !== 'authenticated')
     return (
       <div className="login-page">
@@ -506,6 +621,11 @@ export function AccountPage() {
         description={`${state.member.displayName}님의 계정`}
       />
       <SessionNotice />
+      {linkedNotice && (
+        <p className="working-notice" role="status">
+          소셜 계정을 연결했어요.
+        </p>
+      )}
       <section className="panel">
         <p>{state.member.email ?? '소셜 로그인 계정'}</p>
         <Link className="button primary full" to="/backup">
@@ -521,11 +641,20 @@ export function AccountPage() {
 }
 export function AuthCompletePage() {
   const { state, initialized, refresh } = useAuth();
-  const { ready } = usePrototype();
+  const { ready, storage } = usePrototype();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const done = useRef(false);
   useEffect(() => {
-    if (initialized && ready && state.status === 'authenticated') navigate('/', { replace: true });
-  }, [initialized, ready, state, navigate]);
+    if (done.current || !initialized || !ready || state.status !== 'authenticated') return;
+    done.current = true;
+    const next = safeReturnPath(params.get('next')) ?? takeReturnPath() ?? '/';
+    // 로그인하며 계정으로 옮긴 게스트 기록은 새 ID를 받으므로 보던 주소도 새 ID로 바꿈
+    const ids = storage?.migratedIds;
+    navigate(ids?.size ? next.replace(/[A-Za-z0-9_-]{8,}/g, (id) => ids.get(id) ?? id) : next, {
+      replace: true,
+    });
+  }, [initialized, ready, state, navigate, params, storage]);
   return (
     <section className="panel">
       <h1 tabIndex={-1}>로그인 확인</h1>

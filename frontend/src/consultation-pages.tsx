@@ -218,13 +218,13 @@ function SelectedMaterials({
 }
 
 export function DesignerList() {
-  const { state, requestDraft } = usePrototype();
+  const { state } = usePrototype();
   const directory = useDirectory(state);
   const mode = useWorkspace();
   const [search] = useSearchParams();
   const previewId = search.get('preview');
   const sourcePreview = state.previews.find((value) => value.id === previewId);
-  const record = search.get('record') ?? sourcePreview?.cut.id ?? requestDraft?.cutId ?? null;
+  const record = search.get('record') ?? sourcePreview?.cut.id ?? null;
   if (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
     return <Missing title="준비한 요청 자료를 찾을 수 없어요" />;
   if (record && !state.cuts.some((cut) => cut.id === record))
@@ -306,11 +306,11 @@ export function DesignerDetail() {
   const { id } = useParams();
   const [search] = useSearchParams();
   const previewId = search.get('preview');
-  const { state, requestDraft, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
+  const { state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
   const mode = useWorkspace();
   const sourcePreview = state.previews.find((value) => value.id === previewId);
-  const record = search.get('record') ?? sourcePreview?.cut.id ?? requestDraft?.cutId ?? null;
+  const record = search.get('record') ?? sourcePreview?.cut.id ?? null;
   const navigate = useNavigate();
   const designer = directory.designers.find((value) => value.id === id);
   if (mode !== 'example' && directory.loading)
@@ -357,11 +357,16 @@ export function DesignerDetail() {
       <PageHeading
         title="디자이너 프로필"
         back={
-          <BackLink
-            to={`/designers?${new URLSearchParams({ ...(record ? { record } : {}), ...(previewId ? { preview: previewId } : {}) })}`}
-          >
-            디자이너 목록
-          </BackLink>
+          // 기록 상세의 디자이너 카드에서 왔으면 그 기록으로 돌아감
+          search.get('from') === 'record' && record ? (
+            <BackLink to={`/records/${record}`}>커트 기록으로</BackLink>
+          ) : (
+            <BackLink
+              to={`/designers?${new URLSearchParams({ ...(record ? { record } : {}), ...(previewId ? { preview: previewId } : {}) })}`}
+            >
+              디자이너 목록
+            </BackLink>
+          )
         }
       />
       <div className="two-column profile-layout">
@@ -469,6 +474,19 @@ export function DesignerDetail() {
   );
 }
 
+// 저장한 준비와 같은 초안을 뒤로 가기로 다시 열면 그 준비 내용으로 보냄. 고쳐 저장해 같은 준비가 늘지 않게 함
+function useSavedDraftRedirect(draft: RequestDraft | null | undefined, active: boolean) {
+  const { state } = usePrototype();
+  const navigate = useNavigate();
+  const saved = draft
+    ? state.previews.find((value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft))
+    : undefined;
+  useEffect(() => {
+    if (active && saved) navigate(previewUrl(saved), { replace: true });
+  }, [active, saved, navigate]);
+  return Boolean(saved);
+}
+
 export function MaterialsPage() {
   const active = useActivePage();
   const {
@@ -519,16 +537,18 @@ export function MaterialsPage() {
   useEffect(() => {
     if (active && !draftId && draft) navigate(materialUrl(draft), { replace: true });
   }, [active, draftId, draft, navigate]);
+  const alreadySaved = useSavedDraftRedirect(draftId ? draft : undefined, active);
   useEffect(() => {
     if (active && draft && source) markRequestStep(draft.id, 'materials');
   }, [active, draft?.id, Boolean(source), markRequestStep]);
   if (search.has('draft') && !explicitDraft)
     return <Missing title="기록 또는 작성 중인 요청을 찾을 수 없어요" />;
+  if (alreadySaved) return null;
   if (!search.has('draft') && !search.has('record') && (!designerId || designer))
     return (
       <>
-        <Link className="back-link" to="/requests">
-          ← 커트 준비
+        <Link className="back-link" to={designer ? profileUrl(designer.id, null) : '/requests'}>
+          {designer ? '← 디자이너 프로필' : '← 커트 준비'}
         </Link>
         <Steps current={0} />
         <PageHeading
@@ -794,14 +814,16 @@ export function RequestPage() {
     : requestDraft;
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const alreadySaved = useSavedDraftRedirect(draft, active);
   useEffect(() => {
-    if (active && draft) {
+    if (active && draft && !alreadySaved) {
       setRequestDraft(draft);
       markRequestStep(draft.id, 'write');
     }
-  }, [active, draft, setRequestDraft, markRequestStep]);
+  }, [active, draft, alreadySaved, setRequestDraft, markRequestStep]);
   const designer = draftDesigner(directory.designers, draft);
   const source = draft ? materialSource(state, draft) : null;
+  if (alreadySaved) return null;
   if (search.has('draft') && !draft)
     return (
       <Missing
@@ -874,9 +896,15 @@ export function RequestPage() {
                     className="remove-link"
                     type="button"
                     aria-label={`원하는 점 ${index + 1} 삭제`}
-                    onClick={() =>
-                      update({ requests: draft.requests.filter((value) => value.id !== item.id) })
-                    }
+                    onClick={() => {
+                      const rest = draft.requests.filter((value) => value.id !== item.id);
+                      update({ requests: rest });
+                      // 지운 칸 대신 바로 앞(없으면 다음) 칸의 내용으로 초점을 옮김
+                      const nextFocus = rest[Math.max(0, index - 1)];
+                      requestAnimationFrame(() =>
+                        document.getElementById(`request-${nextFocus?.id}`)?.focus(),
+                      );
+                    }}
                   >
                     삭제
                   </button>
@@ -930,7 +958,11 @@ export function RequestPage() {
           <button
             className="text-link"
             type="button"
-            onClick={() => update({ requests: [...draft.requests, newRequest()] })}
+            onClick={() => {
+              const added = newRequest();
+              update({ requests: [...draft.requests, added] });
+              requestAnimationFrame(() => document.getElementById(`request-${added.id}`)?.focus());
+            }}
           >
             <Icon name="plus" size={17} />
             원하는 점 추가

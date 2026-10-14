@@ -1,6 +1,6 @@
 import { newId } from './ids';
 import { openDB } from 'idb';
-import { createMemoryRepository, InputError } from './memory-repository';
+import { createMemoryRepository, InputError, isBlankCutDraft } from './memory-repository';
 import type { PrototypeRepository } from './types';
 import {
   appendBundle,
@@ -9,11 +9,12 @@ import {
   emptyDrafts,
   mapPhotos,
   photoIds,
+  repairBundle,
   serialize,
   validateBundle,
 } from './storage-model';
 import type { Asset, Bundle, Drafts } from './storage-model';
-import { exportZip, importZip, checkImage } from './zip-backup';
+import { exportZip, importZip, checkImage, MAX_PIXELS } from './zip-backup';
 
 export type SyncItem = {
   revision: number;
@@ -52,6 +53,10 @@ const database = () =>
     terminated() {
       connection = undefined;
     },
+  }).catch((error: unknown) => {
+    // 열기 실패를 남겨 두지 않아야 ‘다시 시도’에서 새로 열 수 있음
+    connection = undefined;
+    throw error;
   }));
 let persistenceRequested = false;
 // 로그인 전 기록은 기기에만 있어 브라우저 저장 공간 정리(Safari 7일 정책 등)로 지워지지 않게 한 번 요청함
@@ -264,9 +269,9 @@ export class PersonalStore {
         operation(() => this.engine.createPreviewForDesigner(id, d)),
       preparePhotos: async (files, count) => {
         for (const file of files)
-          await checkImage(file).catch(() => {
+          await checkImage(file, MAX_PIXELS).catch(() => {
             throw new InputError({
-              photos: '5 MiB 이하의 올바른 JPEG·PNG·WebP 사진을 선택해 주세요.',
+              photos: '5 MiB·4천만 화소 이하의 올바른 JPEG·PNG·WebP 사진을 선택해 주세요.',
             });
           });
         const photos = await this.engine.preparePhotos(files, count);
@@ -345,58 +350,12 @@ export class PersonalStore {
     });
     return runtime;
   }
-  async load() {
+  async load(adoptGuest = false) {
     this.activate();
     return this.enqueue(async () => {
       if (this.view.ready) return;
       try {
-        if (this.scope !== 'guest') {
-          await flushPersonalStoresExcept(this);
-          const db = await database();
-          const tx = db.transaction(['workspaces', 'assets'], 'readwrite');
-          const guest: Document | undefined = await tx.objectStore('workspaces').get('guest');
-          if (guest && JSON.stringify(guest.bundle) !== JSON.stringify(emptyBundle())) {
-            const target: Document =
-              (await tx.objectStore('workspaces').get(this.scope)) ?? this.document;
-            const copied = copyBundle(guest.bundle);
-            const unfinished = copied.bundle.drafts.cutDraft;
-            const adopt =
-              JSON.stringify(target.bundle.drafts.cutDraft) ===
-              JSON.stringify(emptyDrafts().cutDraft);
-            target.bundle = appendBundle(target.bundle, copied.bundle);
-            if (adopt) {
-              target.bundle.drafts.cutDraft = unfinished;
-              target.bundle.drafts.recoveredCuts = target.bundle.drafts.recoveredCuts.filter(
-                (d) => JSON.stringify(d) !== JSON.stringify(unfinished),
-              );
-            }
-            for (const id of photoIds(guest.bundle)) {
-              const blob = await tx.objectStore('assets').get(['guest', id]);
-              if (!blob) {
-                tx.abort();
-                throw new Error('missing photo');
-              }
-              await tx.objectStore('assets').put(blob, [this.scope, copied.ids.get(id)!]);
-            }
-            let guestAsset = await tx
-              .objectStore('assets')
-              .openCursor(IDBKeyRange.bound(['guest', ''], ['guest', '\uffff']));
-            while (guestAsset) {
-              await guestAsset.delete();
-              guestAsset = await guestAsset.continue();
-            }
-            target.generation++;
-            target.items = this.changedItems(target.bundle, target.items);
-            await tx.objectStore('workspaces').put(target);
-            await tx.objectStore('workspaces').put({
-              scope: 'guest',
-              generation: guest.generation + 1,
-              bundle: emptyBundle(),
-              items: {},
-            });
-          }
-          await tx.done;
-        }
+        if (this.scope !== 'guest' && adoptGuest) await this.migrateGuest();
         await this.read();
       } catch {
         this.setView({
@@ -407,6 +366,70 @@ export class PersonalStore {
         });
       }
     });
+  }
+  // 로그인을 서버에서 확인한 뒤에만 이 기기의 게스트 기록을 계정 공간으로 옮김
+  async adoptGuest() {
+    if (this.scope === 'guest') return;
+    await this.enqueue(async () => {
+      if (!this.view.ready) return;
+      try {
+        if (this.pendingDrafts) await this.commit(this.view.bundle);
+        if (await this.migrateGuest()) await this.read();
+      } catch {
+        this.setView({ status: 'error', error: storageError(), errorSource: 'local' });
+      }
+    });
+  }
+  // 옮긴 게스트 기록의 이전 ID → 새 ID. 로그인 전에 보던 주소를 새 주소로 바꿀 때 씀
+  migratedIds = new Map<string, string>();
+  private async migrateGuest() {
+    let migrated: Map<string, string> | undefined;
+    await flushPersonalStoresExcept(this);
+    const db = await database();
+    const tx = db.transaction(['workspaces', 'assets'], 'readwrite');
+    const guest: Document | undefined = await tx.objectStore('workspaces').get('guest');
+    if (guest && JSON.stringify(guest.bundle) !== JSON.stringify(emptyBundle())) {
+      const target: Document =
+        (await tx.objectStore('workspaces').get(this.scope)) ?? this.document;
+      const copied = copyBundle(guest.bundle);
+      migrated = copied.ids;
+      const unfinished = copied.bundle.drafts.cutDraft;
+      const adopt = isBlankCutDraft(target.bundle.drafts.cutDraft);
+      target.bundle = appendBundle(target.bundle, copied.bundle);
+      if (adopt) {
+        target.bundle.drafts.cutDraft = unfinished;
+        target.bundle.drafts.recoveredCuts = target.bundle.drafts.recoveredCuts.filter(
+          (d) => JSON.stringify(d) !== JSON.stringify(unfinished),
+        );
+      }
+      for (const id of photoIds(guest.bundle)) {
+        const blob = await tx.objectStore('assets').get(['guest', id]);
+        if (!blob) {
+          tx.abort();
+          throw new Error('missing photo');
+        }
+        await tx.objectStore('assets').put(blob, [this.scope, copied.ids.get(id)!]);
+      }
+      let guestAsset = await tx
+        .objectStore('assets')
+        .openCursor(IDBKeyRange.bound(['guest', ''], ['guest', '\uffff']));
+      while (guestAsset) {
+        await guestAsset.delete();
+        guestAsset = await guestAsset.continue();
+      }
+      target.generation++;
+      target.items = this.changedItems(target.bundle, target.items);
+      await tx.objectStore('workspaces').put(target);
+      await tx.objectStore('workspaces').put({
+        scope: 'guest',
+        generation: guest.generation + 1,
+        bundle: emptyBundle(),
+        items: {},
+      });
+    }
+    await tx.done;
+    if (migrated) this.migratedIds = migrated;
+    return Boolean(migrated);
   }
   private async read() {
     const db = await database();
@@ -423,12 +446,21 @@ export class PersonalStore {
     }
     await tx.done;
 
-    this.document = document;
-    this.hydrate(document.bundle);
+    const repaired = repairBundle(document.bundle) as Bundle;
+    const items = Object.fromEntries(
+      Object.entries(document.items).map(([id, item]) => [
+        id,
+        item.conflict ? { ...item, conflict: repairBundle(item.conflict) as Bundle } : item,
+      ]),
+    );
+    this.document = { ...document, items };
+    this.hydrate(repaired);
     this.persistedRuntime = this.view.bundle;
+    if (repaired !== document.bundle)
+      await this.commit(this.view.bundle, this.changedItems(this.view.bundle, { ...items }));
     this.setView({
       status:
-        Object.values(document.items).some((i) => i.dirty) && this.scope !== 'guest'
+        Object.values(this.document.items).some((i) => i.dirty) && this.scope !== 'guest'
           ? 'syncing'
           : 'local',
       error: '',
@@ -550,13 +582,20 @@ export class PersonalStore {
     await this.flush().catch(() => {});
     return exportZip(this.view.bundle, this.assets);
   }
-  async importBackup(file: File) {
-    const imported = await importZip(file);
+  async readBackup(file: File) {
+    return importZip(file);
+  }
+  async importBackup(file: File | Awaited<ReturnType<typeof importZip>>) {
+    const imported = file instanceof File ? await importZip(file) : file;
     return this.enqueue(async () => {
       const copied = copyBundle(imported.bundle);
       imported.assets.forEach((a) => this.assets.set(copied.ids.get(a.id)!, a.blob));
       await this.commit(appendBundle(this.view.bundle, copied.bundle));
     });
+  }
+  // 화면에서 바로 다시 보내기. CloudSync가 연결돼 있을 때만 동작함
+  requestSync() {
+    this.onChange?.();
   }
   getItems() {
     return this.document.items;
@@ -590,13 +629,11 @@ export class PersonalStore {
       errorSource: null,
     });
   }
-  markSyncError() {
+  markSyncError(
+    error = '서버 저장을 확인하지 못했어요. 기기 기록은 그대로 두고 자동으로 다시 시도할게요.',
+  ) {
     if (this.view.errorSource === 'local') return;
-    this.setView({
-      status: 'error',
-      error: '서버 저장을 확인하지 못했어요. 기기 기록은 그대로 두고 자동으로 다시 시도할게요.',
-      errorSource: 'cloud',
-    });
+    this.setView({ status: 'error', error, errorSource: 'cloud' });
   }
   async acknowledge(id: string, mutationId: string, revision: number) {
     await this.enqueue(async () => {

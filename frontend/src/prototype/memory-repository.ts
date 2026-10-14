@@ -95,6 +95,20 @@ export function newCutDraft(): CutDraft {
     photos: [],
   };
 }
+// 날짜만 남은 새 기록 초안. 저장 뒤 비운 초안의 날짜는 그날로 남으므로 내용 판단에서 날짜를 뺌
+export function isBlankCutDraft(draft: CutDraft) {
+  return (
+    draft.service === '커트' &&
+    !draft.areas.length &&
+    !draft.goodNote &&
+    !draft.salonName &&
+    !draft.salonId &&
+    !draft.designerName &&
+    !draft.designerProfileId &&
+    !draft.price &&
+    !draft.photos.length
+  );
+}
 export function newProgressDraft(): ProgressDraft {
   return { observedOn: today(), areas: [], discomfort: '', styling: '', question: '', photos: [] };
 }

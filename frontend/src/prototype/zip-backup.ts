@@ -9,7 +9,9 @@ const digest = async (bytes: Uint8Array) =>
     (b) => b.toString(16).padStart(2, '0'),
   ).join('');
 const MIME = ['image/jpeg', 'image/png', 'image/webp'];
-export async function checkImage(blob: Blob) {
+// 서버 백업은 4천만 화소를 넘는 사진을 거절함. 새로 고르는 사진에만 적용하고 이전 ZIP 복원은 막지 않음
+export const MAX_PIXELS = 40_000_000;
+export async function checkImage(blob: Blob, maxPixels = Infinity) {
   if (!MIME.includes(blob.type) || !blob.size || blob.size > 5 * 1024 * 1024)
     throw new Error('image size/type');
   const bytes = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
@@ -25,6 +27,7 @@ export async function checkImage(blob: Blob) {
     const image = new Image();
     image.src = url;
     await image.decode();
+    if (image.naturalWidth * image.naturalHeight > maxPixels) throw new Error('image pixels');
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -32,6 +35,11 @@ export async function checkImage(blob: Blob) {
 export async function exportZip(bundle: Bundle, assets: Map<string, Blob>): Promise<Blob> {
   const entries: Record<string, Uint8Array> = {};
   const manifest: { id: string; path: string; type: string; size: number; sha256: string }[] = [];
+  // 복원은 ZIP 항목 512개(기록·목록 파일 2개 포함)까지 받으므로 복원할 수 없는 파일을 만들지 않음
+  if (photoIds(bundle).length > 510)
+    throw new Error(
+      '사진이 510장을 넘어 한 파일로 받을 수 없어요. 계정에 로그인하면 자동으로 보관돼요.',
+    );
   for (const id of photoIds(bundle)) {
     const blob = assets.get(id);
     if (!blob) throw new Error('사진을 읽지 못했어요. 백업을 다시 시도해 주세요.');

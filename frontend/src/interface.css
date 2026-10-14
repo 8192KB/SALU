@@ -1074,6 +1074,10 @@ h2 {
   height: 1px;
   opacity: 0;
 }
+.backup-actions label:has(input[type='file']:focus-visible) {
+  outline: 3px solid var(--teal);
+  outline-offset: 4px;
+}
 .social-buttons {
   display: grid;
   gap: 12px;

@@ -95,11 +95,22 @@ export function ConsultationDesignerProfile({
   const query = new URLSearchParams({ designer: designer.id });
   if (linked) query.set('record', linked);
   if (linked && preview) query.set('preview', preview.id);
+  const fromRecord = useSearchParams()[0].get('from') === 'record';
   return (
     <div className="consultation-screen consultation-profile">
       <PageHeading
         title="디자이너 프로필"
-        back={<BackLink to="/designers">디자이너 목록</BackLink>}
+        back={
+          fromRecord && record ? (
+            <BackLink to={`/records/${record}`}>커트 기록으로</BackLink>
+          ) : (
+            <BackLink
+              to={record ? `/designers?record=${encodeURIComponent(record)}` : '/designers'}
+            >
+              디자이너 목록
+            </BackLink>
+          )
+        }
       />
       <div className="consultation-profile-identity">
         <Avatar name={designer.name} large src={designer.avatarUrl} />

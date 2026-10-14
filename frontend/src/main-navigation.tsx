@@ -33,8 +33,14 @@ export function isTaskPath(pathname: string) {
     /^\/(?:requests|consultations)\/(?:new|materials|write|request|review)$/.test(path)
   );
 }
-function pageKey(pathname: string) {
-  const section = sectionOf(pathname);
+const isDesignerPath = (pathname: string) =>
+  /^\/designers(\/|$)/.test(pathname.replace(/^\/examples(?=\/|$)/, '') || '/');
+// 저장 완료 화면은 한 번 보는 화면이라 메뉴의 마지막 화면으로 남기지 않음
+const isCompletionPath = (pathname: string) =>
+  /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/[^/]+\/complete)$/.test(
+    pathname.replace(/^\/examples(?=\/|$)/, '') || '/',
+  );
+function pageKey(pathname: string, section = sectionOf(pathname)) {
   return section ? `${section}${isTaskPath(pathname) ? '-task' : ''}` : undefined;
 }
 const address = (location: Location) => `${location.pathname}${location.search}${location.hash}`;
@@ -44,18 +50,29 @@ export function useMainNavigation(ready: boolean) {
   const navigationType = useNavigationType();
   const navigate = useNavigate();
   const mode = useWorkspace();
-  const candidate = sectionOf(location.pathname);
+  // 디자이너 화면은 들어온 메뉴(내 기록·커트 준비 등)에 속함
+  const origin = useRef<MainSection | undefined>(undefined);
+  const sectionFor = (pathname: string) => {
+    const value = sectionOf(pathname);
+    return isDesignerPath(pathname) && origin.current && origin.current !== 'home'
+      ? origin.current
+      : value;
+  };
+  const candidate = sectionFor(location.pathname);
   const section = mode === 'example' && candidate === 'home' ? undefined : candidate;
   const [visited, setVisited] = useState<Record<string, Location>>({});
   const positions = useRef(new Map<string, number>());
   const currentAddress = useRef(address(location));
   const returning = useRef(false);
-  const activePageKey = section ? pageKey(location.pathname) : undefined;
+  const activePageKey = section ? pageKey(location.pathname, section) : undefined;
   const pages = activePageKey ? { ...visited, [activePageKey]: location } : visited;
 
   useEffect(() => {
-    if (activePageKey) setVisited((previous) => ({ ...previous, [activePageKey]: location }));
-  }, [activePageKey, location]);
+    if (!isDesignerPath(location.pathname)) origin.current = sectionOf(location.pathname);
+    else origin.current ??= candidate;
+    if (activePageKey && !isCompletionPath(location.pathname))
+      setVisited((previous) => ({ ...previous, [activePageKey]: location }));
+  }, [activePageKey, location, candidate]);
 
   useEffect(() => {
     const previousRestoration = window.history.scrollRestoration;
@@ -77,21 +94,45 @@ export function useMainNavigation(ready: boolean) {
         : 0;
     returning.current = false;
     // 페이지를 연결해 높이가 확정된 뒤 스크롤 복원
+    let observer: MutationObserver | undefined;
+    let stop: ReturnType<typeof setTimeout> | undefined;
     const frame = requestAnimationFrame(() => {
       window.scrollTo(0, y);
-      document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
+      const heading = document.querySelector<HTMLElement>('main h1');
+      if (heading) {
+        heading.focus({ preventScroll: true });
+        return;
+      }
+      // 지연 로딩 화면은 제목이 늦게 그려지므로 나타날 때 초점을 옮김
+      const main = document.querySelector('main');
+      if (!main) return;
+      observer = new MutationObserver(() => {
+        const late = main.querySelector<HTMLElement>('h1');
+        if (!late) return;
+        observer?.disconnect();
+        // 그사이 사용자가 본문 안으로 옮긴 초점은 건드리지 않음
+        const active = document.activeElement;
+        if (!active || active === document.body || active.closest('header, nav'))
+          late.focus({ preventScroll: true });
+      });
+      observer.observe(main, { childList: true, subtree: true });
+      stop = setTimeout(() => observer?.disconnect(), 3000);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
+      clearTimeout(stop);
+    };
   }, [location, navigationType, ready]);
 
   const root = (target: MainSection) =>
     mode === 'example' && target !== 'home'
       ? `/examples${sectionRoots[target]}`
       : sectionRoots[target];
-  const target = (item: MainSection) =>
+  const target = (item: MainSection, current = section) =>
     mode === 'example' && item === 'home'
       ? '/'
-      : section === item
+      : current === item
         ? root(item)
         : visited[item]
           ? address(visited[item])
@@ -100,11 +141,16 @@ export function useMainNavigation(ready: boolean) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
       return;
     event.preventDefault();
-    positions.current.set(address(location), window.scrollY);
-    const to = target(item);
-    returning.current = section !== item && Boolean(visited[item]);
-    if (section === item) positions.current.delete(to);
-    if (to === address(location)) {
+    // 바로 앞 메뉴 이동이 아직 그려지지 않았을 수 있어 실제 주소로 판단함
+    const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    const current = sectionFor(window.location.pathname);
+    positions.current.set(here, window.scrollY);
+    const to = target(item, current);
+    returning.current = current !== item && Boolean(visited[item]);
+    // 메뉴로 다시 연 디자이너 화면은 누른 메뉴에 속함
+    origin.current = item;
+    if (current === item) positions.current.delete(to);
+    if (to === here) {
       window.scrollTo(0, 0);
       document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
     } else {
@@ -124,12 +170,17 @@ export function useMainNavigation(ready: boolean) {
     },
     background: (page: Location, to: To, options?: NavigateOptions) => {
       const path = resolvePath(to, page.pathname);
-      const nextSection = sectionOf(path.pathname);
-      if (!nextSection) return;
+      if (!sectionOf(path.pathname)) return;
       setVisited((previous) => {
         const next = { ...previous };
-        const originKey = pageKey(page.pathname);
-        const nextKey = pageKey(path.pathname)!;
+        const originKey =
+          Object.keys(previous).find((key) => previous[key].key === page.key) ??
+          pageKey(page.pathname);
+        const originSection = originKey?.replace(/-task$/, '') as MainSection | undefined;
+        const nextKey = pageKey(
+          path.pathname,
+          isDesignerPath(path.pathname) && originSection ? originSection : sectionOf(path.pathname),
+        )!;
         if (originKey !== nextKey && originKey) delete next[originKey];
         next[nextKey] = {
           ...page,

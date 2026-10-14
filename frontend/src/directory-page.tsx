@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useAuth } from './auth/context';
-import { directoryRequest } from './auth/api';
+import { ApiFailure, directoryRequest } from './auth/api';
+import { useLoginPath } from './auth/pages';
 import { Alert, BackLink, PageHeading, focusFirstError } from './components';
 import { Field } from './fields';
 import { Link } from './workspace';
@@ -11,8 +12,20 @@ import { refreshDirectory, salonLabel } from './directory-cache';
 import type { PublicProfile, Salon } from './directory-cache';
 import { Completion } from './completion';
 
+// 서버 오류 코드를 이 화면에서 할 수 있는 일로 바꿈
+function directoryError(error: unknown, fallback: string, conflict: string) {
+  if (!(error instanceof ApiFailure)) return error instanceof Error ? error.message : fallback;
+  if (error.status === 401) return '로그인이 끝났어요. 다시 로그인한 뒤 저장해 주세요.';
+  if (error.status === 409) return conflict;
+  if (error.status === 400)
+    return '입력을 확인해 주세요. 전문 분야는 쉼표로 나눠 10개까지, 항목마다 40자까지 쓸 수 있어요.';
+  return error.message;
+}
+
 export function DirectoryEditor() {
-  const { state: auth } = useAuth();
+  const { state: auth, refresh } = useAuth();
+  const loginPath = useLoginPath();
+
   const { state } = usePrototype();
   const directory = useDirectory(state);
   const [profile, setProfile] = useState<PublicProfile | null>(null);
@@ -55,6 +68,10 @@ export function DirectoryEditor() {
     }
   };
   useEffect(() => {
+    // 같은 주소에서 완료 화면으로 바뀌므로 제목으로 초점을 옮겨 저장 결과를 알림
+    if (complete) document.querySelector<HTMLElement>('main h1')?.focus();
+  }, [complete]);
+  useEffect(() => {
     if (auth.status === 'authenticated') void load();
     return () => {
       generation.current++;
@@ -64,6 +81,15 @@ export function DirectoryEditor() {
     event.preventDefault();
     const element = event.currentTarget;
     if (busy) return;
+    const specialties = form.specialties
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (specialties.length > 10 || specialties.some((value) => value.length > 40)) {
+      setError('전문 분야는 쉼표로 나눠 10개까지, 항목마다 40자까지 쓸 수 있어요.');
+      focusFirstError(element);
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -73,17 +99,21 @@ export function DirectoryEditor() {
         {
           ...form,
           salonId: form.salonId || null,
-          specialties: form.specialties
-            .split(',')
-            .map((value) => value.trim())
-            .filter(Boolean),
+          specialties,
         },
       );
       setProfile(result);
       setComplete(true);
       void refreshDirectory();
     } catch (error) {
-      setError(error instanceof Error ? error.message : '프로필을 저장하지 못했어요.');
+      setError(
+        directoryError(
+          error,
+          '프로필을 저장하지 못했어요.',
+          '프로필이 이미 바뀌었어요. 화면을 새로 불러온 뒤 다시 저장해 주세요.',
+        ),
+      );
+      if (error instanceof ApiFailure && error.status === 401) void refresh();
       focusFirstError(element);
     } finally {
       setBusy(false);
@@ -99,21 +129,32 @@ export function DirectoryEditor() {
       const result = await directoryRequest<Salon>('/api/salons', 'POST', salon);
       if (result) {
         setForm((previous) => ({ ...previous, salonId: result.id }));
-        setSalonResult(`${salonLabel(result)} 등록 완료`);
+        setSalon({ name: '', region: '', branch: '' });
+        setSalonResult(
+          `‘${salonLabel(result)}’ 매장을 등록하고 소속 매장으로 골라 뒀어요. 위의 ‘프로필 저장’을 눌러야 프로필에 반영돼요.`,
+        );
         await refreshDirectory();
       }
     } catch (error) {
-      setSalonError(error instanceof Error ? error.message : '매장을 등록하지 못했어요.');
+      setSalonError(
+        directoryError(
+          error,
+          '매장을 등록하지 못했어요.',
+          '이름·지역·지점이 같은 매장이 이미 있어요. 위의 소속 매장 목록에서 골라 주세요.',
+        ),
+      );
+      if (error instanceof ApiFailure && error.status === 401) void refresh();
     } finally {
       setBusy(false);
     }
   };
+  if (auth.status === 'checking') return <p role="status">로그인 상태를 확인하고 있어요.</p>;
   if (auth.status !== 'authenticated')
     return (
       <section className="empty-state">
-        <h1>내 디자이너 프로필</h1>
+        <PageHeading title="내 디자이너 프로필" back={<BackLink to="/account">내 계정</BackLink>} />
         <p>로그인하고 디자이너로 등록해 주세요.</p>
-        <Link className="button primary" to="/login">
+        <Link className="button primary" to={loginPath}>
           로그인
         </Link>
       </section>

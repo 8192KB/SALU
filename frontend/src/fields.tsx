@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { FieldFeedback } from './components';
 import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
@@ -58,6 +58,9 @@ export function AreaChoices({
   const areas = (Object.keys(AREAS) as Area[]).filter((area) => area !== 'WHOLE');
   const selected = values.includes('WHOLE') ? areas : values;
   const allSelected = areas.every((area) => selected.includes(area));
+  const errorId = useId();
+  // 오류를 체크박스에 연결해 화면 낭독기가 듣고, 첫 오류 찾기가 이 칸으로 초점을 옮김
+  const invalid = error ? { 'aria-invalid': true as const, 'aria-describedby': errorId } : {};
   return (
     <fieldset>
       <legend>부위</legend>
@@ -66,6 +69,7 @@ export function AreaChoices({
           <input
             type="checkbox"
             aria-label="전체"
+            {...invalid}
             checked={allSelected}
             ref={(input) => {
               if (input) input.indeterminate = selected.length > 0 && !allSelected;
@@ -79,6 +83,7 @@ export function AreaChoices({
             <input
               type="checkbox"
               aria-label={AREAS[key]}
+              {...invalid}
               checked={selected.includes(key)}
               onChange={() => {
                 const next = selected.includes(key)
@@ -94,7 +99,7 @@ export function AreaChoices({
           </label>
         ))}
       </div>
-      {error && <FieldFeedback message={error} />}
+      {error && <FieldFeedback id={errorId} message={error} />}
     </fieldset>
   );
 }
@@ -220,4 +225,16 @@ export function PhotoPicker({
       />
     </div>
   );
+}
+
+// 한 줄 칸에서 Enter(폰 키보드의 ‘이동’)를 눌러도 좋았던 점·사진을 넣기 전에 기록이 저장되지 않게 함
+export function preventEnterSubmit(event: KeyboardEvent<HTMLFormElement>) {
+  const target = event.target;
+  if (
+    event.key === 'Enter' &&
+    !event.nativeEvent.isComposing &&
+    target instanceof HTMLInputElement &&
+    !['checkbox', 'radio', 'submit', 'button', 'file'].includes(target.type)
+  )
+    event.preventDefault();
 }

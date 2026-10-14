@@ -1,7 +1,7 @@
 import { newId } from './ids';
 import { z } from 'zod';
 import { AREAS, INTENTS } from './types';
-import { newCutDraft } from './memory-repository';
+import { isBlankCutDraft, newCutDraft } from './memory-repository';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const text = z.string().max(10000);
@@ -156,7 +156,7 @@ export function serialize(bundle: Bundle): Bundle {
   return mapPhotos(bundle, () => '');
 }
 export function validateBundle(value: unknown): Bundle {
-  const bundle = bundleSchema.parse(value);
+  const bundle = bundleSchema.parse(repairBundle(value));
   const { state, drafts } = bundle;
   const unique = (values: { id: string }[]) => {
     if (new Set(values.map((v) => v.id)).size !== values.length) throw new Error('duplicate');
@@ -220,17 +220,59 @@ export function copyBundle(bundle: Bundle): { bundle: Bundle; ids: Map<string, s
   };
   const idKeys = new Set(['id', 'cutId', 'progressId', 'referencePreviewId', 'currentRequestId']);
   const maps = new Set(['progressDrafts', 'cutEdits', 'progressEdits', 'requests', 'steps']);
-  const walk = (value: unknown, key = ''): unknown => {
+  // ID를 키로 쓰는 객체는 drafts 바로 아래뿐. 준비 초안의 requests 배열 항목 키는 그대로 둠
+  const walk = (value: unknown, key = '', idKeyed = false): unknown => {
     if (typeof value === 'string')
       return idKeys.has(key) || key === 'progressIds' || key === 'photoIds' ? remap(value) : value;
     if (Array.isArray(value)) return value.map((v) => walk(v, key));
     if (!value || typeof value !== 'object') return value;
     if (key === 'designer' || key === 'designerSnapshot') return structuredClone(value);
     return Object.fromEntries(
-      Object.entries(value).map(([k, v]) => [maps.has(key) ? remap(k) : k, walk(v, k)]),
+      Object.entries(value).map(([k, v]) => [
+        idKeyed ? remap(k) : k,
+        walk(v, k, key === 'drafts' && maps.has(k)),
+      ]),
     );
   };
-  return { bundle: walk(serialize(bundle)) as Bundle, ids };
+  return { bundle: bundleSchema.parse(walk(serialize(repairBundle(bundle) as Bundle))), ids };
+}
+// 이전 copyBundle이 준비 요청 항목의 속성 이름을 새 ID로 바꿔 둔 자료를 되돌림
+export function repairBundle(value: unknown): unknown {
+  const areas = Object.keys(AREAS);
+  const intents = Object.keys(INTENTS);
+  const fields = ['id', 'area', 'intent', 'content'];
+  const repairItem = (item: unknown): unknown => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    const keys = Object.keys(item);
+    if (keys.length !== 4 || keys.some((k) => fields.includes(k))) return item;
+    const values = Object.values(item);
+    if (values.some((v) => typeof v !== 'string')) return item;
+    const [first, area, intent, content] = values as string[];
+    if (areas.includes(area) && intents.includes(intent))
+      return { id: first, area, intent, content };
+    const rest = (values as string[]).filter((v) => !areas.includes(v) && !intents.includes(v));
+    const itemId = rest.find((v) => /^[A-Za-z0-9_-]{1,100}$/.test(v));
+    return {
+      id: itemId ?? newId(),
+      area: values.find((v) => areas.includes(v as string)) ?? 'SIDE',
+      intent: values.find((v) => intents.includes(v as string)) ?? 'ASK',
+      content: rest.find((v) => v !== itemId) ?? '',
+    };
+  };
+  let changed = false;
+  const walk = (node: unknown, key = ''): unknown => {
+    if (Array.isArray(node))
+      return node.map((v) => {
+        if (key !== 'requests') return walk(v);
+        const fixed = repairItem(v);
+        if (fixed !== v) changed = true;
+        return fixed;
+      });
+    if (!node || typeof node !== 'object') return node;
+    return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, walk(v, k)]));
+  };
+  const result = walk(value);
+  return changed ? result : value;
 }
 export function appendBundle(target: Bundle, added: Bundle): Bundle {
   return {
@@ -253,9 +295,7 @@ export function appendBundle(target: Bundle, added: Bundle): Bundle {
       recoveredCuts: [
         ...target.drafts.recoveredCuts,
         ...added.drafts.recoveredCuts,
-        ...(JSON.stringify(added.drafts.cutDraft) !== JSON.stringify(newCutDraft())
-          ? [added.drafts.cutDraft]
-          : []),
+        ...(isBlankCutDraft(added.drafts.cutDraft) ? [] : [added.drafts.cutDraft]),
       ],
     },
   };

@@ -59,18 +59,27 @@ const ConsultationDetail = lazy(() =>
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { reset, ready } = usePrototype();
+  const { reset, ready, storage, loadFailed } = usePrototype();
   const { repository: consultations } = useConsultations();
   const mode = useWorkspace();
   useEffect(() => {
     // 미리 받기 실패는 실제 화면 진입 때 LoadBoundary가 안내함
     if (mode === 'example') import('./consultation-flow').catch(() => {});
   }, [mode]);
+  useEffect(() => {
+    // 로그인 전에 보던 게스트 기록 주소(뒤로 가기 포함)를 계정으로 옮긴 새 ID 주소로 바꿈
+    const ids = storage?.migratedIds;
+    if (!ready || !ids?.size) return;
+    const current = `${location.pathname}${location.search}`;
+    const next = current.replace(/[A-Za-z0-9_-]{8,}/g, (id) => ids.get(id) ?? id);
+    if (next !== current) navigate(next, { replace: true });
+  }, [location, ready, storage, navigate]);
   const navigation = useMainNavigation(ready);
   const [pageSlot, setPageSlot] = useState<HTMLDivElement | null>(null);
   const path =
     mode === 'example' ? location.pathname.replace(/^\/examples/, '') || '/' : location.pathname;
   const [resetOpen, setResetOpen] = useState(false);
+  const [exitTo, setExitTo] = useState<string | null>(null);
   const focused = isTaskPath(path);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   useEffect(() => {
@@ -97,6 +106,17 @@ function Layout() {
   }, []);
   return (
     <div
+      onClickCapture={(event) => {
+        // 예시 자료는 메모리에만 있어 체험 밖 주소로 가면 사라지므로 먼저 확인함
+        if (mode !== 'example' || event.button !== 0 || event.metaKey || event.ctrlKey) return;
+        const anchor = (event.target as HTMLElement).closest('a[href]');
+        if (!(anchor instanceof HTMLAnchorElement) || anchor.origin !== window.location.origin)
+          return;
+        if (/^\/examples(\/|$)/.test(anchor.pathname)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setExitTo(`${anchor.pathname}${anchor.search}${anchor.hash}`);
+      }}
       className={`app-shell${path === '/records' ? ' journal-screen' : ''}${path === '/' && mode === 'empty' ? ' home-screen' : ''}${focused ? ' task-focused' : ''}${keyboardOpen ? ' keyboard-open' : ''}`}
     >
       {mode === 'example' && (
@@ -155,6 +175,16 @@ function Layout() {
             <ThemeSettings />
             {focused ? (
               <WorkspaceLink
+                onClick={(event) => {
+                  // 화면 위 뒤로 링크가 있으면 같은 곳으로 나감
+                  const back = document.querySelector<HTMLAnchorElement>(
+                    'main .heading-back, main .back-link',
+                  );
+                  // 이전 단계(작업 화면)를 가리키면 작업을 벗어나지 않으므로 기본 목적지로 나감
+                  if (!back || event.defaultPrevented || isTaskPath(back.pathname)) return;
+                  event.preventDefault();
+                  navigate(`${back.pathname}${back.search}`);
+                }}
                 className="task-exit"
                 to={
                   path.startsWith('/records/')
@@ -172,12 +202,35 @@ function Layout() {
           </div>
         </div>
       </header>
-      {mode !== 'example' && path !== '/' && path !== '/login' && path !== '/signup' ? (
+      {mode !== 'example' &&
+      !loadFailed &&
+      path !== '/' &&
+      path !== '/login' &&
+      path !== '/signup' ? (
         <StorageNotice compact={focused} />
       ) : null}
       {path === '/login' || path === '/signup' || path === '/account' ? null : (
         <SessionNotice compact />
       )}
+      <Dialog open={exitTo !== null} title="예시 체험을 끝낼까요?" onClose={() => setExitTo(null)}>
+        <p>체험 중 작성한 기록과 상담 요청은 저장되지 않고 사라져요. 내 기록은 그대로 있어요.</p>
+        <div className="dialog-actions">
+          <button type="button" className="button" onClick={() => setExitTo(null)}>
+            계속 체험
+          </button>
+          <button
+            type="button"
+            className="button coral"
+            onClick={() => {
+              const to = exitTo!;
+              setExitTo(null);
+              navigate(to);
+            }}
+          >
+            체험 끝내기
+          </button>
+        </div>
+      </Dialog>
       <Dialog
         open={resetOpen}
         title="작성한 내용을 초기화할까요?"
@@ -204,7 +257,23 @@ function Layout() {
         </div>
       </Dialog>
       <main id="main-content">
-        {!ready && path !== '/' ? (
+        {loadFailed && path !== '/' ? (
+          <section className="empty-state">
+            <h1 tabIndex={-1}>기록을 불러오지 못했어요</h1>
+            <p role="alert">
+              이 브라우저에서 기기 저장소를 쓸 수 없어요. 사이트 데이터 저장을 허용했는지, 저장
+              공간이 남아 있는지 확인한 뒤 다시 시도해 주세요.
+            </p>
+            <div className="dialog-actions">
+              <button type="button" className="button primary" onClick={() => void storage?.load()}>
+                다시 시도
+              </button>
+              <Link className="button" to="/examples/records">
+                예시로 둘러보기
+              </Link>
+            </div>
+          </section>
+        ) : !ready && path !== '/' ? (
           <section className="empty-state">
             <h1 tabIndex={-1}>기록 불러오기</h1>
             <p role="status">기기에 보관한 기록을 불러오고 있어요.</p>
@@ -297,12 +366,12 @@ function PageRoutes({
 }
 
 function AccountScopedPrototype() {
-  const { activeMember } = useAuth();
+  const { activeMember, state: auth } = useAuth();
   const { pathname } = useLocation();
   const example = pathname === '/examples' || pathname.startsWith('/examples/');
   const scope = activeMember ? `member-${activeMember.id}` : 'guest';
   return (
-    <PrototypeProvider scope={scope}>
+    <PrototypeProvider scope={scope} adoptGuest={auth.status === 'authenticated'}>
       <CloudSync />
       <FeedbackProvider key={`${scope}:${example ? 'example' : 'personal'}`}>
         <Routes>

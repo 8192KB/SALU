@@ -119,5 +119,6 @@ cd backend
 - [개발 계약](docs/development-contract.md): 구조·화면 흐름·권한·트랜잭션·검증
 - [인증 계약](docs/login.md): 회원가입·세션·CSRF·소셜 로그인
 - [저장 계약](docs/personal-storage.md): 기기 보관·ZIP·계정 백업·암호화 키
+- [상담 API 계약](docs/consultation-api.md): 상담 요청·답변 서버 API. 구현 전 합의안
 
 진행 메모·과거 검토·발표 자료·화면 캡처는 로컬에 보관합니다. Git에는 실행 코드·공통 개발 설정·필수 계약과 지침만 올립니다. NAS 전용 설정과 테스트·검증 도구는 로컬에 보관합니다.

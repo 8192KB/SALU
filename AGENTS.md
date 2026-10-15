@@ -18,5 +18,6 @@
 - 변경한 공통 동작은 빌드뿐 아니라 실제 서버/API·DB·브라우저에서 확인. 테스트 결과로 구현되지 않은 기능을 완료 처리하지 않음
 
 - 로그인 변경 전 docs/login.md 확인. 로컬 docs/salon-security-audit.md가 있으면 참고. 요청 role/memberId 사용 금지, ACTIVE 상태·전체 CSRF·세션 교체·JSON 실패 계약 유지
+- 상담 API 구현·호출 전 docs/consultation-api.md 확인. 경로·필드·오류를 바꿀 때는 코드보다 문서를 먼저 갱신
 
 - Git의 Markdown은 README·작업 지침·스킬·개발/인증/저장 계약만 유지. 진행상황·할 일·기능 검토·구버전·운영/배포 안내·발표 메모는 로컬 보관, Git 추적 제외. 새 공유 문서는 .gitignore 허용 목록을 명시적으로 갱신

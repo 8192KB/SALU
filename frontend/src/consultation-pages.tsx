@@ -283,7 +283,7 @@ export function DesignerList() {
         title="디자이너 찾기"
         back={
           record ? (
-            <BackLink to={`/records/${record}`}>참고할 지난 커트</BackLink>
+            <BackLink to={`/records/${record}`}>커트 기록으로</BackLink>
           ) : previous ? (
             <BackLink to={previous.to}>{previous.label}</BackLink>
           ) : undefined
@@ -395,6 +395,10 @@ function useSavedDraftRedirect(draft: RequestDraft | null | undefined, active: b
   return Boolean(saved);
 }
 
+// 커트 준비 목록에서 지난 커트를 골라 시작한 초안. 자료 선택의 뒤로 링크가 고르던 화면으로 돌아감.
+// 기록 ID라 브라우저 저장소에 남기지 않고 이 탭 메모리에만 둠
+const pickedDrafts = new Set<string>();
+
 export function MaterialsPage() {
   const active = useActivePage();
   const {
@@ -420,7 +424,12 @@ export function MaterialsPage() {
   const record = state.cuts.find((value) => value.id === cutId);
   const draft = draftId
     ? explicitDraft
-    : requestDraft?.designerId === designerId && requestDraft?.cutId === cutId
+    : requestDraft?.designerId === designerId &&
+        requestDraft?.cutId === cutId &&
+        // 이미 준비 내용으로 저장한 초안은 새 준비로 이어 쓰지 않음(resumeRequestDraft와 같은 기준)
+        !state.previews.some(
+          (preview) => JSON.stringify(preview.sourceDraft) === JSON.stringify(requestDraft),
+        )
       ? requestDraft
       : undefined;
   const source = draft ? materialSource(state, draft) : null;
@@ -443,7 +452,9 @@ export function MaterialsPage() {
     setRequestDraft,
   ]);
   useEffect(() => {
-    if (active && !draftId && draft) navigate(materialUrl(draft), { replace: true });
+    if (!active || draftId || !draft) return;
+    if (search.has('picked')) pickedDrafts.add(draft.id);
+    navigate(materialUrl(draft), { replace: true });
   }, [active, draftId, draft, navigate]);
   const alreadySaved = useSavedDraftRedirect(draftId ? draft : undefined, active);
   useEffect(() => {
@@ -469,7 +480,7 @@ export function MaterialsPage() {
               <Link
                 className="panel reference-record-choice"
                 key={cut.id}
-                to={`/requests/materials?${new URLSearchParams({ record: cut.id, ...(designerId ? { designer: designerId } : {}) })}`}
+                to={`/requests/materials?${new URLSearchParams({ record: cut.id, picked: '1', ...(designerId ? { designer: designerId } : {}) })}`}
               >
                 <div className="reference-record-image">
                   <PhotoThumbnail
@@ -525,9 +536,18 @@ export function MaterialsPage() {
     <>
       <PageHeading
         back={
-          <BackLink to={designer ? profileUrl(designer.id, cut.id) : `/records/${cut.id}`}>
-            {designer ? '디자이너 프로필' : '커트 기록으로'}
-          </BackLink>
+          pickedDrafts.has(draft.id) ? (
+            <BackLink
+              to={designer ? `/requests/materials?designer=${designer.id}` : '/requests/materials'}
+              trail={false}
+            >
+              지난 커트 다시 고르기
+            </BackLink>
+          ) : (
+            <BackLink to={designer ? profileUrl(designer.id, cut.id) : `/records/${cut.id}`}>
+              {designer ? '디자이너 프로필' : '커트 기록으로'}
+            </BackLink>
+          )
         }
         title={designer ? '상담에 참고할 자료 선택' : '참고 자료 선택'}
         description="함께 담을 메모와 경과, 사진을 골라 주세요."

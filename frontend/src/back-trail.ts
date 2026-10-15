@@ -27,6 +27,9 @@ const ROOT_LABELS: Record<string, string> = {
   '/consultations': '상담 내역',
 };
 const titles = new Map<string, string>();
+// 작성 단계에 들어오기 직전 화면. 여러 단계 뒤에서 나가기를 눌러도 작업을 시작한 곳으로 돌아감
+let taskStart: string | null = null;
+export const taskOrigin = () => taskStart;
 const listeners = new Set<() => void>();
 function write(next: Record<string, Trail>) {
   trails = Object.fromEntries(Object.entries(next).slice(-LIMIT));
@@ -67,6 +70,9 @@ export function useBackTrailTracker() {
     const here = address(location);
     const before = previous.current;
     previous.current = here;
+    if (!isTaskPath(pathOf(here))) taskStart = null;
+    else if (before && !isTaskPath(pathOf(before)))
+      taskStart = skipped(pathOf(before)) ? null : before;
     if (!before || before === here || type === 'POP') return;
     if ((location.state as { trail?: string } | null)?.trail === KEEP_TRAIL.trail) return;
     if (type === 'REPLACE') {

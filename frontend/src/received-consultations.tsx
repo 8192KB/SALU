@@ -28,7 +28,7 @@ const statusLabel = (value: Consultation) =>
 function ExampleNotice() {
   return (
     <div className="consultation-screen">
-      <PageHeading title="받은 상담" back={<BackLink to="/consultations">상담 목록</BackLink>} />
+      <PageHeading title="받은 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
       <section className="consultation-soft-panel">
         <h2>예시 체험에서는 받은 상담을 볼 수 없어요</h2>
         <p>디자이너 프로필을 등록한 계정으로 로그인하면 받은 상담을 확인할 수 있어요.</p>
@@ -69,7 +69,7 @@ export function ReceivedList() {
       <PageHeading
         title="받은 상담"
         description="고객이 보낸 요청과 첨부한 커트 기록을 보고 답변해 주세요."
-        back={<BackLink to="/consultations">상담 목록</BackLink>}
+        back={<BackLink to="/consultations">상담 내역</BackLink>}
       />
       {access ??
         (error ? (

@@ -614,7 +614,7 @@ export function ConsultationDetail() {
   if (access)
     return (
       <div className="consultation-screen">
-        <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 목록</BackLink>} />
+        <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 내역</BackLink>} />
         {access}
       </div>
     );
@@ -626,7 +626,7 @@ export function ConsultationDetail() {
     );
   return (
     <div className="consultation-screen">
-      <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 목록</BackLink>} />
+      <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 내역</BackLink>} />
       <div className="consultation-history-heading">
         <Avatar name={thread.designer.name} src={thread.designer.avatarUrl} />
         <h2>{thread.designer.name} 디자이너</h2>

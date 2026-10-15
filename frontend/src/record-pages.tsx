@@ -861,7 +861,7 @@ function ProgressFormBody({
   return (
     <div className="form-layout">
       <PageHeading
-        back={<BackLink to={`/records/${cut.id}`}>커트 기록</BackLink>}
+        back={<BackLink to={`/records/${cut.id}`}>커트 기록으로</BackLink>}
         title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />

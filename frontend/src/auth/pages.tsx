@@ -331,6 +331,11 @@ export function SignupPage() {
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  // 제출한 뒤부터 불일치를 알림. 칸을 떠날 때 알리면 문구가 버튼을 밀어 첫 클릭이 빗나감
+  const [confirmChecked, setConfirmChecked] = useState(false);
+  const confirmInput = useRef<HTMLInputElement>(null);
+  const mismatch = confirmChecked && confirm !== password ? '비밀번호가 서로 달라요.' : '';
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [error, setError] = useState('');
@@ -376,6 +381,11 @@ export function SignupPage() {
               setError('비밀번호가 너무 길어요. 글자 수를 줄여 주세요.');
               return;
             }
+            if (confirm !== password) {
+              setConfirmChecked(true);
+              requestAnimationFrame(() => confirmInput.current?.focus());
+              return;
+            }
             setBusy(true);
             try {
               await flushPersonalStores();
@@ -391,6 +401,8 @@ export function SignupPage() {
               );
             } finally {
               setPassword('');
+              setConfirm('');
+              setConfirmChecked(false);
               setBusy(false);
             }
           }}
@@ -431,6 +443,19 @@ export function SignupPage() {
               value={password}
               disabled={busy || pending}
               onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <Field label="비밀번호 확인" error={mismatch}>
+            <input
+              name="passwordConfirm"
+              type="password"
+              autoComplete="new-password"
+              maxLength={72}
+              required
+              ref={confirmInput}
+              value={confirm}
+              disabled={busy || pending}
+              onChange={(event) => setConfirm(event.target.value)}
             />
           </Field>
           <button

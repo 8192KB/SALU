@@ -32,7 +32,7 @@ import { HomePage } from './home-page';
 import { Link as WorkspaceLink, useWorkspace, WorkspaceContext } from './workspace';
 import { RetainedPage, useMainNavigation, isTaskPath } from './main-navigation';
 import { ThemeSettings } from './theme';
-import { KEEP_TRAIL, useBackTrailTracker } from './back-trail';
+import { KEEP_TRAIL, taskOrigin, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
 import {
   DesignerDetail,
@@ -190,10 +190,14 @@ function Layout() {
                   const back = document.querySelector<HTMLAnchorElement>(
                     'main .heading-back, main .back-link',
                   );
-                  // 이전 단계(작업 화면)를 가리키면 작업을 벗어나지 않으므로 기본 목적지로 나감
-                  if (!back || event.defaultPrevented || isTaskPath(back.pathname)) return;
+                  // 이전 단계(작업 화면)를 가리키면 작업을 시작한 화면, 그것도 모르면 기본 목적지로 나감
+                  if (!back || event.defaultPrevented) return;
+                  const to = isTaskPath(back.pathname)
+                    ? taskOrigin()
+                    : `${back.pathname}${back.search}`;
+                  if (!to) return;
                   event.preventDefault();
-                  navigate(`${back.pathname}${back.search}`, { state: KEEP_TRAIL });
+                  navigate(to, { state: KEEP_TRAIL });
                 }}
                 className="task-exit"
                 to={

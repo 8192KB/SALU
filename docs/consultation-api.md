@@ -255,7 +255,7 @@ const response = await fetch('/api/consultations', {
 | 주소 | 화면 |
 |---|---|
 | `/designers/{id}` | 디자이너 프로필. 이 디자이너가 담당한 커트 기록이 있으면 `상담 요청` |
-| `/consultations/new` | 첨부할 커트 기록 선택과 이번 요청 입력. 로그인하지 않았으면 로그인 안내 |
+| `/consultations/new` | 첨부할 커트 기록 선택과 이번 요청 입력. 준비 내용(`?preview=`)에서 오면 그 내용을 첨부하고 담당이 아닌 디자이너에게도 보냄. 로그인하지 않았으면 로그인 안내 |
 | `/consultations`, `/consultations/{id}` | 보낸 상담 목록과 상세. 들어올 때·창으로 돌아올 때·`새 답변 확인`으로 다시 조회 |
 | `/consultations/received`, `/consultations/received/{id}` | 받은 상담 목록과 상세·답변 보내기. 내 계정 화면의 `받은 상담`에서 들어감 |
 

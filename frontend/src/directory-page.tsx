@@ -163,7 +163,11 @@ export function DirectoryEditor() {
     return (
       <Completion
         title="프로필을 저장했어요"
-        description="프로필을 서버에 저장했어요."
+        description={
+          profile.visibility === 'PUBLIC'
+            ? '고객이 디자이너 찾기에서 볼 수 있어요.'
+            : '비공개라 디자이너 찾기에 보이지 않아요.'
+        }
         primary={profile.visibility === 'PUBLIC' ? '프로필 보기' : '내 계정으로'}
         to={profile.visibility === 'PUBLIC' ? `/designers/${profile.id}` : '/account'}
         secondary="디자이너 목록으로"
@@ -172,10 +176,9 @@ export function DirectoryEditor() {
         <div className="completed-summary">
           <div>
             <strong>{profile.name} 디자이너</strong>
+            {/* 공개 여부는 위 설명에 있으므로 카드는 저장한 소속을 보여 줌 */}
             <p>
-              {profile.visibility === 'PUBLIC'
-                ? 'SALU 공개 목록에 표시돼요.'
-                : '나만 볼 수 있는 비공개 프로필이에요.'}
+              {[profile.salonName, profile.branch].filter(Boolean).join(' ') || '소속 매장 없음'}
             </p>
           </div>
         </div>
@@ -209,7 +212,7 @@ export function DirectoryEditor() {
           <form className="panel directory-form" onSubmit={save}>
             <h2>디자이너 소개</h2>
             <p className="form-note">
-              직접 등록한 프로필이에요. SALU에서 자격을 확인한 표시는 제공하지 않아요.
+              SALU는 디자이너 자격을 따로 확인하지 않아요. 소개는 직접 적은 그대로 보여요.
             </p>
             <fieldset disabled={busy}>
               <Field label="활동 이름">

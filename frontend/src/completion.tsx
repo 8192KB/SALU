@@ -26,16 +26,17 @@ export function Completion({
 }) {
   const location = useLocation();
   const mode = useWorkspace();
+  // 예시 체험은 제목만으로 결과가 분명해 '저장했어요'를 덧붙이지 않음
+  const note =
+    description ??
+    (mode === 'example'
+      ? undefined
+      : '기기에 저장했어요. 계정 백업 상태는 내 기록에서 확인할 수 있어요.');
   return (
     <section className="preparation-complete" aria-label="저장 결과">
       <SuccessMark className="completion-check" celebrate={Boolean(location.state?.celebrate)} />
       <h1 tabIndex={-1}>{title}</h1>
-      <p className="completion-description">
-        {description ??
-          (mode === 'example'
-            ? '저장했어요.'
-            : '기기에 저장했어요. 계정 백업 상태는 내 기록에서 확인할 수 있어요.')}
-      </p>
+      {note && <p className="completion-description">{note}</p>}
       {children}
       <Link className="button primary full" to={to} replace>
         {primary} <Icon name="arrow" />

@@ -105,6 +105,54 @@ export function fixtures(): PrototypeState {
           },
         ],
       },
+      // 사진 없는 예시 디자이너는 이름 첫 글자로 표시함
+      {
+        id: 'designer-seoyun',
+        name: '서윤',
+        introduction:
+          '손상된 모발도 부담 없이 할 수 있는 펌과 관리법을 알려드려요. 평소 손질 습관부터 같이 봐요.',
+        specialties: ['펌', '손상모 관리'],
+        affiliations: [{ salonName: '바람 헤어', period: '2023. 05 – 현재', current: true }],
+        reviewExamples: [
+          {
+            id: 'review-seoyun-1',
+            content: '펌이 자연스럽게 풀려서 손질이 훨씬 편해졌어요.',
+            date: '2026-08-28',
+          },
+        ],
+      },
+      {
+        id: 'designer-dohyun',
+        name: '도현',
+        introduction:
+          '남성 커트와 짧은 머리를 주로 해요. 옆머리 뜨는 고민, 다듬는 주기를 같이 정해 드려요.',
+        specialties: ['남성 커트', '투블럭'],
+        affiliations: [
+          { salonName: '온 헤어', period: '2024. 01 – 현재', current: true },
+          { salonName: '그린 헤어', period: '2020. 06 – 2023. 12', current: false },
+        ],
+        reviewExamples: [
+          {
+            id: 'review-dohyun-1',
+            content: '옆머리가 덜 떠서 아침 손질 시간이 줄었어요.',
+            date: '2026-09-10',
+          },
+          {
+            id: 'review-dohyun-2',
+            content: '다음에 언제 오면 좋을지까지 알려주셨어요.',
+            date: '2026-07-02',
+          },
+        ],
+      },
+      {
+        id: 'designer-harin',
+        name: '하린',
+        introduction:
+          '피부 톤에 맞는 염색과 가벼운 레이어드 커트를 제안해요. 사진으로 원하는 느낌을 보여 주셔도 좋아요.',
+        specialties: ['염색', '레이어드 커트'],
+        affiliations: [{ salonName: '마루 헤어', period: '2025. 02 – 현재', current: true }],
+        reviewExamples: [],
+      },
     ],
     previews: [],
   };

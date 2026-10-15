@@ -246,10 +246,15 @@ export function DesignerList() {
     return <Missing title="준비한 요청 자료를 찾을 수 없어요" />;
   if (record && !cut) return <Missing title="선택한 커트 기록을 찾을 수 없어요" />;
   const others = directory.designers.filter((value) => value !== recorded);
+  // 준비 내용에서 왔으면 디자이너를 고르는 즉시 그 준비 내용으로 상담을 작성함
   const card = (designer: DesignerProfile) => (
     <Link
       className="panel designer-card"
-      to={profileUrl(designer.id, record, previewId)}
+      to={
+        sourcePreview
+          ? `/consultations/new?${new URLSearchParams({ designer: designer.id, preview: sourcePreview.id })}`
+          : profileUrl(designer.id, record, previewId)
+      }
       key={designer.id}
     >
       <div className="designer-top">
@@ -273,7 +278,9 @@ export function DesignerList() {
             ? `상담 후기 ${designer.reviewExamples.length}개`
             : '직접 등록한 프로필'}
         </span>
-        <span>프로필 보기 ↗</span>
+        <span className="card-action">
+          {sourcePreview ? '상담 요청' : '프로필 보기'} <Icon name="arrow" size={16} />
+        </span>
       </div>
     </Link>
   );
@@ -282,7 +289,9 @@ export function DesignerList() {
       <PageHeading
         title="디자이너 찾기"
         back={
-          record ? (
+          sourcePreview ? (
+            <BackLink to={previewUrl(sourcePreview)}>준비 내용으로</BackLink>
+          ) : record ? (
             <BackLink to={`/records/${record}`}>커트 기록으로</BackLink>
           ) : previous ? (
             <BackLink to={previous.to}>{previous.label}</BackLink>
@@ -290,7 +299,7 @@ export function DesignerList() {
         }
         description={
           sourcePreview
-            ? '준비한 내용을 보여 주고 싶은 디자이너를 골라 보세요.'
+            ? '준비한 내용으로 상담할 디자이너를 골라 주세요.'
             : '소개와 상담 분야를 보고, 이야기를 나눌 디자이너를 골라 보세요.'
         }
       />
@@ -466,14 +475,18 @@ export function MaterialsPage() {
   if (!search.has('draft') && !search.has('record') && (!designerId || designer))
     return (
       <>
-        <Link className="back-link" to={designer ? profileUrl(designer.id, null) : '/requests'}>
-          {designer ? '← 디자이너 프로필' : '← 커트 준비'}
-        </Link>
-        <Steps current={0} />
         <PageHeading
+          back={
+            designer ? (
+              <BackLink to={profileUrl(designer.id, null)}>디자이너 프로필</BackLink>
+            ) : (
+              <BackLink to="/requests">커트 준비로</BackLink>
+            )
+          }
           title="참고할 지난 커트를 골라 주세요"
-          description="이 기록을 바탕으로 다음 커트에서 원하는 점을 정리해요."
+          description="고른 커트의 기록을 바탕으로 원하는 점을 정리해요."
         />
+        <Steps current={0} />
         {state.cuts.length ? (
           <div className="reference-record-list">
             {state.cuts.map((cut) => (
@@ -558,7 +571,7 @@ export function MaterialsPage() {
           {designer && <SelectedDesigner designer={designer} />}
           {source.frozen && (
             <div className="source-note">
-              <strong>미리보기를 만들 때의 자료</strong>
+              <strong>준비할 때 담아 둔 자료</strong>
               <p>기록을 수정해도 여기 담아 둔 내용은 그대로 남아요.</p>
               <button
                 type="button"
@@ -948,7 +961,7 @@ export function RequestPage() {
           )}
           <div className="form-actions request-editor-actions">
             <button type="submit" className="button primary">
-              내용 확인하기 <Icon name="arrow" />
+              작성 완료 <Icon name="arrow" />
             </button>
           </div>
           <Link className="text-link request-reselect" to={materialUrl(draft)}>
@@ -974,7 +987,10 @@ export function PreviewPage() {
     directory.designers.find(
       (value) => value.id === (preview.designer?.id ?? cut?.designerProfileId),
     ) ?? undefined;
-  const designerQuery = new URLSearchParams({ record: preview.cut.id, preview: preview.id });
+  // 준비 내용은 프로필을 거치지 않고 바로 상담 작성으로 가며, 고른 디자이너 누구에게나 보낼 수 있음
+  const consultUrl = (designerId: string) =>
+    `/consultations/new?${new URLSearchParams({ designer: designerId, preview: preview.id })}`;
+  const designerQuery = new URLSearchParams({ preview: preview.id });
   const sent = consultations.threads.filter((thread) =>
     consultations.sentFrom?.[preview.id]?.includes(thread.id),
   );
@@ -1070,16 +1086,13 @@ export function PreviewPage() {
             {sent.length > 0 && (
               <p className="working-notice" role="status">
                 {sent.map((thread) => thread.designer.name).join('·')} 디자이너에게 보냈어요.{' '}
-                <Link to={`/consultations/${sent.at(-1)!.id}`}>상담 내역 보기</Link>
+                <Link to={`/consultations/${sent.at(-1)!.id}`}>보낸 상담 보기</Link>
               </p>
             )}
-            {/* 준비를 마친 다음 할 일은 대개 디자이너에게 보여 주기라 가장 먼저 둠 */}
+            {/* 준비를 마친 다음 할 일은 대개 디자이너에게 상담 요청이라 가장 먼저 둠 */}
             {target ? (
-              <Link
-                className="button primary full"
-                to={`/designers/${encodeURIComponent(target.id)}?${designerQuery}`}
-              >
-                {target.name} 디자이너에게 보여 주기 <Icon name="arrow" />
+              <Link className="button primary full" to={consultUrl(target.id)}>
+                {target.name} 디자이너에게 상담 요청 <Icon name="arrow" />
               </Link>
             ) : (
               <Link className="button primary full" to={`/designers?${designerQuery}`}>
@@ -1246,7 +1259,6 @@ export function ReviewPage() {
           </BackLink>
         }
         title="저장할 내용을 확인해 주세요"
-        description="자료와 원하는 점이 맞으면 준비를 마쳐요."
       />
       <Steps current={2} />
       <Alert message={error || validationError} />

@@ -5,7 +5,9 @@ import { Field } from '../fields';
 import { Dialog } from '../dialog';
 import { useAuth } from './context';
 import { usePrototype } from '../prototype/context';
-import { ApiFailure, backupRequest, signup } from './api';
+import { ApiFailure, backupRequest, directoryRequest, signup } from './api';
+import type { SessionMember } from './api';
+import { listReceivedConsultations } from '../consultation-api';
 import { flushPersonalStores } from '../prototype/personal-store';
 
 // 로그인 뒤 돌아갈 앱 안 주소. 외부 주소와 계정 화면은 받지 않음
@@ -219,13 +221,9 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <PageHeading
-        back={
-          <BackLink to={next ?? '/records'}>
-            {next ? '이전 화면으로 돌아가기' : '내 기록으로 돌아가기'}
-          </BackLink>
-        }
+        back={<BackLink to={next ?? '/records'}>{next ? '이전 화면으로' : '내 기록으로'}</BackLink>}
         title="로그인"
-        description="SALU 계정으로 로그인해 주세요."
+        description="로그인하면 기록이 계정에도 자동으로 저장돼요."
       />
       {state.status === 'prototype' ? (
         <section className="panel">
@@ -610,10 +608,33 @@ function SocialButtons({
     </section>
   );
 }
+// 디자이너 프로필이 있는 회원에게만 받은 상담을 버튼으로 보여 주고 답변 전 건수를 함께 알림
+function useDesignerSummary(member: SessionMember | null) {
+  const [summary, setSummary] = useState<{ profile: boolean; waiting: number } | null>(null);
+  useEffect(() => {
+    if (!member) return;
+    let live = true;
+    directoryRequest<{ id: string }>('/api/my/designer-profile')
+      .then(async (own) => {
+        if (!own) return { profile: false, waiting: 0 };
+        const items = await listReceivedConsultations(member);
+        return { profile: true, waiting: items.filter((item) => item.canReply).length };
+      })
+      .then(
+        (value) => live && setSummary(value),
+        () => live && setSummary(null),
+      );
+    return () => {
+      live = false;
+    };
+  }, [member]);
+  return summary;
+}
 export function AccountPage() {
   const { state } = useAuth();
   const [params] = useSearchParams();
   const linkedNotice = params.has('linked');
+  const designer = useDesignerSummary(state.status === 'authenticated' ? state.member : null);
   if (state.status !== 'authenticated')
     return (
       <div className="login-page">
@@ -657,12 +678,24 @@ export function AccountPage() {
           기록 저장·백업
         </Link>
       </section>
-      <Link className="button full" to="/account/designer">
-        내 디자이너 프로필 등록·관리
-      </Link>
-      <Link className="text-link" to="/consultations/received">
-        받은 상담
-      </Link>
+      {designer?.profile ? (
+        <section className="panel account-designer" aria-labelledby="account-designer-heading">
+          <h2 id="account-designer-heading">디자이너</h2>
+          <Link className="button full" to="/consultations/received">
+            받은 상담
+            {designer.waiting > 0 && (
+              <span className="account-designer-count">답변 전 {designer.waiting}건</span>
+            )}
+          </Link>
+          <Link className="text-link" to="/account/designer">
+            내 디자이너 프로필 관리
+          </Link>
+        </section>
+      ) : (
+        <Link className="button full" to="/account/designer">
+          내 디자이너 프로필 등록·관리
+        </Link>
+      )}
       <SocialButtons link />
     </div>
   );

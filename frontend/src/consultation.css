@@ -160,6 +160,21 @@
 .consultation-choice .consultation-attachment {
   flex: 1;
 }
+/* 준비 내용으로 온 상담은 고르지 않고 첨부할 기록 한 개만 보여 줌 */
+.consultation-prepared {
+  display: grid;
+  gap: 10px;
+}
+.consultation-prepared h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.consultation-prepared .consultation-attachment {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--surface);
+}
 .consultation-choice-mark {
   width: 28px;
   height: 28px;

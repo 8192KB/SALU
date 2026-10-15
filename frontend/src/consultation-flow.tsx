@@ -23,35 +23,39 @@ import type {
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
 import { cutTitle } from './prototype/dates';
+import { previewUrl } from './prototype/request-flow';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
 import { listReceivedConsultations } from './consultation-api';
 
+// 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
   state: PrototypeState,
   cutId: string,
+  designerId: string,
   preview?: RequestPreview,
 ): ConsultationAttachment | undefined {
   const cut = state.cuts.find((value) => value.id === cutId);
-  if (!cut?.designerProfileId) return;
+  if (!cut) return;
   if (preview?.cut.id === cutId) {
     const photo = preview.photos[0];
     return {
       cutId,
-      designerId: cut.designerProfileId,
+      designerId,
       cutDate: preview.cut.cutDate,
       service: preview.cut.service,
       summary: preview.goodNote || preview.progress.at(-1)?.discomfort || '커트한 날의 기록',
       photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
     };
   }
+  if (cut.designerProfileId !== designerId) return;
   const latest = state.progress
     .filter((value) => value.cutId === cutId)
     .sort((a, b) => b.observedOn.localeCompare(a.observedOn))[0];
   const photo = state.photos.find((value) => value.cutId === cutId && !value.progressId);
   return {
     cutId,
-    designerId: cut.designerProfileId,
+    designerId,
     cutDate: cut.cutDate,
     service: cut.service,
     summary: cut.goodNote || latest?.discomfort || '커트한 날의 기록',
@@ -155,6 +159,15 @@ export function ConsultationDesignerProfile({
   const query = new URLSearchParams({ designer: designer.id });
   if (linked) query.set('record', linked);
   if (linked && preview) query.set('preview', preview.id);
+  const recordCut = record ? state.cuts.find((cut) => cut.id === record) : undefined;
+  // 이 디자이너가 해 주지 않은 커트도 준비 내용으로 정리하면 상담을 보낼 수 있음
+  const prepareUrl = `/consultations/materials?${new URLSearchParams({
+    designer: designer.id,
+    ...(recordCut ? { record: recordCut.id } : {}),
+  })}`;
+  // 담당자가 비어 있는 기록만 이 디자이너로 연결하게 함. 다른 담당자가 있는 기록은 바꾸지 않음
+  const canLink = Boolean(recordCut && !recordCut.designerProfileId);
+  const editRecordUrl = recordCut ? `/records/${encodeURIComponent(recordCut.id)}/edit` : '';
   const salon = designer.affiliations.find((value) => value.current)?.salonName;
   const fromRecord = useSearchParams()[0].get('from') === 'record';
   return (
@@ -207,26 +220,25 @@ export function ConsultationDesignerProfile({
             <Link className="button primary full" to={`/consultations/new?${query}`}>
               상담 요청
             </Link>
-            {record && !linked && (
-              // 보던 기록이 이 디자이너와 연결되지 않았으면 연결하러 갈 수 있게 함
-              <Link className="text-link" to={`/records/${encodeURIComponent(record)}/edit`}>
-                보던 기록에도 이 디자이너 연결
+            {recordCut && !linked && (
+              <Link className="text-link" to={canLink ? editRecordUrl : prepareUrl}>
+                {canLink ? '보던 기록에도 이 디자이너 연결' : '보던 기록으로 상담 준비'}
               </Link>
             )}
           </>
         ) : (
           <>
             <p className="muted">
-              {designer.name} 디자이너에게 받은 커트 기록이 있으면 상담을 요청할 수 있어요. 기록
-              수정의 ‘담당자 선택’에서 이 디자이너를 고르면 연결돼요.
+              보낼 기록과 원하는 점을 먼저 정리한 뒤 {designer.name} 디자이너에게 상담을 요청해요.
             </p>
-            {/* 담당자 이름만 적은 기록도 여기서 바로 연결하러 갈 수 있게 함 */}
-            <Link
-              className="button full"
-              to={record ? `/records/${encodeURIComponent(record)}/edit` : '/records'}
-            >
-              {record ? '이 기록에 담당 디자이너 연결' : '내 기록에서 연결할 기록 고르기'}
+            <Link className="button primary full" to={prepareUrl}>
+              {recordCut ? '이 기록으로 상담 준비' : '기록 골라 상담 준비'}
             </Link>
+            {canLink && (
+              <Link className="text-link" to={editRecordUrl}>
+                이 디자이너가 해 준 커트라면 담당자로 연결
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -271,11 +283,10 @@ export function ConsultationNew() {
     );
   if (
     !designer ||
-    (record &&
-      !state.cuts.some(
-        (value) => value.id === record && value.designerProfileId === designer.id,
-      )) ||
-    (previewId && (!preview || preview.cut.id !== record))
+    (previewId && (!preview || preview.cut.id !== record)) ||
+    (!preview &&
+      record &&
+      !state.cuts.some((value) => value.id === record && value.designerProfileId === designer.id))
   )
     return <Missing title="상담할 디자이너와 기록을 찾을 수 없어요" />;
   return (
@@ -317,7 +328,7 @@ function ConsultationForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (lock.current) return;
-    const attachment = attachmentFor(state, draft.cutId, preview);
+    const attachment = attachmentFor(state, draft.cutId, designer.id, preview);
     if (!attachment) {
       setError('상담에 사용할 커트 기록을 선택해 주세요.');
       return;
@@ -349,44 +360,67 @@ function ConsultationForm({
       setBusy(false);
     }
   }
+  const prepared = preview && attachmentFor(state, preview.cut.id, designer.id, preview);
   return (
     <div className="consultation-screen consultation-compose">
       <PageHeading
-        title="상담 자료 선택"
-        description="상담에 사용할 커트 기록을 선택해 주세요."
+        title={prepared ? '상담 요청' : '상담 자료 선택'}
+        description={
+          prepared
+            ? `준비한 내용을 ${designer.name} 디자이너에게 보내요.`
+            : '상담에 사용할 커트 기록을 선택해 주세요.'
+        }
         back={
-          <BackLink
-            to={`/designers/${designer.id}${record ? `?record=${encodeURIComponent(record)}` : ''}`}
-          >
-            디자이너 프로필
-          </BackLink>
+          preview ? (
+            <BackLink to={previewUrl(preview)}>준비 내용으로</BackLink>
+          ) : (
+            <BackLink
+              to={`/designers/${designer.id}${record ? `?record=${encodeURIComponent(record)}` : ''}`}
+            >
+              디자이너 프로필
+            </BackLink>
+          )
         }
       />
       <form onSubmit={submit} noValidate>
-        <fieldset className="consultation-choices" disabled={busy}>
-          <legend className="sr-only">첨부할 커트 기록</legend>
-          {state.cuts
-            .filter((cut) => cut.designerProfileId === designer.id)
-            .map((cut) => {
-              const attachment = attachmentFor(state, cut.id, preview)!;
-              const selected = cut.id === draft.cutId;
-              return (
-                <label className={`consultation-choice${selected ? ' selected' : ''}`} key={cut.id}>
-                  <input
-                    type="radio"
-                    name="consultation-cut"
-                    aria-label={`${cutTitle(cut.cutDate, cut.service)} 선택`}
-                    checked={selected}
-                    onChange={() => update({ cutId: cut.id })}
-                  />
-                  <AttachmentCard attachment={attachment} />
-                  <span className="consultation-choice-mark" aria-hidden="true">
-                    {selected && <Icon name="check" size={20} />}
-                  </span>
-                </label>
-              );
-            })}
-        </fieldset>
+        {prepared ? (
+          // 준비 내용으로 왔으면 그 내용만 첨부하고 커트를 다시 고르게 하지 않음
+          <section
+            className="consultation-prepared"
+            aria-labelledby="consultation-prepared-heading"
+          >
+            <h2 id="consultation-prepared-heading">함께 보낼 기록</h2>
+            <AttachmentCard attachment={prepared} />
+          </section>
+        ) : (
+          <fieldset className="consultation-choices" disabled={busy}>
+            <legend className="sr-only">첨부할 커트 기록</legend>
+            {state.cuts
+              .filter((cut) => cut.designerProfileId === designer.id)
+              .map((cut) => {
+                const attachment = attachmentFor(state, cut.id, designer.id)!;
+                const selected = cut.id === draft.cutId;
+                return (
+                  <label
+                    className={`consultation-choice${selected ? ' selected' : ''}`}
+                    key={cut.id}
+                  >
+                    <input
+                      type="radio"
+                      name="consultation-cut"
+                      aria-label={`${cutTitle(cut.cutDate, cut.service)} 선택`}
+                      checked={selected}
+                      onChange={() => update({ cutId: cut.id })}
+                    />
+                    <AttachmentCard attachment={attachment} />
+                    <span className="consultation-choice-mark" aria-hidden="true">
+                      {selected && <Icon name="check" size={20} />}
+                    </span>
+                  </label>
+                );
+              })}
+          </fieldset>
+        )}
         <label className="consultation-request-field">
           <span>이번 요청</span>
           <textarea
@@ -447,9 +481,9 @@ export function ConsultationComplete() {
       <Completion
         title={`${thread.designer.name} 디자이너에게 전달했어요`}
         description="답변이 오면 상담 내역에서 확인할 수 있어요."
-        primary="상담 내역 보기"
+        primary="보낸 상담 보기"
         to={`/consultations/${thread.id}`}
-        secondary="상담 목록"
+        secondary="상담 내역으로"
         secondaryTo="/consultations"
       >
         <div className="completed-summary">
@@ -614,7 +648,7 @@ export function ConsultationDetail() {
   if (access)
     return (
       <div className="consultation-screen">
-        <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 내역</BackLink>} />
+        <PageHeading title="보낸 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
         {access}
       </div>
     );
@@ -626,7 +660,7 @@ export function ConsultationDetail() {
     );
   return (
     <div className="consultation-screen">
-      <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 내역</BackLink>} />
+      <PageHeading title="보낸 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
       <div className="consultation-history-heading">
         <Avatar name={thread.designer.name} src={thread.designer.avatarUrl} />
         <h2>{thread.designer.name} 디자이너</h2>

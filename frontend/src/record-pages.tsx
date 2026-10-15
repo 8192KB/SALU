@@ -624,7 +624,6 @@ export function RecordDetail() {
   const [search] = useSearchParams();
   const { state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
-  const mode = useWorkspace();
   const navigate = useNavigate();
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
@@ -649,13 +648,12 @@ export function RecordDetail() {
     <>
       {preview && (
         <Link className="preview-return-link" to={previewUrl(preview)}>
-          상담 미리보기로 돌아가기 <Icon name="arrow" size={17} />
+          준비 내용으로 돌아가기 <Icon name="arrow" size={17} />
         </Link>
       )}
       <PageHeading
         back={<BackLink to="/records">기록 목록으로</BackLink>}
         title="커트 기록 · 경과"
-        description="당일의 느낌과 이후 변화를 함께 확인하세요."
       />
       <div className="two-column">
         <section>
@@ -741,7 +739,7 @@ export function RecordDetail() {
               </button>
             )}
             <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
-              디자이너 선택 <Icon name="arrow" size={16} />
+              디자이너 골라 상담 <Icon name="arrow" size={16} />
             </Link>
           </section>
         </section>
@@ -755,8 +753,9 @@ export function RecordDetail() {
                 {recordedDesigner.affiliations.find((value) => value.current)?.salonName ??
                   '등록 전'}
               </p>
+              {/* 주 버튼은 다음 커트 준비 하나. 준비 내용에서 상담해야 고른 자료가 함께 첨부됨 */}
               <Link
-                className={`button full${mode === 'example' ? ' primary' : ''}`}
+                className="button full"
                 to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
               >
                 프로필 · 상담 요청 <Icon name="arrow" size={17} />
@@ -772,8 +771,8 @@ export function RecordDetail() {
                     {value.designer ? `${value.designer.name} · 상담 준비` : '내 커트 준비'}
                   </span>
                   <strong>{value.requests[0]?.content}</strong>
-                  <span>
-                    미리보기 <span aria-hidden="true">↗</span>
+                  <span className="card-action">
+                    내용 보기 <Icon name="arrow" size={16} />
                   </span>
                 </Link>
               ))}

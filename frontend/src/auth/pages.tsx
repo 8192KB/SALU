@@ -635,6 +635,9 @@ export function AccountPage() {
       <Link className="button full" to="/account/designer">
         내 디자이너 프로필 등록·관리
       </Link>
+      <Link className="text-link" to="/consultations/received">
+        받은 상담
+      </Link>
       <SocialButtons link />
     </div>
   );

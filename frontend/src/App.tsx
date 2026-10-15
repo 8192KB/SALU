@@ -32,6 +32,7 @@ import { HomePage } from './home-page';
 import { Link as WorkspaceLink, useWorkspace, WorkspaceContext } from './workspace';
 import { RetainedPage, useMainNavigation, isTaskPath } from './main-navigation';
 import { ThemeSettings } from './theme';
+import { KEEP_TRAIL, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
 import {
   DesignerDetail,
@@ -55,6 +56,15 @@ const ConsultationList = lazy(() =>
 const ConsultationDetail = lazy(() =>
   import('./consultation-flow').then((module) => ({ default: module.ConsultationDetail })),
 );
+const ReceivedList = lazy(() =>
+  import('./received-consultations').then((module) => ({ default: module.ReceivedList })),
+);
+const ReceivedDetail = lazy(() =>
+  import('./received-consultations').then((module) => ({ default: module.ReceivedDetail })),
+);
+const ReceivedComplete = lazy(() =>
+  import('./received-consultations').then((module) => ({ default: module.ReceivedComplete })),
+);
 
 function Layout() {
   const location = useLocation();
@@ -64,7 +74,7 @@ function Layout() {
   const mode = useWorkspace();
   useEffect(() => {
     // 미리 받기 실패는 실제 화면 진입 때 LoadBoundary가 안내함
-    if (mode === 'example') import('./consultation-flow').catch(() => {});
+    import('./consultation-flow').catch(() => {});
   }, [mode]);
   useEffect(() => {
     // 로그인 전에 보던 게스트 기록 주소(뒤로 가기 포함)를 계정으로 옮긴 새 ID 주소로 바꿈
@@ -75,6 +85,7 @@ function Layout() {
     if (next !== current) navigate(next, { replace: true });
   }, [location, ready, storage, navigate]);
   const navigation = useMainNavigation(ready);
+  useBackTrailTracker();
   const [pageSlot, setPageSlot] = useState<HTMLDivElement | null>(null);
   const path =
     mode === 'example' ? location.pathname.replace(/^\/examples/, '') || '/' : location.pathname;
@@ -161,14 +172,13 @@ function Layout() {
                   커트 준비
                 </>,
               )}
-              {mode === 'example' &&
-                navigation.menu(
-                  'consultations',
-                  <>
-                    <Icon name="consult" />
-                    상담
-                  </>,
-                )}
+              {navigation.menu(
+                'consultations',
+                <>
+                  <Icon name="consult" />
+                  상담
+                </>,
+              )}
             </nav>
           )}
           <div className="header-actions">
@@ -183,7 +193,7 @@ function Layout() {
                   // 이전 단계(작업 화면)를 가리키면 작업을 벗어나지 않으므로 기본 목적지로 나감
                   if (!back || event.defaultPrevented || isTaskPath(back.pathname)) return;
                   event.preventDefault();
-                  navigate(`${back.pathname}${back.search}`);
+                  navigate(`${back.pathname}${back.search}`, { state: KEEP_TRAIL });
                 }}
                 className="task-exit"
                 to={
@@ -341,6 +351,9 @@ function PageRoutes({
           <Route path="designers" element={<DesignerList />} />
           <Route path="designers/:id" element={<DesignerDetail />} />
           <Route path="consultations" element={<ConsultationList />} />
+          <Route path="consultations/received" element={<ReceivedList />} />
+          <Route path="consultations/received/:id" element={<ReceivedDetail />} />
+          <Route path="consultations/received/:id/complete" element={<ReceivedComplete />} />
           <Route path="consultations/new" element={<ConsultationNew />} />
           <Route path="consultations/:id/complete" element={<ConsultationComplete />} />
           <Route path="consultations/:id" element={<ConsultationDetail />} />
@@ -387,7 +400,15 @@ function AccountScopedPrototype() {
               </PrototypeProvider>
             }
           />
-          <Route path="/*" element={<Layout />} />
+          <Route
+            path="/*"
+            element={
+              // 실제 상담은 로그인한 회원의 서버 자료
+              <ConsultationProvider member={auth.status === 'authenticated' ? auth.member : null}>
+                <Layout />
+              </ConsultationProvider>
+            }
+          />
         </Routes>
       </FeedbackProvider>
     </PrototypeProvider>

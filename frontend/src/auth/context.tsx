@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { openDB } from 'idb';
 import { fetchMember, login as loginRequest, logout as logoutRequest } from './api';
 import type { SessionMember } from './api';
 
@@ -26,32 +27,36 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const prototypeOnly = import.meta.env.VITE_SALU_AUTH_MODE === 'prototype';
 const errorText = (error: unknown) =>
   error instanceof Error ? error.message : '로그인 상태를 확인할 수 없어요.';
-// 서버 연결 없이 앱을 열어도 마지막 계정의 기기 기록을 열기 위한 표시. storageContext는 저장하지 않음
-const MEMBER_KEY = 'salu-last-member';
-function rememberMember(member: SessionMember | null) {
+// 서버 연결 없이 앱을 열어도 마지막 계정의 기기 기록을 열기 위한 표시.
+// 인증 계약상 회원 정보는 localStorage·sessionStorage에 두지 않으므로 기기 기록과 같은 IndexedDB에
+// 회원 번호와 표시 이름만 둠. 이메일·storageContext는 저장하지 않음
+const HINT_DB = 'salu-member-hint-v1';
+async function hintStore() {
+  return openDB(HINT_DB, 1, {
+    upgrade(db) {
+      db.createObjectStore('hint');
+    },
+  });
+}
+async function rememberMember(member: SessionMember | null) {
   try {
-    if (member)
-      localStorage.setItem(
-        MEMBER_KEY,
-        JSON.stringify({ id: member.id, email: member.email, displayName: member.displayName }),
-      );
-    else localStorage.removeItem(MEMBER_KEY);
+    const db = await hintStore();
+    if (member) await db.put('hint', { id: member.id, displayName: member.displayName }, 'last');
+    else await db.delete('hint', 'last');
+    db.close();
   } catch {
     /* 저장소를 쓸 수 없으면 연결 실패 때 게스트 공간을 엶 */
   }
 }
-function rememberedMember(): SessionMember | null {
+async function rememberedMember(): Promise<SessionMember | null> {
   try {
-    const value: unknown = JSON.parse(localStorage.getItem(MEMBER_KEY) ?? 'null');
+    const db = await hintStore();
+    const value: unknown = await db.get('hint', 'last');
+    db.close();
     if (!value || typeof value !== 'object') return null;
-    const { id, email, displayName } = value as Record<string, unknown>;
+    const { id, displayName } = value as Record<string, unknown>;
     if (typeof id !== 'string' || !/^\d+$/.test(id) || typeof displayName !== 'string') return null;
-    return {
-      id,
-      email: typeof email === 'string' ? email : null,
-      displayName,
-      storageContext: '',
-    };
+    return { id, email: null, displayName, storageContext: '' };
   } catch {
     return null;
   }
@@ -83,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
     else if (!checked) setSessionChange('');
     shownMember.current = member;
-    rememberMember(member);
+    void rememberMember(member);
     setActiveMember(member);
     setState(member ? { status: 'authenticated', member } : { status: 'guest' });
     setInitialized(true);
@@ -100,9 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (generation.current === current) confirm(member, true);
     } catch (error) {
       // 장애 중에는 비로그인으로 단정하거나 이전 작성 내용을 지우지 않음. 마지막 계정의 기기 기록을 엶
+      const remembered = shownMember.current ?? (await rememberedMember());
       if (generation.current === current) {
-        shownMember.current ??= rememberedMember();
-        setActiveMember(shownMember.current);
+        shownMember.current = remembered;
+        setActiveMember(remembered);
         setState({ status: 'unavailable', message: errorText(error) });
       }
     } finally {

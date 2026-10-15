@@ -6,6 +6,7 @@ import { Link, resolvePath, useLocation, useNavigate, useNavigationType } from '
 import type { Location, NavigateOptions, To } from 'react-router';
 import { useWorkspace } from './workspace';
 import { PageNavigationContext } from './page-navigation';
+import { KEEP_TRAIL } from './back-trail';
 
 export type MainSection = 'home' | 'records' | 'requests' | 'consultations';
 const sectionRoots = {
@@ -154,7 +155,8 @@ export function useMainNavigation(ready: boolean) {
       window.scrollTo(0, 0);
       document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
     } else {
-      navigate(to);
+      // 메뉴로 돌아간 화면은 원래 돌아갈 곳을 유지함
+      navigate(to, { state: KEEP_TRAIL });
     }
   };
 

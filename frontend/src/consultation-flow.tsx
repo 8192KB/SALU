@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
-import { Link, useNavigate } from './workspace';
+import { Link, useNavigate, useWorkspace } from './workspace';
 import { usePrototype } from './prototype/context';
 import { useDirectory } from './directory';
 import {
@@ -22,6 +22,8 @@ import type {
 } from './consultation-store';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
 import { cutTitle } from './prototype/dates';
+import { useAuth } from './auth/context';
+import { useLoginPath } from './auth/pages';
 
 function attachmentFor(
   state: PrototypeState,
@@ -54,7 +56,7 @@ function attachmentFor(
     photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
   };
 }
-function AttachmentCard({ attachment }: { attachment: ConsultationAttachment }) {
+export function AttachmentCard({ attachment }: { attachment: ConsultationAttachment }) {
   return (
     <div className="consultation-attachment">
       {attachment.photo ? (
@@ -77,7 +79,52 @@ const sentFormatter = new Intl.DateTimeFormat('ko-KR', {
   dateStyle: 'medium',
   timeStyle: 'short',
 });
-const sentTime = (date: string) => sentFormatter.format(new Date(date));
+export const sentTime = (date: string) => sentFormatter.format(new Date(date));
+
+// 실제 상담은 로그인한 회원만 사용. 확인 중·연결 실패·비로그인이면 안내를 돌려줌
+export function useConsultationAccess() {
+  const { state } = useAuth();
+  const loginPath = useLoginPath();
+  const example = useWorkspace() === 'example';
+  if (example || state.status === 'authenticated') return null;
+  if (state.status === 'checking') return <p role="status">로그인 상태를 확인하고 있어요.</p>;
+  const copy = {
+    prototype: ['서버 없이 화면만 확인하는 중이에요', '상담 흐름은 예시 체험에서 볼 수 있어요.'],
+    unavailable: ['서버에 연결할 수 없어요', '연결이 돌아오면 상담을 이어서 볼 수 있어요.'],
+    guest: ['로그인이 필요해요', '로그인 후 디자이너에게 상담을 요청하고 답변을 볼 수 있어요.'],
+  }[state.status];
+  return (
+    <section className="consultation-soft-panel">
+      <h2>{copy[0]}</h2>
+      <p>{copy[1]}</p>
+      {state.status === 'guest' && (
+        <Link className="button primary" to={loginPath}>
+          로그인
+        </Link>
+      )}
+      {state.status === 'prototype' && (
+        <Link className="button" to="/examples/designers">
+          예시 체험
+        </Link>
+      )}
+    </section>
+  );
+}
+// 새 상담과 답변은 실시간으로 오지 않아 화면에 들어올 때와 창으로 돌아올 때 다시 조회함
+export function useRefreshOnFocus(action?: () => unknown) {
+  const current = useRef(action);
+  useEffect(() => {
+    current.current = action;
+  });
+  const enabled = Boolean(action);
+  useEffect(() => {
+    if (!enabled) return;
+    const run = () => void current.current?.();
+    run();
+    window.addEventListener('focus', run);
+    return () => window.removeEventListener('focus', run);
+  }, [enabled]);
+}
 
 export function ConsultationDesignerProfile({
   designer,
@@ -95,6 +142,7 @@ export function ConsultationDesignerProfile({
   const query = new URLSearchParams({ designer: designer.id });
   if (linked) query.set('record', linked);
   if (linked && preview) query.set('preview', preview.id);
+  const salon = designer.affiliations.find((value) => value.current)?.salonName;
   const fromRecord = useSearchParams()[0].get('from') === 'record';
   return (
     <div className="consultation-screen consultation-profile">
@@ -116,6 +164,7 @@ export function ConsultationDesignerProfile({
         <Avatar name={designer.name} large src={designer.avatarUrl} />
         <div>
           <h2>{designer.name} 디자이너</h2>
+          {salon && <p>현재 소속 · {salon}</p>}
           <p>{designer.specialties.join(' · ')}</p>
         </div>
       </div>
@@ -163,12 +212,31 @@ export function ConsultationNew() {
   const previewId = search.get('preview');
   const preview = state.previews.find((value) => value.id === previewId);
   const record = search.get('record') ?? preview?.cut.id ?? '';
+  const access = useConsultationAccess();
   if (!repository)
     return (
       <Missing
         title="상담 요청을 연결하고 있어요"
         message="현재는 커트 기록과 개인 준비 내용을 보관할 수 있어요."
       />
+    );
+  if (access)
+    return (
+      <div className="consultation-screen">
+        <PageHeading
+          title="상담 요청"
+          back={
+            designer ? (
+              <BackLink
+                to={`/designers/${designer.id}${record ? `?record=${encodeURIComponent(record)}` : ''}`}
+              >
+                디자이너 프로필
+              </BackLink>
+            ) : undefined
+          }
+        />
+        {access}
+      </div>
     );
   if (
     !designer ||
@@ -319,11 +387,33 @@ function ConsultationForm({
   );
 }
 
+// 서버 상담은 주소로 직접 열거나 새로고침하면 저장소에 없으므로 한 건을 다시 받음
+function useThread(id: string) {
+  const { state, repository } = useConsultations();
+  const thread = state.threads.find((value) => value.id === id);
+  const [error, setError] = useState('');
+  const load = repository?.load;
+  useRefreshOnFocus(
+    load &&
+      (() =>
+        load(id).then(
+          () => setError(''),
+          (failure: unknown) =>
+            setError(failure instanceof Error ? failure.message : '상담을 불러오지 못했어요.'),
+        )),
+  );
+  return { thread, error, server: Boolean(load) };
+}
+
 export function ConsultationComplete() {
   const { id = '' } = useParams();
-  const { state } = useConsultations();
-  const thread = state.threads.find((value) => value.id === id);
-  if (!thread) return <Missing title="보낸 상담 요청을 찾을 수 없어요" />;
+  const { thread, error, server } = useThread(id);
+  if (!thread)
+    return server && !error ? (
+      <p role="status">상담 요청을 불러오고 있어요.</p>
+    ) : (
+      <Missing title="보낸 상담 요청을 찾을 수 없어요" />
+    );
   const { attachment } = thread;
   // 기록 저장 완료와 같은 완료 화면을 써서 체크·문구·버튼 배치를 통일
   return (
@@ -360,6 +450,9 @@ export function ConsultationComplete() {
 
 export function ConsultationList() {
   const { state, repository } = useConsultations();
+  const access = useConsultationAccess();
+  const mode = useWorkspace();
+  useRefreshOnFocus(access ? undefined : repository?.refresh);
   if (!repository)
     return (
       <Missing
@@ -367,6 +460,7 @@ export function ConsultationList() {
         message="현재는 커트 기록과 개인 준비 내용을 보관할 수 있어요."
       />
     );
+  const loading = state.loaded === false;
   return (
     <div className="consultation-screen">
       <PageHeading
@@ -377,7 +471,11 @@ export function ConsultationList() {
           </Link>
         }
       />
-      {state.threads.length ? (
+      {access ? (
+        access
+      ) : loading ? (
+        <p role="status">상담 내역을 불러오고 있어요.</p>
+      ) : state.threads.length ? (
         <div className="consultation-history">
           {[...state.threads].reverse().map((thread) => (
             <Link
@@ -399,13 +497,40 @@ export function ConsultationList() {
           ))}
         </div>
       ) : (
+        !state.error && (
+          <section className="consultation-soft-panel">
+            <h2>아직 보낸 상담이 없어요</h2>
+            <p>지난 커트의 담당 디자이너에게 궁금한 점을 보내 보세요.</p>
+            <Link className="button" to="/records">
+              지난 커트 보기
+            </Link>
+          </section>
+        )
+      )}
+      {!access && state.error && (
         <section className="consultation-soft-panel">
-          <h2>아직 보낸 상담이 없어요</h2>
-          <p>지난 커트의 담당 디자이너에게 궁금한 점을 보내 보세요.</p>
-          <Link className="button" to="/records">
-            지난 커트 보기
-          </Link>
+          <Alert message={state.error} />
+          <button type="button" className="button" onClick={() => void repository.refresh?.()}>
+            다시 불러오기
+          </button>
         </section>
+      )}
+      {!access && repository.server && (
+        <div className="consultation-list-actions">
+          <button
+            type="button"
+            className="text-link"
+            disabled={state.loading}
+            onClick={() => void repository.refresh?.()}
+          >
+            {state.loading ? '확인 중' : '새 답변 확인'}
+          </button>
+          {mode !== 'example' && (
+            <Link className="text-link" to="/consultations/received">
+              받은 상담(디자이너)
+            </Link>
+          )}
+        </div>
       )}
     </div>
   );
@@ -427,9 +552,21 @@ export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
 }
 export function ConsultationDetail() {
   const { id = '' } = useParams();
-  const { state } = useConsultations();
-  const thread = state.threads.find((value) => value.id === id);
-  if (!thread) return <Missing title="상담 내역을 찾을 수 없어요" />;
+  const access = useConsultationAccess();
+  const { thread, error, server } = useThread(id);
+  if (access)
+    return (
+      <div className="consultation-screen">
+        <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 목록</BackLink>} />
+        {access}
+      </div>
+    );
+  if (!thread)
+    return server && !error ? (
+      <p role="status">상담 내역을 불러오고 있어요.</p>
+    ) : (
+      <Missing title="상담 내역을 찾을 수 없어요" message={error || undefined} />
+    );
   return (
     <div className="consultation-screen">
       <PageHeading title="상담 내역" back={<BackLink to="/consultations">상담 목록</BackLink>} />

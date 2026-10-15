@@ -740,11 +740,9 @@ export function RecordDetail() {
                 이 기록으로 다음 커트 준비 <Icon name="arrow" />
               </button>
             )}
-            {mode === 'example' && (
-              <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
-                디자이너 선택 <Icon name="arrow" size={16} />
-              </Link>
-            )}
+            <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
+              디자이너 선택 <Icon name="arrow" size={16} />
+            </Link>
           </section>
         </section>
         <aside className="sidebar">
@@ -761,8 +759,7 @@ export function RecordDetail() {
                 className={`button full${mode === 'example' ? ' primary' : ''}`}
                 to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
               >
-                {mode === 'example' ? '프로필 · 상담 요청' : '프로필 · 상담 준비'}{' '}
-                <Icon name="arrow" size={17} />
+                프로필 · 상담 요청 <Icon name="arrow" size={17} />
               </Link>
             </section>
           )}

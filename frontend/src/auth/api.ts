@@ -209,3 +209,36 @@ export async function directoryRequest<T>(
   if (response.status === 204) return null;
   return response.json() as Promise<T>;
 }
+
+// 로그인한 회원의 계정 공간(storageContext)을 함께 보내는 요청. 사진을 올리는 요청은 시간 제한을 길게 줌
+export async function memberRequest(
+  path: string,
+  member: SessionMember,
+  options: RequestInit = {},
+  timeout = 8000,
+): Promise<Response> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const csrf = options.method === 'POST' ? await csrfHeaders() : {};
+    let response: Response;
+    try {
+      response = await fetch(path, {
+        ...options,
+        credentials: 'same-origin',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(timeout),
+        headers: { ...csrf, ...options.headers, 'X-SALU-Storage-Context': member.storageContext },
+      });
+    } catch {
+      throw new ApiFailure(
+        0,
+        'CONNECTION_UNAVAILABLE',
+        '서버에 연결할 수 없어요. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.',
+      );
+    }
+    if (response.ok) return response;
+    const error = await failure(response);
+    if (attempt === 0 && error.status === 403 && error.code === 'CSRF_INVALID') continue;
+    throw error;
+  }
+  throw new ApiFailure(403, 'CSRF_INVALID', messages.CSRF_INVALID);
+}

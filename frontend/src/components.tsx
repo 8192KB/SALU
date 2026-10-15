@@ -1,6 +1,8 @@
 import { Component, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from './workspace';
+import { Link as RouterLink, useLocation } from 'react-router';
+import { Link, scopedTo, useWorkspace } from './workspace';
+import { KEEP_TRAIL, useBackTrail } from './back-trail';
 
 export function Icon({
   name,
@@ -131,12 +133,32 @@ export function PageHeading({
   );
 }
 
-export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+// 직전에 보던 화면이 있으면 그 화면으로 돌아감. 단계가 정해진 작성 화면은 trail={false}로 이전 단계 유지
+export function BackLink({
+  to,
+  children,
+  trail = true,
+}: {
+  to: string;
+  children: ReactNode;
+  trail?: boolean;
+}) {
+  const location = useLocation();
+  const mode = useWorkspace();
+  const previous = useBackTrail(location);
+  const fallback = scopedTo(to, mode) as string;
+  if (trail && previous && previous.to !== fallback)
+    return (
+      <RouterLink className="heading-back" to={previous.to} state={KEEP_TRAIL}>
+        <Icon name="back" />
+        <span>{previous.label}</span>
+      </RouterLink>
+    );
   return (
-    <Link className="heading-back" to={to}>
+    <RouterLink className="heading-back" to={fallback} state={KEEP_TRAIL}>
       <Icon name="back" />
       <span>{children}</span>
-    </Link>
+    </RouterLink>
   );
 }
 

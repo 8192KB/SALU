@@ -44,6 +44,8 @@ const isCompletionPath = (pathname: string) =>
 function pageKey(pathname: string, section = sectionOf(pathname)) {
   return section ? `${section}${isTaskPath(pathname) ? '-task' : ''}` : undefined;
 }
+const isReturn = (location: Location) =>
+  (location.state as { trail?: string } | null)?.trail === KEEP_TRAIL.trail;
 const address = (location: Location) => `${location.pathname}${location.search}${location.hash}`;
 
 export function useMainNavigation(ready: boolean) {
@@ -89,8 +91,12 @@ export function useMainNavigation(ready: boolean) {
   useLayoutEffect(() => {
     if (!ready) return;
     currentAddress.current = address(location);
+    // 뒤로 가기·메뉴 복귀·뒤로 링크·나가기로 돌아온 화면은 보던 위치로 되돌림
     const y =
-      returning.current || navigationType === 'POP' || isTaskPath(location.pathname)
+      returning.current ||
+      navigationType === 'POP' ||
+      isReturn(location) ||
+      isTaskPath(location.pathname)
         ? (positions.current.get(currentAddress.current) ?? 0)
         : 0;
     returning.current = false;
@@ -245,6 +251,8 @@ export function RetainedPage({
     return element;
   });
   const navigationType = useNavigationType();
+  const shown = useLocation();
+  const backward = navigationType === 'POP' || isReturn(shown);
   useLayoutEffect(() => {
     // 비활성 페이지는 DOM에서 분리하고 폼·사진 처리 상태는 유지
     if (visible && slot) {
@@ -272,7 +280,7 @@ export function RetainedPage({
           animations.push(
             element.animate(
               [
-                { transform: `translateX(${navigationType === 'POP' ? '-12px' : '12px'})` },
+                { transform: `translateX(${backward ? '-12px' : '12px'})` },
                 { transform: 'translateX(0)' },
               ],
               { duration: 220, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
@@ -285,7 +293,7 @@ export function RetainedPage({
       cancelAnimationFrame(frame);
       animations.forEach((animation) => animation.cancel());
     };
-  }, [visible, slot, container, pageAddress, navigationType]);
+  }, [visible, slot, container, pageAddress, backward]);
   return createPortal(
     <PageNavigationContext.Provider value={handleNavigation}>
       <ActivePageContext.Provider value={visible}>{children}</ActivePageContext.Provider>

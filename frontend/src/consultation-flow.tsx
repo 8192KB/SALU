@@ -20,10 +20,12 @@ import type {
   ConsultationReply,
   ConsultationRepository,
 } from './consultation-store';
+import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
 import { cutTitle } from './prototype/dates';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
+import { listReceivedConsultations } from './consultation-api';
 
 function attachmentFor(
   state: PrototypeState,
@@ -55,6 +57,17 @@ function attachmentFor(
     summary: cut.goodNote || latest?.discomfort || '커트한 날의 기록',
     photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
   };
+}
+// 준비 내용의 부위·방향을 문장 앞에 붙여 디자이너가 어느 부위 이야기인지 알 수 있게 함
+function requestFromPreview(preview: RequestPreview) {
+  return [
+    ...preview.requests.map(
+      (value) => `${AREAS[value.area]} · ${INTENTS[value.intent]}: ${value.content}`,
+    ),
+    ...(preview.additionalQuestion ? [`질문: ${preview.additionalQuestion}`] : []),
+  ]
+    .join('\n')
+    .slice(0, 2000);
 }
 export function AttachmentCard({ attachment }: { attachment: ConsultationAttachment }) {
   return (
@@ -190,13 +203,31 @@ export function ConsultationDesignerProfile({
       </section>
       <div className="consultation-action">
         {cuts.length ? (
-          <Link className="button primary full" to={`/consultations/new?${query}`}>
-            상담 요청
-          </Link>
+          <>
+            <Link className="button primary full" to={`/consultations/new?${query}`}>
+              상담 요청
+            </Link>
+            {record && !linked && (
+              // 보던 기록이 이 디자이너와 연결되지 않았으면 연결하러 갈 수 있게 함
+              <Link className="text-link" to={`/records/${encodeURIComponent(record)}/edit`}>
+                보던 기록에도 이 디자이너 연결
+              </Link>
+            )}
+          </>
         ) : (
-          <p className="muted">
-            {designer.name} 디자이너에게 받은 커트 기록이 있으면 상담을 요청할 수 있어요.
-          </p>
+          <>
+            <p className="muted">
+              {designer.name} 디자이너에게 받은 커트 기록이 있으면 상담을 요청할 수 있어요. 기록
+              수정의 ‘담당자 선택’에서 이 디자이너를 고르면 연결돼요.
+            </p>
+            {/* 담당자 이름만 적은 기록도 여기서 바로 연결하러 갈 수 있게 함 */}
+            <Link
+              className="button full"
+              to={record ? `/records/${encodeURIComponent(record)}/edit` : '/records'}
+            >
+              {record ? '이 기록에 담당 디자이너 연결' : '내 기록에서 연결할 기록 고르기'}
+            </Link>
+          </>
         )}
       </div>
     </div>
@@ -273,12 +304,7 @@ function ConsultationForm({
   const { state: consultations } = useConsultations();
   const navigate = useNavigate();
   const [initial] = useState(() =>
-    repository.draft(
-      designer.id,
-      record,
-      preview?.id,
-      preview?.requests.map((value) => value.content).join('\n'),
-    ),
+    repository.draft(designer.id, record, preview?.id, preview && requestFromPreview(preview)),
   );
   const draft = consultations.drafts[initial.id] ?? initial;
   const lock = useRef(false);
@@ -448,11 +474,33 @@ export function ConsultationComplete() {
   );
 }
 
+// 디자이너 프로필이 있는 회원에게 받은 상담 건수를 알려 줌. 실패해도 보낸 상담 화면은 그대로 둠
+function useReceivedSummary(enabled: boolean) {
+  const { state } = useAuth();
+  const member = state.status === 'authenticated' ? state.member : null;
+  const [summary, setSummary] = useState<{ total: number; waiting: number } | null>(null);
+  useRefreshOnFocus(
+    enabled && member
+      ? () =>
+          listReceivedConsultations(member).then(
+            (items) =>
+              setSummary({
+                total: items.length,
+                waiting: items.filter((item) => item.canReply).length,
+              }),
+            () => setSummary(null),
+          )
+      : undefined,
+  );
+  return summary;
+}
+
 export function ConsultationList() {
   const { state, repository } = useConsultations();
   const access = useConsultationAccess();
   const mode = useWorkspace();
   useRefreshOnFocus(access ? undefined : repository?.refresh);
+  const received = useReceivedSummary(!access && mode !== 'example' && Boolean(repository?.server));
   if (!repository)
     return (
       <Missing
@@ -471,6 +519,15 @@ export function ConsultationList() {
           </Link>
         }
       />
+      {received && received.total > 0 && (
+        <Link
+          className="consultation-soft-panel consultation-received-link"
+          to="/consultations/received"
+        >
+          <strong>받은 상담 {received.total}건</strong>
+          <span>{received.waiting ? `답변 전 ${received.waiting}건` : '모두 답변했어요'}</span>
+        </Link>
+      )}
       {access ? (
         access
       ) : loading ? (
@@ -525,7 +582,7 @@ export function ConsultationList() {
           >
             {state.loading ? '확인 중' : '새 답변 확인'}
           </button>
-          {mode !== 'example' && (
+          {mode !== 'example' && !received?.total && (
             <Link className="text-link" to="/consultations/received">
               받은 상담(디자이너)
             </Link>

@@ -1,4 +1,5 @@
 import { draftDesigner, refreshDirectory } from './directory-cache';
+import { useConsultations } from './consultation-store';
 import { useDirectory } from './directory';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Completion } from './completion';
@@ -231,6 +232,16 @@ export function DesignerList() {
   // 이 커트를 해 준 디자이너를 먼저 보여 주고, 다른 디자이너는 원할 때 펼침
   const recorded = directory.designers.find((value) => value.id === cut?.designerProfileId);
   const [showAll, setShowAll] = useState(false);
+  const active = useActivePage();
+  useEffect(() => {
+    if (!active || mode === 'example' || import.meta.env.VITE_SALU_AUTH_MODE === 'prototype')
+      return;
+    // 탭을 연 뒤 새로 공개된 디자이너도 보이도록 들어올 때·창으로 돌아올 때 다시 받음
+    void refreshDirectory();
+    const refresh = () => void refreshDirectory();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, [active, mode]);
   if (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
     return <Missing title="준비한 요청 자료를 찾을 수 없어요" />;
   if (record && !cut) return <Missing title="선택한 커트 기록을 찾을 수 없어요" />;
@@ -305,7 +316,9 @@ export function DesignerList() {
       )}
       {mode !== 'example' && (
         <>
-          {directory.loading && <p role="status">디자이너를 불러오고 있어요.</p>}
+          {directory.loading && !directory.designers.length && (
+            <p role="status">디자이너를 불러오고 있어요.</p>
+          )}
           {directory.error && (
             <div className="panel">
               <Alert message={directory.error} />
@@ -342,9 +355,10 @@ export function DesignerDetail() {
   const sourcePreview = state.previews.find((value) => value.id === previewId);
   const record = search.get('record') ?? sourcePreview?.cut.id ?? null;
   const designer = directory.designers.find((value) => value.id === id);
-  if (mode !== 'example' && directory.loading)
+  // 목록을 다시 받는 동안에도 이미 받은 프로필은 그대로 보여 줌
+  if (mode !== 'example' && directory.loading && !designer)
     return <p role="status">프로필을 불러오고 있어요.</p>;
-  if (mode !== 'example' && directory.error)
+  if (mode !== 'example' && directory.error && !designer)
     return (
       <section className="panel">
         <Alert message={directory.error} />
@@ -930,8 +944,20 @@ export function PreviewPage() {
   const { id } = useParams();
   const { state, setRequestDraft } = usePrototype();
   const navigate = useNavigate();
+  const directory = useDirectory(state);
+  const { state: consultations } = useConsultations();
   const preview = state.previews.find((value) => value.id === id);
   if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
+  // 보여 줄 디자이너: 디자이너용으로 준비했으면 그 디자이너, 아니면 이 커트를 해 준 디자이너
+  const cut = state.cuts.find((value) => value.id === preview.cut.id);
+  const target =
+    directory.designers.find(
+      (value) => value.id === (preview.designer?.id ?? cut?.designerProfileId),
+    ) ?? undefined;
+  const designerQuery = new URLSearchParams({ record: preview.cut.id, preview: preview.id });
+  const sent = consultations.threads.filter((thread) =>
+    consultations.sentFrom?.[preview.id]?.includes(thread.id),
+  );
   return (
     <>
       <PageHeading
@@ -1021,9 +1047,34 @@ export function PreviewPage() {
           <section className="panel sticky-summary">
             <h2>{preview.designer ? '보여 줄 내용 확인' : '다음 커트 준비 완료'}</h2>
             <p className="muted">고르지 않은 기록과 사진은 포함하지 않았어요.</p>
-            <Link className="button primary full" to="/requests">
-              준비 목록으로 <Icon name="arrow" />
-            </Link>
+            {sent.length > 0 && (
+              <p className="working-notice" role="status">
+                {sent.map((thread) => thread.designer.name).join('·')} 디자이너에게 보냈어요.{' '}
+                <Link to={`/consultations/${sent.at(-1)!.id}`}>상담 내역 보기</Link>
+              </p>
+            )}
+            {/* 준비를 마친 다음 할 일은 대개 디자이너에게 보여 주기라 가장 먼저 둠 */}
+            {target ? (
+              <Link
+                className="button primary full"
+                to={`/designers/${encodeURIComponent(target.id)}?${designerQuery}`}
+              >
+                {target.name} 디자이너에게 보여 주기 <Icon name="arrow" />
+              </Link>
+            ) : (
+              <Link className="button primary full" to={`/designers?${designerQuery}`}>
+                디자이너 선택하기 <Icon name="arrow" />
+              </Link>
+            )}
+            {target && (
+              <Link
+                className="text-link"
+                style={{ marginTop: 12 }}
+                to={`/designers?${designerQuery}`}
+              >
+                다른 디자이너 선택
+              </Link>
+            )}
             <button
               className="button full"
               style={{ marginTop: 12 }}
@@ -1035,21 +1086,15 @@ export function PreviewPage() {
             >
               내용 수정
             </button>
-            {!preview.designer && (
-              <Link
-                className="button full"
-                style={{ marginTop: 12 }}
-                to={`/designers?record=${encodeURIComponent(preview.cut.id)}&preview=${encodeURIComponent(preview.id)}`}
-              >
-                디자이너 선택하기 <Icon name="arrow" />
-              </Link>
-            )}
             <Link
               className="button full"
               style={{ marginTop: 12 }}
               to={`/records/${preview.cut.id}?preview=${encodeURIComponent(preview.id)}`}
             >
               원본 기록 보기
+            </Link>
+            <Link className="text-link" style={{ marginTop: 16 }} to="/requests">
+              준비 목록으로
             </Link>
             <p className="form-note">정리한 내용은 커트 준비 목록에서 다시 볼 수 있어요.</p>
           </section>

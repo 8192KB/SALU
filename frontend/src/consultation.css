@@ -381,3 +381,13 @@
   justify-content: space-between;
   margin-top: 20px;
 }
+
+/* 상담 목록 위: 디자이너가 받은 상담 건수 */
+.consultation-received-link {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}

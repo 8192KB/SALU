@@ -31,6 +31,8 @@ export type ConsultationDraft = {
   designerId: string;
   cutId: string;
   request: string;
+  // 준비 내용에서 시작한 상담이면 그 준비 ID
+  sourceId?: string;
 };
 export type ConsultationSend = Pick<
   ConsultationThread,
@@ -40,6 +42,8 @@ type ConsultationSnapshot = {
   generation: number;
   threads: ConsultationThread[];
   drafts: Record<string, ConsultationDraft>;
+  // 준비 내용 ID → 그 준비로 보낸 상담 ID. 이 탭에서 보낸 상담만 기억함
+  sentFrom?: Record<string, string[]>;
   // 서버 상담만 사용. 예시 상담은 메모리에 있어 항상 불러온 상태
   loading?: boolean;
   loaded?: boolean;
@@ -91,7 +95,13 @@ export class MemoryConsultationRepository implements ConsultationRepository {
     const existingId = this.targets.get(key);
     const existing = existingId && this.drafts.get(existingId);
     if (existing) return existing;
-    const draft: ConsultationDraft = { id: newId(), designerId, cutId: recordId, request };
+    const draft: ConsultationDraft = {
+      id: newId(),
+      designerId,
+      cutId: recordId,
+      request,
+      ...(sourceId ? { sourceId } : {}),
+    };
     this.targets.set(key, draft.id);
     this.drafts.set(draft.id, draft);
     return draft;
@@ -120,6 +130,15 @@ export class MemoryConsultationRepository implements ConsultationRepository {
   protected forgetDraft(draftId: string) {
     for (const [key, value] of this.targets) if (value === draftId) this.targets.delete(key);
   }
+  protected sentFrom(draftId: string, threadId: string) {
+    const source = this.drafts.get(draftId)?.sourceId;
+    if (!source) return this.snapshot.sentFrom;
+    const previous = this.snapshot.sentFrom?.[source] ?? [];
+    return {
+      ...this.snapshot.sentFrom,
+      [source]: previous.includes(threadId) ? previous : [...previous, threadId],
+    };
+  }
   async send(input: ConsultationSend) {
     const request = this.checked(input);
     const submitted = this.submissions.get(input.draftId);
@@ -141,7 +160,11 @@ export class MemoryConsultationRepository implements ConsultationRepository {
     });
     this.submissions.set(input.draftId, thread.id);
     this.forgetDraft(input.draftId);
-    this.publish({ ...this.snapshot, threads: [...this.snapshot.threads, thread] });
+    this.publish({
+      ...this.snapshot,
+      threads: [...this.snapshot.threads, thread],
+      sentFrom: this.sentFrom(input.draftId, thread.id),
+    });
     return thread;
   }
   receiveReply(id: string, reply: ConsultationReply) {
@@ -277,6 +300,7 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     const thread = threadFrom(sent, input.draftId);
     this.forgetDraft(input.draftId);
     this.upsert(thread);
+    this.publish({ ...this.snapshot, sentFrom: this.sentFrom(input.draftId, thread.id) });
     return thread;
   }
 }

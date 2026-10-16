@@ -11,6 +11,9 @@ Git에 올라간 파일의 용도입니다. 2026-10-16 main 기준.
 | `.env.example` | 환경 변수 목록. 실제 `.env`는 `scripts/init-env.py`로 만들고 공유하지 않음 |
 | `compose.yml` | 개발용 MySQL을 Docker로 띄울 때 사용 |
 | `.agents/skills/`, `skills-lock.json` | AI 화면 디자인 skill |
+| `.github/workflows/ci.yml` | PR마다 프론트 빌드·형식 검사, 백엔드 jar 빌드 |
+| `.github/CODEOWNERS` | 서버·DB·문서·지침 변경에 저장소 관리자 승인 요구 |
+| `.github/pull_request_template.md` | PR 작성 때 흐름·서버 규칙 확인 목록 |
 
 ## scripts
 
@@ -29,6 +32,7 @@ Git에 올라간 파일의 용도입니다. 2026-10-16 main 기준.
 | `login.md` | 회원가입·로그인·세션·CSRF·소셜 로그인 규칙 |
 | `personal-storage.md` | 기기 보관·ZIP·계정 암호화 백업 규칙 |
 | `consultation-api.md` | 상담 요청·답변 API 경로·응답·오류 |
+| `screen-flow.md` | 화면 목록·이동과 새 화면 추가 순서 |
 | `files.md` | 이 문서 |
 
 ## backend (`backend/src/main/java/kr/salu`)

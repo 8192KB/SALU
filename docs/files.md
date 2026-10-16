@@ -31,7 +31,10 @@ Git에 올라간 파일의 용도입니다. 2026-10-16 main 기준.
 | `development-contract.md` | 구조·화면 흐름·권한·트랜잭션 규칙 |
 | `login.md` | 회원가입·로그인·세션·CSRF·소셜 로그인 규칙 |
 | `personal-storage.md` | 기기 보관·ZIP·계정 암호화 백업 규칙 |
-| `consultation-api.md` | 상담 요청·답변 API 경로·응답·오류 |
+| `consultation-api.md` | 상담 요청·메시지·읽음 API 경로·응답·오류 |
+| `notification-api.md` | 알림 API와 실시간 신호(WebSocket·STOMP) 연결 |
+| `designer-api.md` | 디자이너 후기·찜·소속 이력 API |
+| `community-api.md` | 커뮤니티 글·댓글·도움돼요·신고·관리자 API |
 | `screen-flow.md` | 화면 목록·이동과 새 화면 추가 순서 |
 | `files.md` | 이 문서 |
 
@@ -47,16 +50,22 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `auth/social/` | Google·네이버 로그인과 기존 계정 연결 |
 | `member/` | 회원 조회 SQL |
 | `backup/` | 로그인 회원의 암호화 자동 백업. 암호화(`BackupCrypto`), 자료 형식 검사(`BackupPayloadValidator`), 요청 크기 제한(`BackupBodyLimit`) |
-| `directory/` | 미용실 등록, 디자이너 공개 프로필 목록·상세·내 프로필 |
-| `consultation/` | 상담 보내기·보낸/받은 목록·상세·첨부 사진·답변 |
-| `common/PhotoCheck.java` | 사진 형식·크기 검사(백업·상담 공용) |
+| `directory/` | 미용실 등록, 디자이너 공개 프로필 목록·상세·내 프로필, 찜, 소속 이력 |
+| `consultation/` | 상담 보내기·보낸/받은 목록·상세·첨부 사진·답변, 대화 메시지·읽음 위치 |
+| `review/` | 상담 후기 쓰기·고치기·지우기, 디자이너 후기 목록 |
+| `notification/` | 알림 저장·목록·읽음. 업무 transaction 안에서만 만듦 |
+| `realtime/` | WebSocket·STOMP 연결(`WebSocketConfig`)과 commit 뒤 신호 전송(`RealtimePublisher`) |
+| `community/` | 커뮤니티 글·사진·댓글·도움돼요·신고, 관리자 신고 처리·제재(`CommunityAdmin*`) |
+| `auth/StorageContext.java` | 다른 탭에서 계정이 바뀐 뒤의 저장 요청을 막는 헤더 검사 |
+| `common/Inputs.java` | 글자 수·UUID·시각 형식 공통 검사 |
+| `common/PhotoCheck.java` | 사진 형식·크기 검사(백업·상담·커뮤니티 공용) |
 | `common/error/` | 모든 API의 공통 오류 응답(`{code, message}`) |
 | `health/` | 서버·DB 상태 확인 |
 
 | 위치 | 용도 |
 |---|---|
 | `resources/application.yml` | 서버 설정(DB·세션·업로드 크기) |
-| `resources/db/migration/V1~V5` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담. 적용한 파일은 고치지 않고 새 번호로 추가 |
+| `resources/db/migration/V1~V10` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담, V6 회원 역할, V7 알림, V8 상담 메시지, V9 후기·찜·소속 이력, V10 커뮤니티. 적용한 파일은 고치지 않고 새 번호로 추가 |
 | `resources/personal-backup-schema.json` | 백업 자료 형식. `frontend/scripts/generate-backup-schema.mjs`로 생성 |
 | `pom.xml`, `mvnw`, `Dockerfile` | 빌드·배포 이미지 |
 

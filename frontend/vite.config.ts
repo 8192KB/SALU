@@ -15,13 +15,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: Number(process.env.SALU_FRONTEND_PORT ?? env.SALU_FRONTEND_PORT ?? '5174'),
       strictPort: true,
-      proxy: { '/api': { target: `http://127.0.0.1:${port}` } },
+      proxy: { '/api': { target: `http://127.0.0.1:${port}`, ws: true } },
     },
     preview: {
       host: '0.0.0.0',
       port: 5174,
       strictPort: true,
-      proxy: { '/api': { target: `http://127.0.0.1:${port}` } },
+      proxy: { '/api': { target: `http://127.0.0.1:${port}`, ws: true } },
     },
   };
 });

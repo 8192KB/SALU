@@ -11,8 +11,8 @@
 |---|---|
 | GET /api/csrf | 세션 masked token/headerName, no-store |
 | POST /api/auth/signup | JSON email/displayName/password + CSRF; 201 가입 완료, 이후 기존 로그인 경로 사용; 중복 409; 실제 가입 검증은 별도 수행 |
-| POST /api/auth/login | application/x-www-form-urlencoded email/password + CSRF header, 200은 id/email(nullable)/displayName/storageContext만, 실패 401/LOGIN_FAILED |
-| GET /api/auth/me | 로그인 회원 id/email(nullable)/displayName/storageContext, 비로그인 401 |
+| POST /api/auth/login | application/x-www-form-urlencoded email/password + CSRF header, 200은 id/email(nullable)/displayName/storageContext/role만, 실패 401/LOGIN_FAILED |
+| GET /api/auth/me | 로그인 회원 id/email(nullable)/displayName/storageContext/role, 비로그인 401 |
 | POST /api/auth/logout | CSRF 필수, 세션 무효화·SALU_SESSION 삭제, 204; GET으로 로그아웃하지 않음 |
 
 ## 인증 처리
@@ -38,6 +38,7 @@
 - IP당 30회/60초 후 429, 요청 X-Forwarded-For를 신뢰하지 않음
 - 단일 개발 서버 범위의 방어이며 배포 전 프록시·분산 방어는 추가 검증 필요
 - 요청 role/memberId는 권한 부여에 사용하지 않음
+- 회원 역할은 `members.role`의 `USER`·`ADMIN`. 관리자 지정은 DB에서만 하고 `/api/admin/**`은 SecurityConfig에서 ADMIN만 허용. 응답의 `role`은 화면 표시용이며, DB 역할이 세션과 달라지면 다음 요청에서 세션을 끊고 401
 - ACTIVE만 로그인, 존재하지 않음·틀린 비밀번호·비활성 모두 동일 실패
 
 ### DB 장애

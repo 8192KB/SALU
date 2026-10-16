@@ -1,8 +1,8 @@
 # 상담 API 계약
 
-2026-10-15 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다.
+2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`·`V8__consultation_messages.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다. 메시지·읽음(7~9장)은 서버만 준비됐고 화면은 아직 연결하지 않았습니다.
 
-고객이 지난 커트 기록 하나를 골라 담당 디자이너에게 상담을 요청하고, 디자이너가 답변을 한 번 보내는 기능의 서버 API입니다. 화면과 서버를 나눠 만들 때 이 문서를 기준으로 맞춥니다. 경로·필드·오류를 바꿔야 하면 코드보다 이 문서를 먼저 고치고 함께 작업하는 사람에게 알립니다.
+고객이 지난 커트 기록 하나를 골라 디자이너에게 상담을 요청하고, 같은 상담 안에서 고객과 디자이너가 메시지를 주고받는 기능의 서버 API입니다. 디자이너의 첫 메시지가 답변입니다. 화면과 서버를 나눠 만들 때 이 문서를 기준으로 맞춥니다. 경로·필드·오류를 바꿔야 하면 코드보다 이 문서를 먼저 고치고 함께 작업하는 사람에게 알립니다.
 
 ## 한눈에 보기
 
@@ -13,14 +13,20 @@
 | 받은 상담 목록 | `GET /api/my/received-consultations` | 디자이너 프로필이 있는 회원 |
 | 상담 상세 | `GET /api/consultations/{id}` | 보낸 회원, 받은 디자이너 |
 | 첨부 사진 | `GET /api/consultations/{id}/photo` | 보낸 회원, 받은 디자이너 |
-| 답변 보내기 | `POST /api/consultations/{id}/reply` | 받은 디자이너 |
+| 답변 보내기(첫 메시지) | `POST /api/consultations/{id}/reply` | 받은 디자이너 |
+| 메시지 목록 | `GET /api/consultations/{id}/messages` | 보낸 회원, 받은 디자이너 |
+| 메시지 보내기 | `POST /api/consultations/{id}/messages` | 보낸 회원, 받은 디자이너 |
+| 읽음 표시 | `POST /api/consultations/{id}/read` | 보낸 회원, 받은 디자이너 |
+
+상담 후기는 [디자이너 API](designer-api.md), 새 상담·새 메시지 알림과 실시간 신호는 [알림 API](notification-api.md)에 있습니다.
 
 흐름은 다음 순서입니다.
 
 1. 고객이 디자이너 프로필에서 커트 기록을 고르고 이번 요청을 적어 보냅니다. `POST /api/consultations`
 2. 디자이너가 받은 상담 목록에서 상담을 열어 봅니다. `GET /api/my/received-consultations`, `GET /api/consultations/{id}`
-3. 디자이너가 답변을 보냅니다. `POST /api/consultations/{id}/reply`
-4. 고객이 상담 내역에서 답변을 확인합니다. `GET /api/my/sent-consultations`, `GET /api/consultations/{id}`
+3. 디자이너가 첫 메시지(답변)를 보냅니다. 이때 상태가 `ANSWERED`로 바뀝니다. `POST /api/consultations/{id}/messages`
+4. 고객과 디자이너가 같은 상담 안에서 메시지를 더 주고받습니다. 고객은 답변 전에도 메시지를 덧붙일 수 있습니다.
+5. 상대가 보낸 메시지를 화면에 보여 준 뒤 읽음 위치를 올립니다. `POST /api/consultations/{id}/read`
 
 ## 공통 규칙
 
@@ -33,7 +39,7 @@
 - 시각은 UTC 기준 ISO 8601 문자열(`2026-10-14T03:12:45.123Z`)입니다. 화면에서 서울 시간으로 바꿔 보여 줍니다. 커트 날짜는 `YYYY-MM-DD`입니다.
 - 오류 응답은 기존 API와 같은 `{ "code": "...", "message": "..." }`입니다. 화면 문구는 `message`가 아니라 `code`를 보고 정합니다.
 - 응답에는 모두 `Cache-Control: no-store`가 붙습니다.
-- 새 상담과 답변을 실시간으로 알려 주지 않습니다. 화면에 들어올 때, 창으로 돌아올 때, 새로고침 버튼을 누를 때 다시 조회합니다.
+- 새 상담·새 메시지가 생기면 서버가 두 참여자에게 실시간 신호(`CONSULTATION`, 상담 ID)를 보냅니다. 신호에는 내용이 없으므로 화면은 신호를 받으면 상세·메시지를 다시 조회합니다. 연결 방법은 [알림 API](notification-api.md)에 있습니다. 연결이 끊긴 사이의 신호는 다시 오지 않으므로 다시 연결하거나 화면에 들어올 때도 조회합니다.
 
 ## 상담 한 건의 모양
 
@@ -61,11 +67,15 @@
     "content": "드라이할 때 옆머리를 아래로 눌러 말리면 덜 떠요. 다음 커트 때 옆머리 아래쪽 숱을 조금 정리해 볼게요.",
     "repliedAt": "2026-10-14T05:40:02.511Z"
   },
-  "canReply": false
+  "canReply": false,
+  "lastMessageAt": "2026-10-14T05:40:02.511Z",
+  "unreadCount": 0,
+  "reviewId": null,
+  "canReview": true
 }
 ```
 
-답변 전이면 `status`가 `REQUESTED`, `reply`가 `null`입니다. 받은 디자이너가 답변 전 상담을 볼 때만 `canReply`가 `true`입니다.
+답변 전이면 `status`가 `REQUESTED`, `reply`가 `null`입니다. 받은 디자이너가 답변 전 상담을 볼 때만 `canReply`가 `true`입니다. `reply`는 디자이너의 첫 메시지이며, 그 뒤의 메시지는 메시지 목록으로 봅니다.
 
 | 필드 | 뜻 |
 |---|---|
@@ -78,8 +88,12 @@
 | `attachment.photoUrl` | 첨부 사진 주소. `<img src>`에 그대로 사용. 사진이 없으면 `null` |
 | `request` | 고객이 적은 이번 요청 |
 | `sentAt` | 보낸 시각 |
-| `reply` | 디자이너 답변. 답변 전이면 `null` |
-| `canReply` | 지금 로그인한 회원이 답변할 수 있는지 |
+| `reply` | 디자이너의 첫 메시지와 그 시각. 답변 전이면 `null` |
+| `canReply` | 지금 로그인한 회원이 첫 답변을 보낼 디자이너인지 |
+| `lastMessageAt` | 마지막 메시지 시각. 메시지가 없으면 보낸 시각. 목록 정렬·표시에 사용 |
+| `unreadCount` | 상대가 보낸 메시지 중 내가 아직 읽음 표시하지 않은 수 |
+| `reviewId` | 이 상담의 후기 ID. 없으면 `null` |
+| `canReview` | 지금 로그인한 회원이 후기를 쓸 수 있는지. 보낸 회원이고 답변을 받았고 후기가 없을 때만 `true` |
 
 화면에는 상태를 이렇게 표시합니다. 고객 화면 문구는 지금 예시 상담 화면과 같습니다.
 
@@ -108,6 +122,18 @@ export type Consultation = {
   sentAt: string;
   reply: { content: string; repliedAt: string } | null;
   canReply: boolean;
+  lastMessageAt: string;
+  unreadCount: number;
+  reviewId: string | null;
+  canReview: boolean;
+};
+
+export type ConsultationMessage = {
+  id: number;
+  sender: 'CUSTOMER' | 'DESIGNER';
+  content: string;
+  sentAt: string;
+  mine: boolean;
 };
 ```
 
@@ -212,7 +238,7 @@ const response = await fetch('/api/consultations', {
 { "content": "드라이할 때 옆머리를 아래로 눌러 말리면 덜 떠요." }
 ```
 
-`content`는 앞뒤 공백을 뺀 1~2,000자입니다. 답변은 상담마다 한 번만 보낼 수 있고, 보낸 뒤에는 고칠 수 없습니다.
+`content`는 앞뒤 공백을 뺀 1~2,000자입니다. 디자이너의 첫 메시지를 보내는 API이며, 이미 답변한 상담에는 `409`입니다. 지금 화면과 맞추려고 남겼습니다. 대화 화면은 아래 메시지 보내기를 쓰면 되고, 디자이너의 첫 메시지도 같은 방식으로 답변이 됩니다.
 
 | 응답 | 언제 |
 |---|---|
@@ -223,6 +249,59 @@ const response = await fetch('/api/consultations', {
 | `409 RESOURCE_CONFLICT` | 이미 답변한 상담 |
 
 `409`를 받으면 상세를 다시 불러와 저장된 답변을 보여 줍니다. 응답을 받지 못해 다시 보낸 경우에도 같은 방법으로 확인합니다.
+
+## 7. 메시지 목록
+
+`GET /api/consultations/{id}/messages`
+
+오래된 순서로 돌려줍니다. `after` 없이 부르면 마지막 200개, `?after={메시지 ID}`를 붙이면 그 뒤의 메시지를 최대 200개 돌려줍니다. 실시간 신호를 받았을 때는 화면에 있는 마지막 메시지 ID를 `after`로 넣어 새 메시지만 받습니다. 볼 수 있는 사람은 상세와 같고, 그 밖에는 `404`입니다.
+
+```json
+[
+  { "id": 41, "sender": "CUSTOMER", "content": "사진 한 장 더 보낼게요", "sentAt": "2026-10-14T03:20:11.002Z", "mine": true },
+  { "id": 42, "sender": "DESIGNER", "content": "옆머리를 눌러 말려 보세요", "sentAt": "2026-10-14T05:40:02.511Z", "mine": false }
+]
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `id` | 메시지 번호. 상담 안에서 늘어나는 순서 |
+| `sender` | `CUSTOMER` 보낸 회원, `DESIGNER` 받은 디자이너 |
+| `mine` | 지금 로그인한 회원이 보낸 메시지인지 |
+
+## 8. 메시지 보내기
+
+`POST /api/consultations/{id}/messages`
+
+헤더는 CSRF와 `X-SALU-Storage-Context`, 본문은 `application/json`입니다.
+
+```json
+{ "clientKey": "7d1c2a3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d", "content": "다음 주에 방문할게요" }
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `clientKey` | UUID. 화면이 메시지마다 새로 만듦. 응답을 못 받아 다시 보낼 때는 같은 값 |
+| `content` | 앞뒤 공백을 뺀 1~2,000자 |
+
+| 응답 | 언제 |
+|---|---|
+| `201` + 메시지 한 건 | 새로 저장함. 디자이너의 첫 메시지면 상담이 `ANSWERED`로 바뀜 |
+| `200` + 메시지 한 건 | 같은 `clientKey`로 같은 내용을 다시 보냄. 처음 저장한 메시지를 돌려줌 |
+| `400 INVALID_REQUEST` | `clientKey`가 UUID가 아님, 내용이 비었거나 2,000자를 넘음, 헤더 없음 |
+| `404 RESOURCE_NOT_FOUND` | 참여자가 아니거나 없는 상담 |
+| `409 RESOURCE_CONFLICT` | 같은 `clientKey`로 다른 내용을 보냄 |
+| `409 STORAGE_CONTEXT_CHANGED` | 다른 탭에서 로그인 계정이 바뀜 |
+
+보낸 사람은 자기 메시지까지 읽은 것으로 처리됩니다. 상대에게는 `CONSULTATION_MESSAGE` 알림이 쌓입니다.
+
+## 9. 읽음 표시
+
+`POST /api/consultations/{id}/read`
+
+헤더는 CSRF, 본문은 `{ "messageId": 42 }`입니다. 화면에 보여 준 마지막 메시지 ID를 넣습니다. 내 읽음 위치를 그 메시지까지 올리고 `204`를 돌려줍니다. 위치는 뒤로 가지 않으므로 오래된 ID를 보내도 그대로입니다. 이 상담의 메시지가 아니면 `400`, 참여자가 아니면 `404`입니다.
+
+상담 목록·상세의 `unreadCount`가 이 위치를 기준으로 계산됩니다. 알림의 읽음과는 따로입니다.
 
 ## 오류 코드와 화면 처리
 
@@ -263,11 +342,9 @@ const response = await fetch('/api/consultations', {
 
 ## 이번 범위에 넣지 않은 것
 
-- 여러 번 주고받는 대화와 실시간 전달(WebSocket)
-- 상담 후기
+- 메시지에 사진 첨부, 메시지 수정·삭제
 - 사진 여러 장, 경과 기록 여러 개 첨부
-- 새 상담·답변 알림
-- 100건이 넘는 목록의 페이지 나누기
-- 보낸 상담 취소·삭제, 답변 수정
+- 100건이 넘는 상담 목록과 200개가 넘는 오래된 메시지의 페이지 나누기
+- 보낸 상담 취소·삭제, 상담 종료 상태
 
 이 기능을 넣을 때도 이 문서를 먼저 고칩니다.

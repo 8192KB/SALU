@@ -12,6 +12,7 @@ public final class MemberPrincipal implements UserDetails, CredentialsContainer,
     private final String email;
     private final String displayName;
     private final boolean active;
+    private final String role;
     private String password;
     private final String storageContext = java.util.UUID.randomUUID().toString();
     private java.util.Map<String,Object> attributes = java.util.Map.of();
@@ -20,10 +21,11 @@ public final class MemberPrincipal implements UserDetails, CredentialsContainer,
 
     public MemberPrincipal(MemberAccount account) {
         id = account.id(); email = account.email(); displayName = account.displayName();
-        active = "ACTIVE".equals(account.status()); password = account.passwordHash();
+        active = "ACTIVE".equals(account.status()); password = account.passwordHash(); role = account.role();
     }
     public long id() { return id; }
     public String storageContext() { return storageContext; }
+    public String role() { return role; }
     public MemberPrincipal social(org.springframework.security.oauth2.core.user.OAuth2User user) {
         password = null;
         // 사용자 정보와 토큰은 세션 안에서만 보관하며 응답 DTO에 노출하지 않음
@@ -42,7 +44,8 @@ public final class MemberPrincipal implements UserDetails, CredentialsContainer,
     @Override public String getPassword() { return password; }
     @Override public boolean isEnabled() { return active; }
     @Override public Collection<? extends GrantedAuthority> getAuthorities() {
-        return java.util.List.of(new SimpleGrantedAuthority("ROLE_MEMBER"));
+        return "ADMIN".equals(role) ? java.util.List.of(new SimpleGrantedAuthority("ROLE_MEMBER"), new SimpleGrantedAuthority("ROLE_ADMIN"))
+            : java.util.List.of(new SimpleGrantedAuthority("ROLE_MEMBER"));
     }
     @Override public void eraseCredentials() { password = null; }
 }

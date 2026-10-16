@@ -28,7 +28,9 @@ public class SecurityConfig {
         http.authenticationProvider(provider)
             .authorizeHttpRequests(authorize -> authorize
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/health", "/api/csrf", "/api/salons", "/api/designers", "/api/designers/*", "/api/auth/oauth2/providers", "/api/auth/oauth2/authorize/*", "/api/auth/oauth2/callback/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/health", "/api/csrf", "/api/salons", "/api/designers", "/api/designers/*", "/api/designers/*/reviews", "/api/designers/*/affiliations", "/api/auth/oauth2/providers", "/api/auth/oauth2/authorize/*", "/api/auth/oauth2/callback/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/community/posts", "/api/community/posts/*", "/api/community/posts/*/comments", "/api/community/posts/*/photos/*").permitAll()
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup").permitAll()
                 .anyRequest().authenticated())
             .formLogin(login -> login.loginPage("/api/auth/me").loginProcessingUrl("/api/auth/login")

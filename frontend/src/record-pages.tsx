@@ -1,6 +1,6 @@
 import { refreshDirectory, salonLabel } from './directory-cache';
 import { useDirectory } from './directory';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
@@ -13,7 +13,14 @@ import {
   PhotoThumbnail,
   focusFirstError,
 } from './components';
-import { AreaChoices, Field, PhotoList, PhotoPicker, PhotoButton } from './fields';
+import {
+  AreaChoices,
+  Field,
+  PhotoList,
+  PhotoPicker,
+  PhotoButton,
+  preventEnterSubmit,
+} from './fields';
 import { DateField } from './date-field';
 import { Dialog } from './dialog';
 import { AnimatedDetails } from './animated-details';
@@ -26,7 +33,7 @@ import {
 import { AREAS } from './prototype/types';
 import type { Area, CutRecord, RecordPhoto, ProgressEntry } from './prototype/types';
 import { cutTitle, daysAfter, displayDate, today } from './prototype/dates';
-import { InputError, newCutDraft } from './prototype/memory-repository';
+import { InputError, isBlankCutDraft, newCutDraft } from './prototype/memory-repository';
 import {
   materialUrl,
   newRequestDraft,
@@ -163,6 +170,16 @@ export function CutForm() {
   const { state, repository, cutDraft, setCutDraft } = usePrototype();
   const original = state.cuts.find((cut) => cut.id === id);
   const edit = useCutEditDraft(original);
+  // 전날 저장하고 비운 초안을 열면 커트 날짜를 오늘로 다시 채움. 화면을 연 뒤 고른 날짜는 그대로 둠
+  const [staleDate] = useState(
+    () => !id && isBlankCutDraft(cutDraft) && cutDraft.cutDate !== today(),
+  );
+  useEffect(() => {
+    if (staleDate)
+      setCutDraft((previous) =>
+        isBlankCutDraft(previous) ? { ...previous, cutDate: today() } : previous,
+      );
+  }, [staleDate, setCutDraft]);
   if (id && !original) return <Missing />;
   const form = id
     ? edit
@@ -189,6 +206,7 @@ function CutFormBody({
   const mode = useWorkspace();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [photosBusy, setPhotosBusy] = useState(false);
   const [manualDesigner, setManualDesigner] = useState(false);
@@ -204,6 +222,14 @@ function CutFormBody({
         return choices;
       }, new Map<string, CutRecord>())
       .values(),
+  ).filter(
+    // 등록 디자이너와 이름·현재 매장이 같으면 아래 ‘SALU 등록 디자이너’로만 표시
+    (cut) =>
+      !directory.designers.some(
+        (designer) =>
+          designer.name === cut.designerName.trim() &&
+          designer.affiliations.find((value) => value.current)?.salonName === cut.salonName.trim(),
+      ),
   );
   const previousDesigner = previousDesigners.find(
     (cut) =>
@@ -221,7 +247,9 @@ function CutFormBody({
   async function submit(event: FormEvent) {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
-    if (busy || photosBusy) return;
+    // 같은 작업 안에서 두 번 보낸 저장 요청이 기록을 두 건 만들지 않게 즉시 잠금
+    if (busy || photosBusy || saving.current) return;
+    saving.current = true;
     setErrors({});
     setBusy(true);
     try {
@@ -230,6 +258,7 @@ function CutFormBody({
         : await repository.createCut(draft);
       clear();
       navigate(`/records/${cut.id}/complete`, {
+        replace: true,
         state: { operation: editingId ? 'update' : 'create', celebrate: true },
       });
     } catch (failure) {
@@ -240,6 +269,7 @@ function CutFormBody({
       );
       focusFirstError(form);
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }
@@ -278,7 +308,12 @@ function CutFormBody({
           </button>
         </div>
       </Dialog>
-      <form className="panel record-form" onSubmit={submit} noValidate>
+      <form
+        className="panel record-form"
+        onSubmit={submit}
+        onKeyDown={preventEnterSubmit}
+        noValidate
+      >
         <Alert message={errors.form ?? ''} />
         <fieldset className="form-body" disabled={busy}>
           <section className="form-section" aria-label="커트 정보">
@@ -589,7 +624,6 @@ export function RecordDetail() {
   const [search] = useSearchParams();
   const { state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
-  const mode = useWorkspace();
   const navigate = useNavigate();
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
@@ -614,13 +648,12 @@ export function RecordDetail() {
     <>
       {preview && (
         <Link className="preview-return-link" to={previewUrl(preview)}>
-          상담 미리보기로 돌아가기 <Icon name="arrow" size={17} />
+          준비 내용으로 돌아가기 <Icon name="arrow" size={17} />
         </Link>
       )}
       <PageHeading
         back={<BackLink to="/records">기록 목록으로</BackLink>}
         title="커트 기록 · 경과"
-        description="당일의 느낌과 이후 변화를 함께 확인하세요."
       />
       <div className="two-column">
         <section>
@@ -705,11 +738,9 @@ export function RecordDetail() {
                 이 기록으로 다음 커트 준비 <Icon name="arrow" />
               </button>
             )}
-            {mode === 'example' && (
-              <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
-                디자이너 선택 <Icon name="arrow" size={16} />
-              </Link>
-            )}
+            <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
+              디자이너 골라 상담 <Icon name="arrow" size={16} />
+            </Link>
           </section>
         </section>
         <aside className="sidebar">
@@ -722,12 +753,12 @@ export function RecordDetail() {
                 {recordedDesigner.affiliations.find((value) => value.current)?.salonName ??
                   '등록 전'}
               </p>
+              {/* 주 버튼은 다음 커트 준비 하나. 준비 내용에서 상담해야 고른 자료가 함께 첨부됨 */}
               <Link
-                className={`button full${mode === 'example' ? ' primary' : ''}`}
-                to={`/designers/${recordedDesigner.id}?record=${cut.id}`}
+                className="button full"
+                to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
               >
-                {mode === 'example' ? '프로필 · 상담 요청' : '프로필 · 상담 준비'}{' '}
-                <Icon name="arrow" size={17} />
+                프로필 · 상담 요청 <Icon name="arrow" size={17} />
               </Link>
             </section>
           )}
@@ -740,8 +771,8 @@ export function RecordDetail() {
                     {value.designer ? `${value.designer.name} · 상담 준비` : '내 커트 준비'}
                   </span>
                   <strong>{value.requests[0]?.content}</strong>
-                  <span>
-                    미리보기 <span aria-hidden="true">↗</span>
+                  <span className="card-action">
+                    내용 보기 <Icon name="arrow" size={16} />
                   </span>
                 </Link>
               ))}
@@ -790,12 +821,15 @@ function ProgressFormBody({
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const saving = useRef(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [photosBusy, setPhotosBusy] = useState(false);
   async function submit(event: FormEvent) {
     event.preventDefault();
     const form = event.currentTarget as HTMLFormElement;
-    if (busy || photosBusy) return;
+    // 같은 작업 안에서 두 번 보낸 저장 요청이 기록을 두 건 만들지 않게 즉시 잠금
+    if (busy || photosBusy || saving.current) return;
+    saving.current = true;
     setErrors({});
     setBusy(true);
     try {
@@ -804,6 +838,7 @@ function ProgressFormBody({
         : await repository.addProgress(cut.id, draft);
       clear();
       navigate(`/records/${cut.id}/progress/${progress.id}/complete`, {
+        replace: true,
         state: { operation: editingId ? 'update' : 'create', celebrate: true },
       });
     } catch (failure) {
@@ -814,6 +849,7 @@ function ProgressFormBody({
       );
       focusFirstError(form);
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   }
@@ -824,7 +860,7 @@ function ProgressFormBody({
   return (
     <div className="form-layout">
       <PageHeading
-        back={<BackLink to={`/records/${cut.id}`}>커트 기록</BackLink>}
+        back={<BackLink to={`/records/${cut.id}`}>커트 기록으로</BackLink>}
         title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />
@@ -856,7 +892,12 @@ function ProgressFormBody({
           </button>
         </div>
       </Dialog>
-      <form className="panel record-form" onSubmit={submit} noValidate>
+      <form
+        className="panel record-form"
+        onSubmit={submit}
+        onKeyDown={preventEnterSubmit}
+        noValidate
+      >
         <Alert message={errors.form ?? ''} />
         <fieldset className="form-body" disabled={busy}>
           <section className="form-section" aria-label="관찰 시점">

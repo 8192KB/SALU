@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Component, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link } from './workspace';
+import { Link as RouterLink, useLocation } from 'react-router';
+import { Link, scopedTo, useWorkspace } from './workspace';
+import { KEEP_TRAIL, useBackTrail } from './back-trail';
 
 export function Icon({
   name,
@@ -18,6 +20,7 @@ export function Icon({
     | 'user'
     | 'reset'
     | 'calendar'
+    | 'consult'
     | 'warning';
   size?: number;
 }) {
@@ -59,6 +62,12 @@ export function Icon({
       </>
     ),
     chat: <path d="M21 11a8 8 0 0 1-8 8H6l-4 3V11a9 9 0 0 1 19 0ZM7 8h9M7 12h6" />,
+    consult: (
+      <>
+        <path d="M15 4H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1v3l4-3h5a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z" />
+        <path d="M17 9h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2l-3-2h-3" />
+      </>
+    ),
     user: (
       <>
         <circle cx="12" cy="8" r="4" />
@@ -124,13 +133,53 @@ export function PageHeading({
   );
 }
 
-export function BackLink({ to, children }: { to: string; children: ReactNode }) {
+// 직전에 보던 화면이 있으면 그 화면으로 돌아감. 단계가 정해진 작성 화면은 trail={false}로 이전 단계 유지
+export function BackLink({
+  to,
+  children,
+  trail = true,
+}: {
+  to: string;
+  children: ReactNode;
+  trail?: boolean;
+}) {
+  const location = useLocation();
+  const mode = useWorkspace();
+  const previous = useBackTrail(location);
+  const fallback = scopedTo(to, mode) as string;
+  if (trail && previous && previous.to !== fallback)
+    return (
+      <RouterLink className="heading-back" to={previous.to} state={KEEP_TRAIL}>
+        <Icon name="back" />
+        <span>{previous.label}</span>
+      </RouterLink>
+    );
   return (
-    <Link className="heading-back" to={to}>
+    <RouterLink className="heading-back" to={fallback} state={KEEP_TRAIL}>
       <Icon name="back" />
       <span>{children}</span>
-    </Link>
+    </RouterLink>
   );
+}
+
+// 배포 직후 예전 탭이 사라진 화면 파일을 요청하면 lazy 화면이 실패해 앱 전체가 비는 것을 막음
+export class LoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className="empty-state" role="alert">
+        <h1 tabIndex={-1}>화면을 불러오지 못했어요</h1>
+        <p>새 버전이 올라왔거나 연결이 끊겼을 수 있어요. 새로고침하면 다시 불러와요.</p>
+        <button type="button" className="button primary" onClick={() => window.location.reload()}>
+          새로고침
+        </button>
+      </section>
+    );
+  }
 }
 
 export function Missing({

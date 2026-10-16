@@ -2,8 +2,6 @@ package kr.salu.backup;
 
 import java.util.*;
 import java.security.MessageDigest;
-import java.io.ByteArrayInputStream;
-import javax.imageio.ImageIO;
 import kr.salu.auth.MemberPrincipal;
 import kr.salu.common.error.ApiException;
 import org.springframework.stereotype.Service;
@@ -54,17 +52,10 @@ public class BackupService {
     @Transactional(readOnly=true) public BackupMapper.Photo photo(MemberPrincipal principal, String context, String id) { id(id); long owner=owner(principal,context); var photo=mapper.photo(owner,id); if(photo==null) throw ApiException.notFound(); return new BackupMapper.Photo(photo.contentType(),photo.byteSize(),null,null,crypto.decrypt(photo.keyId(),photo.nonce(),photo.ciphertext(),aad(owner,"photo",id))); }
     @Transactional public void putPhoto(MemberPrincipal principal, String context, String id, String type, byte[] bytes) {
         id(id); long owner=owner(principal,context);
-        if(id.length()>100 || bytes.length==0 || bytes.length>5*1024*1024 || (type==null || !Set.of("image/jpeg","image/png","image/webp").contains(type)) || !signature(type,bytes)) throw ApiException.invalidRequest();
-        try (var input=ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
-            var readers=ImageIO.getImageReaders(input); if(!readers.hasNext()) throw ApiException.invalidRequest();
-            var reader=readers.next();
-            try { reader.setInput(input,true,true); if(reader.getWidth(0)*(long)reader.getHeight(0)>40000000) throw ApiException.invalidRequest(); if(reader.read(0)==null) throw ApiException.invalidRequest(); }
-            finally { reader.dispose(); }
-        } catch(java.io.IOException | IllegalArgumentException e) { throw ApiException.invalidRequest(); }
+        if(id.length()>100 || bytes.length>kr.salu.common.PhotoCheck.MAX_BYTES || !kr.salu.common.PhotoCheck.readable(type,bytes)) throw ApiException.invalidRequest();
         if(mapper.lockOwner(owner)==null) throw new org.springframework.security.access.AccessDeniedException("계정 확인 필요"); mapper.cleanupPhotos(owner); var old=mapper.photo(owner,id);
         if(old!=null) { if(!old.contentType().equals(type) || !MessageDigest.isEqual(crypto.decrypt(old.keyId(),old.nonce(),old.ciphertext(),aad(owner,"photo",id)),bytes)) throw ApiException.conflict(); return; }
         if(mapper.photoBytes(owner)+bytes.length>128*1024*1024) throw ApiException.invalidRequest();
         if(mapper.insertPhoto(owner,id,type,bytes.length,crypto.encrypt(bytes,aad(owner,"photo",id)))!=1) throw ApiException.conflict();
     }
-    private boolean signature(String type,byte[] b) { if(b.length<12) return false; return switch(type) { case "image/jpeg" -> (b[0]&255)==255 && (b[1]&255)==216 && (b[2]&255)==255; case "image/png" -> Arrays.equals(Arrays.copyOf(b,8),new byte[]{(byte)137,80,78,71,13,10,26,10}); default -> new String(b,0,4,java.nio.charset.StandardCharsets.US_ASCII).equals("RIFF") && new String(b,8,4,java.nio.charset.StandardCharsets.US_ASCII).equals("WEBP"); }; }
 }

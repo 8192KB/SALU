@@ -22,15 +22,16 @@
 !/docs/development-contract.md
 !/docs/login.md
 !/docs/personal-storage.md
+!/docs/consultation-api.md
+!/docs/files.md
 
 # Local reports, history, presentation notes and generated critiques
 /.local/
 /.impeccable/
 
-# Local presentation files, captured screens and ad hoc audit tools
+# Local presentation files and captured screens
 /docs/presentations/
 /docs/screenshots/
-/frontend/scripts/audit-*.mjs
 
 # Private deployment, local verification and Linux-specific runtime helpers
 /compose.nas.yml
@@ -38,7 +39,6 @@
 /backend/src/test/
 /frontend/tests/
 /frontend/playwright*.config.ts
-/frontend/scripts/capture-prototype.mjs
 /scripts/mysql-local.sh
 /scripts/storage-test-server.sh
 /scripts/verify-backend.sh

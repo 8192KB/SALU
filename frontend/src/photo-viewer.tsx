@@ -22,7 +22,7 @@ export function PhotoButton({
       <button
         className="photo-open"
         type="button"
-        aria-label={`${photo.caption} 확대`}
+        aria-label={`${photo.caption} 확대 보기`}
         onClick={() => setOpen(true)}
       >
         {failed ? (

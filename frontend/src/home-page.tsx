@@ -53,6 +53,15 @@ export function HomePage() {
               <p>참고할 자료를 고르고, 유지할 점과 바꿀 점을 정리해요.</p>
             </div>
           </li>
+          <li>
+            <Icon name="consult" size={24} />
+            <div>
+              <h3>
+                정리한 내용으로 디자이너에게 상담해요 <small>선택</small>
+              </h3>
+              <p>고른 자료만 보내고, 디자이너의 답변을 상담 내역에서 확인해요.</p>
+            </div>
+          </li>
         </ol>
       </section>
     </div>

@@ -14,6 +14,9 @@ public final class ApiException extends RuntimeException {
     public static ApiException invalidRequest() { return new ApiException(HttpStatus.BAD_REQUEST); }
     public static ApiException notFound() { return new ApiException(HttpStatus.NOT_FOUND); }
     public static ApiException conflict() { return new ApiException(HttpStatus.CONFLICT); }
+    public static ApiException forbidden() { return new ApiException(HttpStatus.FORBIDDEN); }
+    public static ApiException tooLarge() { return new ApiException(HttpStatus.CONTENT_TOO_LARGE); }
+    public static ApiException unsupportedMedia() { return new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE); }
     public static ApiException storageContextChanged() { var error = new ApiException(HttpStatus.CONFLICT); error.code = "STORAGE_CONTEXT_CHANGED"; return error; }
     public static ApiException unavailable() { return new ApiException(HttpStatus.SERVICE_UNAVAILABLE); }
     public String code() { return code; }

@@ -91,8 +91,8 @@ export function RequestList() {
                       minute: '2-digit',
                     })}
                   </time>
-                  <span>
-                    미리보기 <span aria-hidden="true">↗</span>
+                  <span className="card-action">
+                    내용 보기 <Icon name="arrow" size={16} />
                   </span>
                 </div>
               </Link>

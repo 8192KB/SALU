@@ -27,6 +27,7 @@ type PrototypeContextValue = {
   repository: PrototypeRepository;
   storage?: PersonalStore;
   ready: boolean;
+  loadFailed: boolean;
   state: PrototypeState;
   cutDraft: CutDraft;
   setCutDraft: Dispatch<SetStateAction<CutDraft>>;
@@ -46,6 +47,9 @@ type PrototypeContextValue = {
   reset: () => void;
 };
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
+// 이미 준비 내용으로 저장한 초안은 같은 기록의 새 준비로 이어 쓰지 않음
+const savedAsPreview = (previews: PrototypeState['previews'], draft: RequestDraft) =>
+  previews.some((preview) => JSON.stringify(preview.sourceDraft) === JSON.stringify(draft));
 type RequestDraftState = {
   current: RequestDraft | null;
   saved: Record<string, RequestDraft>;
@@ -115,18 +119,23 @@ function MemoryPrototypeProvider({
       }),
     [],
   );
-  const resumeRequestDraft = useCallback((initial: RequestDraft) => {
-    setRequestDrafts((previous) => {
-      const key = requestTarget(initial);
-      const next = previous.saved[previous.targets[key]] ?? initial;
-      if (previous.current === next) return previous;
-      return {
-        current: next,
-        saved: { ...previous.saved, [next.id]: next },
-        targets: { ...previous.targets, [key]: next.id },
-      };
-    });
-  }, []);
+  const resumeRequestDraft = useCallback(
+    (initial: RequestDraft) => {
+      setRequestDrafts((previous) => {
+        const key = requestTarget(initial);
+        const found = previous.saved[previous.targets[key]];
+        const next =
+          found && !savedAsPreview(repository.getSnapshot().previews, found) ? found : initial;
+        if (previous.current === next) return previous;
+        return {
+          current: next,
+          saved: { ...previous.saved, [next.id]: next },
+          targets: { ...previous.targets, [key]: next.id },
+        };
+      });
+    },
+    [repository],
+  );
   useEffect(() => {
     void repository.load();
     return () => repository.dispose();
@@ -145,6 +154,7 @@ function MemoryPrototypeProvider({
       value={{
         repository,
         ready: true,
+        loadFailed: false,
         state,
         cutDraft,
         setCutDraft,
@@ -173,21 +183,32 @@ export function PrototypeProvider({
   children,
   seed = 'empty',
   scope = 'guest',
+  adoptGuest = false,
 }: {
   children: ReactNode;
   seed?: WorkspaceMode;
   scope?: string;
+  adoptGuest?: boolean;
 }) {
   return seed === 'example' ? (
     <MemoryPrototypeProvider seed={seed}>{children}</MemoryPrototypeProvider>
   ) : (
-    <PersonalPrototypeProvider key={scope} scope={scope}>
+    <PersonalPrototypeProvider key={scope} scope={scope} adoptGuest={adoptGuest}>
       {children}
     </PersonalPrototypeProvider>
   );
 }
-function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; scope: string }) {
+function PersonalPrototypeProvider({
+  children,
+  scope,
+  adoptGuest,
+}: {
+  children: ReactNode;
+  scope: string;
+  adoptGuest: boolean;
+}) {
   const [storage] = useState(() => new PersonalStore(scope));
+  const [adoptAtLoad] = useState(adoptGuest);
   const view = useSyncExternalStore(storage.subscribe, storage.getSnapshot);
   const { bundle, ready } = view;
   const drafts = bundle.drafts;
@@ -221,9 +242,10 @@ function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; s
   const resumeRequestDraft = useCallback(
     (initial: RequestDraft) =>
       storage.updateDrafts((previous) => {
+        const previews = storage.getSnapshot().bundle.state.previews;
         const saved = Object.values(previous.requests)
           .reverse()
-          .find((d) => requestTarget(d) === requestTarget(initial));
+          .find((d) => requestTarget(d) === requestTarget(initial) && !savedAsPreview(previews, d));
         const next = saved ?? initial;
         if (previous.currentRequestId === next.id) return previous;
         return {
@@ -244,7 +266,11 @@ function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; s
     [storage],
   );
   useEffect(() => {
-    void storage.load();
+    // 서버에 연결하지 못해 마지막 계정으로 연 경우, 로그인을 확인한 뒤에 게스트 기록을 옮김
+    if (adoptGuest && ready) void storage.adoptGuest();
+  }, [adoptGuest, ready, storage]);
+  useEffect(() => {
+    void storage.load(adoptAtLoad);
     const save = () => {
       void storage.flush().catch(() => {});
     };
@@ -255,12 +281,13 @@ function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; s
       document.removeEventListener('visibilitychange', save);
       storage.dispose();
     };
-  }, [storage]);
+  }, [storage, adoptAtLoad]);
   const value = useMemo<PrototypeContextValue>(
     () => ({
       repository: storage.repository,
       storage,
       ready,
+      loadFailed: !ready && view.errorSource === 'local',
       state: bundle.state,
       cutDraft: drafts.cutDraft,
       setCutDraft: (v) => setter('cutDraft', v),
@@ -284,7 +311,16 @@ function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; s
       ),
       reset: () => storage.repository.reset(),
     }),
-    [bundle, ready, storage, setter, setRequestDraft, resumeRequestDraft, markRequestStep],
+    [
+      bundle,
+      ready,
+      view.errorSource,
+      storage,
+      setter,
+      setRequestDraft,
+      resumeRequestDraft,
+      markRequestStep,
+    ],
   );
   return <PrototypeContext.Provider value={value}>{children}</PrototypeContext.Provider>;
 }

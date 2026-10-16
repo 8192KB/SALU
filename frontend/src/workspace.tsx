@@ -13,7 +13,7 @@ export type WorkspaceMode = 'empty' | 'example';
 export const WorkspaceContext = createContext<WorkspaceMode>('empty');
 export const useWorkspace = () => useContext(WorkspaceContext);
 
-function scopedTo(to: To, mode: WorkspaceMode): To {
+export function scopedTo(to: To, mode: WorkspaceMode): To {
   const prefix = (path: string) =>
     mode === 'example' && path.startsWith('/') && !path.startsWith('/examples') && path !== '/login'
       ? `/examples${path}`

@@ -1,6 +1,6 @@
 import { draftDesigner, refreshDirectory } from './directory-cache';
 import { useDirectory } from './directory';
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Completion } from './completion';
 import { useActivePage } from './main-navigation';
 import type { FormEvent } from 'react';
@@ -42,6 +42,10 @@ import {
   unfinishedDrafts,
 } from './prototype/request-flow';
 
+const ConsultationDesignerProfile = lazy(() =>
+  import('./consultation-flow').then((module) => ({ default: module.ConsultationDesignerProfile })),
+);
+
 function currentSalon(designer: DesignerProfile) {
   return designer.affiliations.find((value) => value.current)?.salonName ?? '소속 미등록';
 }
@@ -70,7 +74,7 @@ function Steps({ current }: { current: number }) {
 function SelectedDesigner({ designer }: { designer: DesignerProfile }) {
   return (
     <div className="selected-designer">
-      <Avatar name={designer.name} />
+      <Avatar name={designer.name} src={designer.avatarUrl} />
       <div>
         <strong>{designer.name} 디자이너</strong>
         <p>{currentSalon(designer)}</p>
@@ -244,7 +248,7 @@ export function DesignerList() {
             key={designer.id}
           >
             <div className="designer-top">
-              <Avatar name={designer.name} />
+              <Avatar name={designer.name} src={designer.avatarUrl} />
               <div>
                 <h3>{designer.name} 디자이너</h3>
                 <p>{currentSalon(designer)}</p>
@@ -260,16 +264,14 @@ export function DesignerList() {
             <p>{designer.introduction.split('\n')[0]}</p>
             <div className="card-bottom">
               <span>
-                {mode === 'example' ? '가상 프로필 · 상담 후기 예시' : '직접 등록한 프로필'}
+                {mode === 'example' ? designer.specialties.join(' · ') : '직접 등록한 프로필'}
               </span>
               <span>프로필 보기 ↗</span>
             </div>
           </Link>
         ))}
       </div>
-      {mode === 'example' ? (
-        <p className="form-note">인물·매장·후기는 화면 확인을 위한 가상 자료입니다.</p>
-      ) : (
+      {mode !== 'example' && (
         <>
           {directory.loading && <p role="status">디자이너를 불러오고 있어요.</p>}
           {directory.error && (
@@ -284,6 +286,9 @@ export function DesignerList() {
             <section className="empty-state">
               <h2>등록된 디자이너가 없어요</h2>
               <p>디자이너라면 소개를 등록해 보세요.</p>
+              <Link className="button" to="/examples/designers">
+                디자이너 예시로 둘러보기
+              </Link>
             </section>
           )}
           <Link className="button" to="/account/designer">
@@ -323,6 +328,12 @@ export function DesignerDetail() {
     (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
   )
     return <Missing title="프로필 또는 선택한 기록을 찾을 수 없어요" />;
+  if (mode === 'example')
+    return (
+      <Suspense fallback={<p role="status">프로필을 불러오고 있어요.</p>}>
+        <ConsultationDesignerProfile designer={designer} record={record} preview={sourcePreview} />
+      </Suspense>
+    );
   const existing = unfinishedDrafts(state, requestDrafts).find(
     (draft) => draft.designerId === designer.id && (!record || draft.cutId === record),
   );
@@ -353,7 +364,7 @@ export function DesignerDetail() {
             <div className="profile-identity">
               <h2>{designer.name} 디자이너</h2>
               <p>현재 소속 · {currentSalon(designer)}</p>
-              {mode !== 'example' && <span className="demo-badge">직접 등록한 프로필</span>}
+              <span className="demo-badge">직접 등록한 프로필</span>
               <div className="chip-row">
                 {designer.specialties.map((value) => (
                   <span className="chip" key={value}>
@@ -433,24 +444,8 @@ export function DesignerDetail() {
           <section className="panel profile-section profile-reviews">
             <div className="section-heading">
               <h2>상담 후기</h2>
-              {mode === 'example' && <span className="demo-badge">가상 후기</span>}
             </div>
-            {mode !== 'example' ? (
-              <p className="muted">상담 후기 기능은 준비 중이에요.</p>
-            ) : designer.reviewExamples.length ? (
-              designer.reviewExamples.map((review) => (
-                <article className="review-card" key={review.id}>
-                  <div className="review-person">
-                    <Avatar name="고객" />
-                    <strong>상담 고객</strong>
-                    <time dateTime={review.date}>{displayDate(review.date)}</time>
-                  </div>
-                  <p>{review.content}</p>
-                </article>
-              ))
-            ) : (
-              <p className="muted">아직 남겨진 후기가 없어요.</p>
-            )}
+            <p className="muted">상담 후기 기능은 준비 중이에요.</p>
           </section>
           <AnimatedDetails className="profile-section profile-details" summary="소속 정보">
             {designer.affiliations.map((value) => (

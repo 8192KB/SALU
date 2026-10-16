@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Link,
@@ -31,8 +31,8 @@ import { CloudSync } from './prototype/cloud-sync';
 import { HomePage } from './home-page';
 import { Link as WorkspaceLink, useWorkspace, WorkspaceContext } from './workspace';
 import { RetainedPage, useMainNavigation, isTaskPath } from './main-navigation';
-import { AnimatedDetails } from './animated-details';
 import { ThemeSettings } from './theme';
+import { ConsultationProvider, useConsultations } from './consultation-store';
 import {
   DesignerDetail,
   DesignerList,
@@ -43,11 +43,28 @@ import {
   RequestPage,
 } from './consultation-pages';
 
+const ConsultationNew = lazy(() =>
+  import('./consultation-flow').then((module) => ({ default: module.ConsultationNew })),
+);
+const ConsultationComplete = lazy(() =>
+  import('./consultation-flow').then((module) => ({ default: module.ConsultationComplete })),
+);
+const ConsultationList = lazy(() =>
+  import('./consultation-flow').then((module) => ({ default: module.ConsultationList })),
+);
+const ConsultationDetail = lazy(() =>
+  import('./consultation-flow').then((module) => ({ default: module.ConsultationDetail })),
+);
+
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { reset, ready } = usePrototype();
+  const { repository: consultations } = useConsultations();
   const mode = useWorkspace();
+  useEffect(() => {
+    if (mode === 'example') void import('./consultation-flow');
+  }, [mode]);
   const navigation = useMainNavigation(ready);
   const [pageSlot, setPageSlot] = useState<HTMLDivElement | null>(null);
   const path =
@@ -81,6 +98,22 @@ function Layout() {
     <div
       className={`app-shell${path === '/records' ? ' journal-screen' : ''}${path === '/' && mode === 'empty' ? ' home-screen' : ''}${focused ? ' task-focused' : ''}${keyboardOpen ? ' keyboard-open' : ''}`}
     >
+      {mode === 'example' && (
+        <div className="prototype-notice example-notice">
+          <div className="example-notice-inner">
+            <span className="demo-badge">예시 체험</span>
+            <WorkspaceLink className="example-directory" to="/designers">
+              디자이너 찾기
+            </WorkspaceLink>
+            <button className="reset-button" onClick={() => setResetOpen(true)}>
+              초기화
+            </button>
+            <Link className="example-exit" to="/">
+              체험 종료
+            </Link>
+          </div>
+        </div>
+      )}
       <header className="app-header">
         <div className="header-inner">
           <Link className="brand" to="/" aria-label="SALU 홈">
@@ -107,6 +140,14 @@ function Layout() {
                   커트 준비
                 </>,
               )}
+              {mode === 'example' &&
+                navigation.menu(
+                  'consultations',
+                  <>
+                    <Icon name="chat" />
+                    상담
+                  </>,
+                )}
             </nav>
           )}
           <div className="header-actions">
@@ -114,7 +155,13 @@ function Layout() {
             {focused ? (
               <WorkspaceLink
                 className="task-exit"
-                to={path.startsWith('/records/') ? '/records' : '/requests'}
+                to={
+                  path.startsWith('/records/')
+                    ? '/records'
+                    : path.startsWith('/consultations/')
+                      ? '/consultations'
+                      : '/requests'
+                }
               >
                 나가기
               </WorkspaceLink>
@@ -124,28 +171,7 @@ function Layout() {
           </div>
         </div>
       </header>
-      {mode === 'example' ? (
-        <div className="prototype-notice example-notice">
-          <div className="example-notice-inner">
-            <span className="demo-badge">예시 체험 · 가상 자료</span>
-            <Link className="example-exit" to="/">
-              예시 체험 끝내기
-            </Link>
-            <AnimatedDetails className="example-help" summary="체험 안내">
-              <p>내 기록과 별도로 체험해요. 예시 체험을 끝내면 예시 기록은 사라져요.</p>
-              <div className="example-tools">
-                <WorkspaceLink className="example-directory" to="/designers">
-                  디자이너 예시
-                </WorkspaceLink>
-                <button className="reset-button" onClick={() => setResetOpen(true)}>
-                  <Icon name="reset" size={14} />
-                  초기화
-                </button>
-              </div>
-            </AnimatedDetails>
-          </div>
-        </div>
-      ) : path !== '/' && path !== '/login' && path !== '/signup' ? (
+      {mode !== 'example' && path !== '/' && path !== '/login' && path !== '/signup' ? (
         <StorageNotice compact={focused} />
       ) : null}
       {path === '/login' || path === '/signup' || path === '/account' ? null : (
@@ -156,7 +182,7 @@ function Layout() {
         title="작성한 내용을 초기화할까요?"
         onClose={() => setResetOpen(false)}
       >
-        <p>예시에서 추가한 기록·사진·준비 내용을 지워요. 내 기록은 그대로 남아요.</p>
+        <p>체험 중 작성한 기록과 상담 요청을 초기화해요. 내 기록은 그대로 남아요.</p>
         <div className="dialog-actions">
           <button type="button" className="button" onClick={() => setResetOpen(false)}>
             계속 작성
@@ -167,6 +193,7 @@ function Layout() {
             onClick={() => {
               setResetOpen(false);
               reset();
+              consultations?.reset();
               navigate('/examples/records');
             }}
           >
@@ -217,43 +244,49 @@ function PageRoutes({
   mode: ReturnType<typeof useWorkspace>;
 }) {
   return (
-    <Routes location={location}>
-      <Route
-        index
-        element={mode === 'example' ? <Navigate to="/examples/records" replace /> : <HomePage />}
-      />
-      <Route path="login" element={<LoginPage />} />
-      <Route path="signup" element={<SignupPage />} />
-      <Route path="backup" element={<BackupPage />} />
-      <Route path="account/designer" element={<DirectoryEditor />} />
-      <Route path="account" element={<AccountPage />} />
-      <Route path="auth/complete" element={<AuthCompletePage />} />
-      <Route path="records" element={<RecordList />} />
-      <Route path="records/new" element={<CutForm />} />
-      <Route path="records/:id/complete" element={<RecordComplete />} />
-      <Route path="records/:id/progress/:progressId/complete" element={<RecordComplete />} />
-      <Route path="records/:id" element={<RecordDetail />} />
-      <Route path="records/:id/edit" element={<CutForm />} />
-      <Route path="records/:id/progress/new" element={<ProgressForm />} />
-      <Route path="records/:id/progress/:progressId/edit" element={<ProgressForm />} />
-      <Route path="designers" element={<DesignerList />} />
-      <Route path="designers/:id" element={<DesignerDetail />} />
-      <Route path="consultations/materials" element={<MaterialsPage />} />
-      <Route path="consultations/request" element={<RequestPage />} />
-      <Route path="consultations/previews/:id" element={<PreviewPage />} />
-      <Route path="requests" element={<RequestList />} />
-      <Route path="requests/materials" element={<MaterialsPage />} />
-      <Route path="requests/write" element={<RequestPage />} />
-      <Route path="requests/review" element={<ReviewPage />} />
-      <Route path="requests/complete/:id" element={<CompletePage />} />
-      <Route path="requests/previews/:id" element={<PreviewPage />} />
-      <Route
-        path="*"
-        element={
-          <Missing title="페이지를 찾을 수 없어요" message="내 기록에서 다시 시작해 주세요." />
-        }
-      />
-    </Routes>
+    <Suspense fallback={<p role="status">상담 화면을 불러오고 있어요.</p>}>
+      <Routes location={location}>
+        <Route
+          index
+          element={mode === 'example' ? <Navigate to="/examples/records" replace /> : <HomePage />}
+        />
+        <Route path="login" element={<LoginPage />} />
+        <Route path="signup" element={<SignupPage />} />
+        <Route path="backup" element={<BackupPage />} />
+        <Route path="account/designer" element={<DirectoryEditor />} />
+        <Route path="account" element={<AccountPage />} />
+        <Route path="auth/complete" element={<AuthCompletePage />} />
+        <Route path="records" element={<RecordList />} />
+        <Route path="records/new" element={<CutForm />} />
+        <Route path="records/:id/complete" element={<RecordComplete />} />
+        <Route path="records/:id/progress/:progressId/complete" element={<RecordComplete />} />
+        <Route path="records/:id" element={<RecordDetail />} />
+        <Route path="records/:id/edit" element={<CutForm />} />
+        <Route path="records/:id/progress/new" element={<ProgressForm />} />
+        <Route path="records/:id/progress/:progressId/edit" element={<ProgressForm />} />
+        <Route path="designers" element={<DesignerList />} />
+        <Route path="designers/:id" element={<DesignerDetail />} />
+        <Route path="consultations" element={<ConsultationList />} />
+        <Route path="consultations/new" element={<ConsultationNew />} />
+        <Route path="consultations/:id/complete" element={<ConsultationComplete />} />
+        <Route path="consultations/:id" element={<ConsultationDetail />} />
+        <Route path="consultations/materials" element={<MaterialsPage />} />
+        <Route path="consultations/request" element={<RequestPage />} />
+        <Route path="consultations/previews/:id" element={<PreviewPage />} />
+        <Route path="requests" element={<RequestList />} />
+        <Route path="requests/materials" element={<MaterialsPage />} />
+        <Route path="requests/write" element={<RequestPage />} />
+        <Route path="requests/review" element={<ReviewPage />} />
+        <Route path="requests/complete/:id" element={<CompletePage />} />
+        <Route path="requests/previews/:id" element={<PreviewPage />} />
+        <Route
+          path="*"
+          element={
+            <Missing title="페이지를 찾을 수 없어요" message="내 기록에서 다시 시작해 주세요." />
+          }
+        />
+      </Routes>
+    </Suspense>
   );
 }
 
@@ -272,7 +305,9 @@ function AccountScopedPrototype() {
             element={
               <PrototypeProvider seed="example">
                 <WorkspaceContext.Provider value="example">
-                  <Layout />
+                  <ConsultationProvider>
+                    <Layout />
+                  </ConsultationProvider>
                 </WorkspaceContext.Provider>
               </PrototypeProvider>
             }

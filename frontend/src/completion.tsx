@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLocation, useParams } from 'react-router';
-import { Icon, Missing } from './components';
+import { Icon, Missing, SuccessMark } from './components';
 import { PhotoButton } from './fields';
 import { PhotoPlaceholder } from './components';
 import { Link, useWorkspace } from './workspace';
@@ -28,14 +28,12 @@ export function Completion({
   const mode = useWorkspace();
   return (
     <section className="preparation-complete" aria-label="저장 결과">
-      <div className={`completion-check${location.state?.celebrate ? ' celebrate' : ''}`}>
-        <Icon name="check" size={66} />
-      </div>
+      <SuccessMark className="completion-check" celebrate={Boolean(location.state?.celebrate)} />
       <h1 tabIndex={-1}>{title}</h1>
       <p className="completion-description">
         {description ??
           (mode === 'example'
-            ? '예시 체험에서 저장했어요.'
+            ? '기록을 저장했어요.'
             : '기기에 저장했어요. 계정 백업 상태는 내 기록에서 확인할 수 있어요.')}
       </p>
       {children}

@@ -149,7 +149,7 @@ export function RecordList() {
           </div>
           {mode === 'example' && (
             <Link className="text-link" style={{ marginTop: 24 }} to="/designers">
-              디자이너 예시 둘러보기 <Icon name="arrow" />
+              디자이너 찾기 <Icon name="arrow" />
             </Link>
           )}
         </section>
@@ -439,9 +439,7 @@ function CutFormBody({
                       </optgroup>
                     )}
                     {directory.designers.length > 0 && (
-                      <optgroup
-                        label={mode === 'example' ? '예시 디자이너 프로필' : 'SALU 등록 디자이너'}
-                      >
+                      <optgroup label="SALU 등록 디자이너">
                         {directory.designers.map((designer) => (
                           <option key={designer.id} value={`profile/${designer.id}`}>
                             {designer.name} ·{' '}
@@ -725,10 +723,11 @@ export function RecordDetail() {
                   '등록 전'}
               </p>
               <Link
-                className="button full"
+                className={`button full${mode === 'example' ? ' primary' : ''}`}
                 to={`/designers/${recordedDesigner.id}?record=${cut.id}`}
               >
-                프로필 · 상담 준비 <Icon name="arrow" size={17} />
+                {mode === 'example' ? '프로필 · 상담 요청' : '프로필 · 상담 준비'}{' '}
+                <Icon name="arrow" size={17} />
               </Link>
             </section>
           )}

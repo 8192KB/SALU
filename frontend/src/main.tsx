@@ -5,6 +5,7 @@ import './styles.css';
 import './interface.css';
 import { ThemeProvider } from './theme';
 import './theme.css';
+import './consultation.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

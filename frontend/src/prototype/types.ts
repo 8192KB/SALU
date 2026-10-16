@@ -35,6 +35,7 @@ export type ProgressEntry = {
   question: string;
 };
 export type DesignerProfile = {
+  avatarUrl?: string;
   salonId?: Id;
   id: Id;
   name: string;

@@ -88,6 +88,16 @@ export function Icon({
   );
 }
 
+export function SuccessMark({ className, celebrate }: { className: string; celebrate: boolean }) {
+  return (
+    <div className={`success-mark ${className}${celebrate ? ' celebrate' : ''}`} aria-hidden="true">
+      <svg className="success-check" viewBox="0 0 24 24">
+        <path d="m5.5 12.5 4 4 9-9.5" pathLength={1} />
+      </svg>
+    </div>
+  );
+}
+
 export function PageHeading({
   title,
   description,
@@ -144,10 +154,18 @@ export function Missing({
   );
 }
 
-export function Avatar({ name, large = false }: { name: string; large?: boolean }) {
+export function Avatar({
+  name,
+  large = false,
+  src,
+}: {
+  name: string;
+  large?: boolean;
+  src?: string;
+}) {
   return (
     <span className={`avatar ${large ? 'large' : ''}`} aria-hidden="true">
-      {name.slice(0, 1)}
+      {src ? <img src={src} alt="" /> : name.slice(0, 1)}
     </span>
   );
 }

@@ -3,6 +3,7 @@ package kr.salu.consultation;
 import java.io.IOException;
 import java.util.List;
 import kr.salu.auth.MemberPrincipal;
+import kr.salu.auth.StorageContext;
 import kr.salu.common.error.ApiException;
 import org.springframework.http.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -33,6 +34,17 @@ public class ConsultationController {
     @GetMapping("/api/consultations/{id}/photo") ResponseEntity<byte[]> photo(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id) {
         var photo = service.photo(member, id);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.parseMediaType(photo.contentType())).header("X-Content-Type-Options","nosniff").body(photo.bytes());
+    }
+    @GetMapping("/api/consultations/{id}/messages") ResponseEntity<List<ConsultationService.Message>> messages(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id, @RequestParam(required=false) Long after) { return ok(service.messages(member, id, after)); }
+    @PostMapping(path="/api/consultations/{id}/messages", consumes=MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<ConsultationService.Message> sendMessage(@AuthenticationPrincipal MemberPrincipal member, @RequestHeader(StorageContext.HEADER) String context, @PathVariable String id, @RequestBody ConsultationService.MessageInput input) {
+        var posted = service.sendMessage(member, context, id, input);
+        return ResponseEntity.status(posted.created() ? 201 : 200).cacheControl(CacheControl.noStore()).body(posted.message());
+    }
+    @PostMapping(path="/api/consultations/{id}/read", consumes=MediaType.APPLICATION_JSON_VALUE)
+    ResponseEntity<Void> read(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id, @RequestBody ConsultationService.ReadInput input) {
+        service.markRead(member, id, input);
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
     @PostMapping(path="/api/consultations/{id}/reply", consumes=MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<ConsultationService.Consultation> reply(@AuthenticationPrincipal MemberPrincipal member, @RequestHeader("X-SALU-Storage-Context") String context, @PathVariable String id, @RequestBody ReplyInput input) {

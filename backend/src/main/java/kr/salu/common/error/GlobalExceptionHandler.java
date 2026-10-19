@@ -21,7 +21,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<Object> domainError(ApiException exception) {
-        if (exception.code() != null) return ResponseEntity.status(exception.status()).contentType(MediaType.APPLICATION_JSON).cacheControl(org.springframework.http.CacheControl.noStore()).body(new ApiError(exception.code(), "로그인 상태를 다시 확인하세요."));
+        if (exception.code() != null) return ResponseEntity.status(exception.status()).contentType(MediaType.APPLICATION_JSON).cacheControl(org.springframework.http.CacheControl.noStore()).body(new ApiError(exception.code(), exception.getMessage()));
         return response(exception.status(), new HttpHeaders());
     }
 

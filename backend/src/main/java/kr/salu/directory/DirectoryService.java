@@ -37,6 +37,29 @@ public class DirectoryService {
         if(count!=1) throw ApiException.conflict();
         mapper.clearAffiliation(id);
         if(input.salonId()!=null && mapper.insertAffiliation(id,input.salonId())!=1) throw ApiException.conflict();
+        // 소속이 바뀌면 지난 기간을 닫고 새 기간을 엶. 열린 기간은 DB UNIQUE로 하나만 허용
+        String before=previous==null?null:previous.salonId();
+        if(!java.util.Objects.equals(before,input.salonId())) {
+            mapper.closeHistory(id);
+            if(input.salonId()!=null && mapper.openHistory(id,input.salonId())!=1) throw ApiException.conflict();
+        }
         return mapper.ownProfile(owner);
+    }
+    public record AffiliationView(String salonId, String salonName, String region, String branch, String startedAt, String endedAt) {}
+    @Transactional(readOnly=true) public List<AffiliationView> affiliations(String id) {
+        profile(id);
+        return mapper.history(id).stream().map(a -> new AffiliationView(a.salonId(),a.salonName(),a.region(),a.branch(),kr.salu.common.Inputs.time(a.startedAt()),kr.salu.common.Inputs.time(a.endedAt()))).toList();
+    }
+    @Transactional(readOnly=true) public List<DirectoryMapper.Profile> favorites(long member) { return mapper.favorites(member); }
+    // 찜은 공개 프로필만, 내 프로필은 찜하지 않음. 이미 찜했으면 그대로 성공
+    @Transactional public void addFavorite(long member, String designer) {
+        if(!kr.salu.common.Inputs.uuid(designer) || mapper.publicProfile(designer)==null) throw ApiException.notFound();
+        Long owner=mapper.profileOwner(designer);
+        if(owner!=null && owner==member) throw ApiException.invalidRequest();
+        mapper.addFavorite(member,designer);
+    }
+    @Transactional public void removeFavorite(long member, String designer) {
+        if(!kr.salu.common.Inputs.uuid(designer)) throw ApiException.notFound();
+        mapper.removeFavorite(member,designer);
     }
 }

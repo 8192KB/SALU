@@ -24,7 +24,7 @@ public final class ActiveSessionGuard extends OncePerRequestFilter {
         if (authentication != null && authentication.getPrincipal() instanceof MemberPrincipal principal) {
             try {
                 var member = mapper.findById(principal.id());
-                if (member == null || !"ACTIVE".equals(member.status())) {
+                if (member == null || !"ACTIVE".equals(member.status()) || !member.role().equals(principal.role())) {
                     SecurityContextHolder.clearContext();
                     var session = request.getSession(false);
                     if (session != null) session.invalidate();

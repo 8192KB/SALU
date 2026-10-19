@@ -7,10 +7,10 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface MemberMapper {
-    @Select("SELECT id, email, password_hash, display_name, status FROM members WHERE email = #{email}")
+    @Select("SELECT id, email, password_hash, display_name, status, role FROM members WHERE email = #{email}")
     MemberAccount findByEmail(String email);
 
-    @Select("SELECT id, email, password_hash, display_name, status FROM members WHERE id = #{id}")
+    @Select("SELECT id, email, password_hash, display_name, status, role FROM members WHERE id = #{id}")
     MemberAccount findById(long id);
 
     @Insert("INSERT INTO members(email, password_hash, display_name, status) VALUES (#{email}, #{passwordHash}, #{displayName}, 'ACTIVE')")

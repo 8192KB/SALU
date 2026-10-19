@@ -25,6 +25,9 @@ export type ConsultationThread = {
   reply?: ConsultationReply;
   customer?: { displayName: string };
   canReply?: boolean;
+  // 서버 상담만 있음. 목록 정렬과 안 읽은 메시지 표시에 사용
+  lastMessageAt?: string;
+  unreadCount?: number;
 };
 export type ConsultationDraft = {
   id: string;
@@ -212,6 +215,8 @@ export function threadFrom(value: Consultation, draftId = ''): ConsultationThrea
     reply: value.reply ?? undefined,
     customer: value.customer,
     canReply: value.canReply,
+    lastMessageAt: value.lastMessageAt,
+    unreadCount: value.unreadCount,
   };
 }
 

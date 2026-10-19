@@ -18,6 +18,15 @@ export type Consultation = {
   sentAt: string;
   reply: { content: string; repliedAt: string } | null;
   canReply: boolean;
+  lastMessageAt: string;
+  unreadCount: number;
+};
+export type ConsultationMessage = {
+  id: number;
+  sender: 'CUSTOMER' | 'DESIGNER';
+  content: string;
+  sentAt: string;
+  mine: boolean;
 };
 export type ConsultationInput = {
   requestKey: string;
@@ -46,6 +55,11 @@ const replyMessages: Record<string, string> = {
   ACCESS_DENIED: '이 상담에 답변할 수 없어요.',
   INVALID_REQUEST: '답변을 2,000자 이내로 적어 주세요.',
 };
+const messageMessages: Record<string, string> = {
+  ...readMessages,
+  INVALID_REQUEST: '메시지를 2,000자 이내로 적어 주세요.',
+  RESOURCE_CONFLICT: '보내던 메시지와 내용이 달라요. 다시 보내 주세요.',
+};
 function translate(error: unknown, table: Record<string, string>): never {
   if (error instanceof ApiFailure) {
     const message =
@@ -66,6 +80,8 @@ function isConsultation(value: unknown): value is Consultation {
     typeof item.request === 'string' &&
     typeof item.sentAt === 'string' &&
     typeof item.canReply === 'boolean' &&
+    typeof item.lastMessageAt === 'string' &&
+    typeof item.unreadCount === 'number' &&
     Boolean(designer && typeof designer.id === 'string' && typeof designer.name === 'string') &&
     Boolean(attachment && typeof attachment.cutDate === 'string')
   );
@@ -139,5 +155,69 @@ export async function replyConsultation(member: SessionMember, id: string, conte
     );
   } catch (error) {
     translate(error, replyMessages);
+  }
+}
+
+function isMessage(value: unknown): value is ConsultationMessage {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return (
+    Number.isSafeInteger(item.id) &&
+    (item.sender === 'CUSTOMER' || item.sender === 'DESIGNER') &&
+    typeof item.content === 'string' &&
+    typeof item.sentAt === 'string' &&
+    typeof item.mine === 'boolean'
+  );
+}
+// after가 있으면 그 메시지 뒤의 것만 받음. 실시간 신호를 받았을 때 새 메시지만 이어 받는 데 씀
+export async function listMessages(member: SessionMember, id: string, after?: number) {
+  try {
+    const query = after ? `?after=${after}` : '';
+    const response = await memberRequest(
+      `/api/consultations/${encodeURIComponent(id)}/messages${query}`,
+      member,
+    );
+    const body: unknown = await response.json().catch(() => null);
+    if (!Array.isArray(body) || !body.every(isMessage))
+      throw new ApiFailure(0, 'INVALID_RESPONSE', '메시지를 읽지 못했어요. 다시 시도해 주세요.');
+    return body;
+  } catch (error) {
+    translate(error, readMessages);
+  }
+}
+// 응답을 못 받아 다시 보낼 때는 같은 clientKey를 써야 메시지가 한 번만 저장됨
+export async function sendMessage(
+  member: SessionMember,
+  id: string,
+  clientKey: string,
+  content: string,
+) {
+  try {
+    const response = await memberRequest(
+      `/api/consultations/${encodeURIComponent(id)}/messages`,
+      member,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientKey, content }),
+      },
+    );
+    const body: unknown = await response.json().catch(() => null);
+    if (!isMessage(body))
+      throw new ApiFailure(0, 'INVALID_RESPONSE', '보낸 메시지를 확인하지 못했어요.');
+    return body;
+  } catch (error) {
+    translate(error, messageMessages);
+  }
+}
+export async function markRead(member: SessionMember, id: string, messageId: number) {
+  try {
+    await memberRequest(`/api/consultations/${encodeURIComponent(id)}/read`, member, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId }),
+    });
+  } catch (error) {
+    translate(error, readMessages);
   }
 }

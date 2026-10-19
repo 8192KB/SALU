@@ -147,7 +147,7 @@ export function ConsultationConversation({
       )}
       {loadError && <Alert message={loadError} />}
       {canWrite && (
-        <form className="consultation-compose" onSubmit={submit} noValidate>
+        <form className="consultation-chat-form" onSubmit={submit} noValidate>
           <label className="consultation-request-field">
             <span>메시지</span>
             <textarea

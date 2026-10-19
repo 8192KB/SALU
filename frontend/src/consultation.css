@@ -354,10 +354,10 @@
   font-size: 17px;
   line-height: 1.8;
 }
-.consultation-compose .consultation-request-field {
+.consultation-chat-form .consultation-request-field {
   margin-top: 18px;
 }
-.consultation-compose .consultation-privacy {
+.consultation-chat-form .consultation-privacy {
   margin-top: 10px;
 }
 @media (max-width: 700px) {

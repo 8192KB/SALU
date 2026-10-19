@@ -40,7 +40,7 @@ export function Stars({ rating }: { rating: number }) {
 function ReviewBody({ review }: { review: DesignerReview }) {
   return (
     <>
-      <div className="review-meta">
+      <div className="review-score">
         <Stars rating={review.rating} />
         <time dateTime={review.updatedAt}>{sentTime(review.updatedAt)}</time>
       </div>
@@ -228,7 +228,7 @@ export function DesignerReviewList({ designerId }: { designerId: string }) {
           <article key={review.id} className="review-item">
             <div>
               <strong>{review.author.displayName}님</strong>
-              <div className="review-meta">
+              <div className="review-score">
                 <Stars rating={review.rating} />
                 <time dateTime={review.createdAt}>{sentTime(review.createdAt)}</time>
               </div>

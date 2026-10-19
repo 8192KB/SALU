@@ -1,6 +1,6 @@
 # 커뮤니티 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `community` 패키지와 Flyway `V10__community.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/community-api.ts`·`community-pages.tsx`가 1~3장을 따르고, 하단 메뉴 맨 오른쪽 더보기에서 들어갑니다([화면 흐름](screen-flow.md)). 4장 관리자는 아직 화면에 연결하지 않았습니다.
+2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `community` 패키지와 Flyway `V10__community.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/community-api.ts`·`community-pages.tsx`가 1~3장을 따르고, 하단 메뉴 맨 오른쪽 더보기에서 들어갑니다([화면 흐름](screen-flow.md)). 4장 관리자는 `admin-api.ts`·`admin-pages.tsx`(더보기의 `신고 처리`)가 따릅니다.
 
 공개한 커트 사례와 고민 질문을 올리고, 댓글·도움돼요·신고로 함께 보는 기능입니다. 개인 기록 원본은 서버가 읽지 못하므로, 글을 올릴 때 화면이 고른 커트 정보와 사진을 복사해 보냅니다.
 

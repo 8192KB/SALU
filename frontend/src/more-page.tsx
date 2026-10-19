@@ -31,6 +31,7 @@ export function MorePage() {
   const { state } = useAuth();
   const loginPath = useLoginPath();
   const member = state.status === 'authenticated';
+  const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
   return (
     <div className="more-screen">
       <PageHeading title="더보기" />
@@ -54,6 +55,11 @@ export function MorePage() {
         )}
         {member && <Item to="/account/designer" title="내 디자이너 프로필" />}
       </Group>
+      {admin && (
+        <Group title="관리자">
+          <Item to="/admin/reports" title="신고 처리" note="신고된 글·댓글과 회원 제재" />
+        </Group>
+      )}
       {member && (
         <Group title="계정">
           <Item to="/notifications" title="알림" />

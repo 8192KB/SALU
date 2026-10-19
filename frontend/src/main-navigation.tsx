@@ -27,8 +27,8 @@ function sectionOf(pathname: string): MainSection | undefined {
   if (/^\/designers(\/|$)/.test(path))
     return pathname.startsWith('/examples/') ? 'consultations' : 'requests';
   if (/^\/requests(\/|$)/.test(path)) return 'requests';
-  // 커뮤니티는 하단 메뉴 맨 오른쪽 더보기에 속함
-  if (/^\/(?:more|community)(\/|$)/.test(path)) return 'more';
+  // 커뮤니티와 관리자 화면은 하단 메뉴 맨 오른쪽 더보기에 속함
+  if (/^\/(?:more|community|admin)(\/|$)/.test(path)) return 'more';
 }
 export function isTaskPath(pathname: string) {
   const path = pathname.replace(/^\/examples(?=\/|$)/, '') || '/';

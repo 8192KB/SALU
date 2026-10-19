@@ -17,7 +17,7 @@ import {
 } from './designer-api';
 import type { DesignerReview, DesignerReviews } from './designer-api';
 import { sentTime } from './prototype/dates';
-import { useLocalSignal } from './realtime';
+import { useLocalSignal, useOnReactivate } from './realtime';
 
 const RATINGS = [1, 2, 3, 4, 5];
 
@@ -64,6 +64,9 @@ export function ConsultationReviewPanel({
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  // 후기를 고치고 돌아오면 ID는 그대로라 다시 보일 때 새로 받음
+  const [version, setVersion] = useState(0);
+  useOnReactivate(() => setVersion((value) => value + 1));
   const { id, reviewId } = consultation;
   useEffect(() => {
     if (!member || !reviewId) {
@@ -80,7 +83,7 @@ export function ConsultationReviewPanel({
     return () => {
       current = false;
     };
-  }, [member, id, reviewId]);
+  }, [member, id, reviewId, version]);
   if (!member || (!reviewId && !consultation.canReview)) return null;
   async function remove() {
     if (!member) return;

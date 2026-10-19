@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Client, ReconnectionTimeMode } from '@stomp/stompjs';
 import { useAuth } from './auth/context';
 import { fetchMember } from './auth/api';
+import { useActivePage } from './main-navigation';
 
 // 알림·실시간 API 계약(docs/notification-api.md) 4장. 신호에는 종류와 ID만 있고 내용은 API로 다시 받음
 export type RealtimeEvent = { type: 'NOTIFICATION' | 'CONSULTATION'; id: string };
@@ -91,8 +92,22 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   return <HubContext.Provider value={hub}>{children}</HubContext.Provider>;
 }
 
-// 화면이 보는 서버 자료를 최신으로 맞춤. 처음 볼 때, 창으로 돌아올 때, 실시간 연결이 이어질 때,
-// matches에 맞는 신호가 올 때 action을 다시 부름
+// 메뉴별로 보관한 화면은 작성 화면에 다녀오는 동안 숨겨진 채 남아 있음. 다시 보일 때 서버 자료를 다시 불러옴
+export function useOnReactivate(action?: () => unknown) {
+  const active = useActivePage();
+  const current = useRef(action);
+  useEffect(() => {
+    current.current = action;
+  });
+  const was = useRef(active);
+  useEffect(() => {
+    if (active && !was.current) void current.current?.();
+    was.current = active;
+  }, [active]);
+}
+
+// 화면이 보는 서버 자료를 최신으로 맞춤. 처음 볼 때, 창으로 돌아올 때, 숨겨졌던 화면이 다시 보일 때,
+// 실시간 연결이 이어질 때, matches에 맞는 신호가 올 때 action을 다시 부름
 export function useLiveRefresh(
   action?: () => unknown,
   matches?: (event: RealtimeEvent) => boolean,
@@ -103,6 +118,7 @@ export function useLiveRefresh(
     current.current = { action, matches };
   });
   const enabled = Boolean(action);
+  useOnReactivate(action);
   useEffect(() => {
     if (!enabled) return;
     const run = () => void current.current.action?.();

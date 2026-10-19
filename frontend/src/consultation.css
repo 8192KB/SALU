@@ -530,14 +530,14 @@
 .review-stars-empty {
   color: var(--strong-line);
 }
-.review-meta {
+.review-score {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 12px;
   margin-bottom: 8px;
 }
-.review-meta time {
+.review-score time {
   font-size: 13px;
   color: var(--muted);
 }
@@ -564,7 +564,7 @@
 .review-item strong {
   font-size: 16px;
 }
-.review-item .review-meta {
+.review-item .review-score {
   margin: 4px 0 0;
 }
 /* 별 다섯 개를 라디오로. 고른 별까지 채움 */

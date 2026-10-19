@@ -1,6 +1,6 @@
 # 파일 안내
 
-Git에 올라간 파일의 용도입니다. 2026-10-16 main 기준.
+Git에 올라간 파일의 용도입니다. 2026-10-19 main 기준.
 
 ## 루트
 
@@ -8,6 +8,8 @@ Git에 올라간 파일의 용도입니다. 2026-10-16 main 기준.
 |---|---|
 | `README.md` | 기능 요약과 실행 방법 |
 | `AGENTS.md` | AI 작업 지침(구조·트랜잭션·오류 처리 규칙) |
+| `DESIGN.md` | 화면 디자인 기준(색·글자·배치·공통 패턴·문구) |
+| `PRODUCT.md` | 제품 맥락(사용자·원칙·현재 범위) |
 | `.env.example` | 환경 변수 목록. 실제 `.env`는 `scripts/init-env.py`로 만들고 공유하지 않음 |
 | `compose.yml` | 개발용 MySQL을 Docker로 띄울 때 사용 |
 | `.agents/skills/`, `skills-lock.json` | AI 화면 디자인 skill |

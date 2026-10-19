@@ -8,12 +8,13 @@ import { useWorkspace } from './workspace';
 import { PageNavigationContext } from './page-navigation';
 import { KEEP_TRAIL } from './back-trail';
 
-export type MainSection = 'home' | 'records' | 'requests' | 'consultations';
+export type MainSection = 'home' | 'records' | 'requests' | 'consultations' | 'more';
 const sectionRoots = {
   home: '/',
   records: '/records',
   requests: '/requests',
   consultations: '/consultations',
+  more: '/more',
 };
 const ActivePageContext = createContext(true);
 export const useActivePage = () => useContext(ActivePageContext);
@@ -26,20 +27,23 @@ function sectionOf(pathname: string): MainSection | undefined {
   if (/^\/designers(\/|$)/.test(path))
     return pathname.startsWith('/examples/') ? 'consultations' : 'requests';
   if (/^\/requests(\/|$)/.test(path)) return 'requests';
+  // 커뮤니티는 하단 메뉴 맨 오른쪽 더보기에 속함
+  if (/^\/(?:more|community)(\/|$)/.test(path)) return 'more';
 }
 export function isTaskPath(pathname: string) {
   const path = pathname.replace(/^\/examples(?=\/|$)/, '') || '/';
   return (
     /^\/records\/(?:new|[^/]+\/edit|[^/]+\/progress\/(?:new|[^/]+\/edit))$/.test(path) ||
     /^\/(?:requests|consultations)\/(?:new|materials|write|request|review)$/.test(path) ||
-    /^\/consultations\/[^/]+\/review$/.test(path)
+    /^\/consultations\/[^/]+\/review$/.test(path) ||
+    /^\/community\/(?:new|[^/]+\/edit)$/.test(path)
   );
 }
 const isDesignerPath = (pathname: string) =>
   /^\/designers(\/|$)/.test(pathname.replace(/^\/examples(?=\/|$)/, '') || '/');
 // 저장 완료 화면은 한 번 보는 화면이라 메뉴의 마지막 화면으로 남기지 않음
 const isCompletionPath = (pathname: string) =>
-  /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/(?:received\/)?[^/]+(?:\/review)?\/complete)$/.test(
+  /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/(?:received\/)?[^/]+(?:\/review)?\/complete|community\/[^/]+\/complete)$/.test(
     pathname.replace(/^\/examples(?=\/|$)/, '') || '/',
   );
 function pageKey(pathname: string, section = sectionOf(pathname)) {

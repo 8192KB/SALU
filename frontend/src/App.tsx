@@ -36,6 +36,7 @@ import { KEEP_TRAIL, taskOrigin, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
 import { RealtimeProvider } from './realtime';
 import { NotificationButton, NotificationList } from './notifications';
+import { MorePage } from './more-page';
 import {
   DesignerDetail,
   DesignerList,
@@ -70,6 +71,18 @@ const ReviewWrite = lazy(() =>
 const ReviewComplete = lazy(() =>
   import('./consultation-review').then((module) => ({ default: module.ReviewComplete })),
 );
+const community = () => import('./community-pages');
+const CommunityList = lazy(() => community().then((module) => ({ default: module.CommunityList })));
+const CommunityDetail = lazy(() =>
+  community().then((module) => ({ default: module.CommunityDetail })),
+);
+const CommunityWrite = lazy(() =>
+  community().then((module) => ({ default: module.CommunityWrite })),
+);
+const CommunityComplete = lazy(() =>
+  community().then((module) => ({ default: module.CommunityComplete })),
+);
+const MyPosts = lazy(() => community().then((module) => ({ default: module.MyPosts })));
 const ReceivedComplete = lazy(() =>
   import('./received-consultations').then((module) => ({ default: module.ReceivedComplete })),
 );
@@ -187,6 +200,15 @@ function Layout() {
                   상담
                 </>,
               )}
+              {/* 커뮤니티·찜 등 그 밖의 기능. 예시 체험은 메모리 자료만 써서 넣지 않음 */}
+              {mode !== 'example' &&
+                navigation.menu(
+                  'more',
+                  <>
+                    <Icon name="more" />
+                    더보기
+                  </>,
+                )}
             </nav>
           )}
           <div className="header-actions">
@@ -214,7 +236,9 @@ function Layout() {
                     ? '/records'
                     : path.startsWith('/consultations/')
                       ? '/consultations'
-                      : '/requests'
+                      : path.startsWith('/community/')
+                        ? '/community'
+                        : '/requests'
                 }
               >
                 나가기
@@ -354,6 +378,13 @@ function PageRoutes({
           <Route path="account" element={<AccountPage />} />
           <Route path="auth/complete" element={<AuthCompletePage />} />
           <Route path="notifications" element={<NotificationList />} />
+          <Route path="more" element={<MorePage />} />
+          <Route path="community" element={<CommunityList />} />
+          <Route path="community/mine" element={<MyPosts />} />
+          <Route path="community/new" element={<CommunityWrite />} />
+          <Route path="community/:id/edit" element={<CommunityWrite />} />
+          <Route path="community/:id/complete" element={<CommunityComplete />} />
+          <Route path="community/:id" element={<CommunityDetail />} />
           <Route path="records" element={<RecordList />} />
           <Route path="records/new" element={<CutForm />} />
           <Route path="records/:id/complete" element={<RecordComplete />} />

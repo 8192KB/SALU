@@ -43,6 +43,8 @@ export type DesignerProfile = {
   specialties: string[];
   affiliations: { salonName: string; period: string; current: boolean }[];
   reviewExamples: { id: Id; content: string; date: string }[];
+  // 실제 공간의 서버 후기 요약. 예시 디자이너는 reviewExamples를 씀
+  rating?: { count: number; average: number | null };
 };
 export type RequestItem = { id: Id; area: Area; intent: Intent; content: string };
 export type RequestDraft = {

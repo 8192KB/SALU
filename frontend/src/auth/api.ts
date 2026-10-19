@@ -218,7 +218,7 @@ export async function memberRequest(
   timeout = 8000,
 ): Promise<Response> {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const csrf = options.method === 'POST' ? await csrfHeaders() : {};
+    const csrf = options.method && options.method !== 'GET' ? await csrfHeaders() : {};
     let response: Response;
     try {
       response = await fetch(path, {

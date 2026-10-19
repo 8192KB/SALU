@@ -31,14 +31,15 @@ export function isTaskPath(pathname: string) {
   const path = pathname.replace(/^\/examples(?=\/|$)/, '') || '/';
   return (
     /^\/records\/(?:new|[^/]+\/edit|[^/]+\/progress\/(?:new|[^/]+\/edit))$/.test(path) ||
-    /^\/(?:requests|consultations)\/(?:new|materials|write|request|review)$/.test(path)
+    /^\/(?:requests|consultations)\/(?:new|materials|write|request|review)$/.test(path) ||
+    /^\/consultations\/[^/]+\/review$/.test(path)
   );
 }
 const isDesignerPath = (pathname: string) =>
   /^\/designers(\/|$)/.test(pathname.replace(/^\/examples(?=\/|$)/, '') || '/');
 // 저장 완료 화면은 한 번 보는 화면이라 메뉴의 마지막 화면으로 남기지 않음
 const isCompletionPath = (pathname: string) =>
-  /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/[^/]+\/complete)$/.test(
+  /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/(?:received\/)?[^/]+(?:\/review)?\/complete)$/.test(
     pathname.replace(/^\/examples(?=\/|$)/, '') || '/',
   );
 function pageKey(pathname: string, section = sectionOf(pathname)) {

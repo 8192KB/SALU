@@ -64,6 +64,12 @@ const ReceivedList = lazy(() =>
 const ReceivedDetail = lazy(() =>
   import('./received-consultations').then((module) => ({ default: module.ReceivedDetail })),
 );
+const ReviewWrite = lazy(() =>
+  import('./consultation-review').then((module) => ({ default: module.ReviewWrite })),
+);
+const ReviewComplete = lazy(() =>
+  import('./consultation-review').then((module) => ({ default: module.ReviewComplete })),
+);
 const ReceivedComplete = lazy(() =>
   import('./received-consultations').then((module) => ({ default: module.ReceivedComplete })),
 );
@@ -364,6 +370,8 @@ function PageRoutes({
           <Route path="consultations/received/:id/complete" element={<ReceivedComplete />} />
           <Route path="consultations/new" element={<ConsultationNew />} />
           <Route path="consultations/:id/complete" element={<ConsultationComplete />} />
+          <Route path="consultations/:id/review" element={<ReviewWrite />} />
+          <Route path="consultations/:id/review/complete" element={<ReviewComplete />} />
           <Route path="consultations/:id" element={<ConsultationDetail />} />
           <Route path="consultations/materials" element={<MaterialsPage />} />
           <Route path="consultations/request" element={<RequestPage />} />

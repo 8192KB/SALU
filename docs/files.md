@@ -83,6 +83,8 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `consultation-flow.tsx` | 상담 요청 보내기·상담 내역·상세 |
 | `received-consultations.tsx` | 디자이너가 받은 상담 목록·상세·답변 |
 | `consultation-conversation.tsx` | 보낸·받은 상담 상세의 메시지 목록·보내기·읽음 표시 |
+| `consultation-review.tsx` | 상담 후기 쓰기·고치기·지우기, 받은 상담의 후기, 디자이너 프로필의 후기 목록 |
+| `designer-api.ts` | 후기·찜·소속 이력 API 호출 |
 | `notifications.tsx` | 머리글 알림 버튼과 알림 목록. 알림 종류별 문구와 이동할 화면 |
 | `consultation-store.tsx` | 상담 자료 저장소. 예시는 메모리, 실제 공간은 서버 |
 | `consultation-api.ts` | 상담 API 호출 |

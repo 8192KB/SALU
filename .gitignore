@@ -18,6 +18,8 @@
 *.MD
 !/README.md
 !/AGENTS.md
+!/DESIGN.md
+!/PRODUCT.md
 !/.agents/skills/frontend-design/SKILL.md
 !/docs/development-contract.md
 !/docs/login.md

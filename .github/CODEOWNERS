@@ -1,7 +1,9 @@
-# 서버·DB·API 계약·화면 흐름·작업 지침은 저장소 관리자 승인 후 merge
+# 서버·DB·API 계약·화면 흐름·작업 지침·디자인 기준은 저장소 관리자 승인 후 merge
 /backend/ @8192KB
 /docs/ @8192KB
 /AGENTS.md @8192KB
+/DESIGN.md @8192KB
+/PRODUCT.md @8192KB
 /.github/ @8192KB
 /compose.yml @8192KB
 /.env.example @8192KB

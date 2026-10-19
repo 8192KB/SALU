@@ -30,6 +30,7 @@ import { listReceivedConsultations } from './consultation-api';
 import { consultationEvent, useLiveRefresh } from './realtime';
 import { ConsultationConversation } from './consultation-conversation';
 import { ConsultationReviewPanel, DesignerReviewList } from './consultation-review';
+import { AffiliationHistory, FavoriteButton } from './designer-parts';
 
 // 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
@@ -176,10 +177,12 @@ export function ConsultationDesignerProfile({
           <p>{designer.specialties.join(' · ')}</p>
         </div>
       </div>
+      <FavoriteButton designer={designer} />
       <section className="consultation-soft-panel">
         <h2>소개</h2>
         <p>{designer.introduction}</p>
       </section>
+      <AffiliationHistory designer={designer} />
       {mode !== 'example' ? (
         <DesignerReviewList designerId={designer.id} />
       ) : (

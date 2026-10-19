@@ -1,6 +1,6 @@
 # 디자이너 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 디자이너 후기·찜·소속 이력을 다룹니다. 서버는 `backend`의 `review`·`directory` 패키지와 Flyway `V9__designer_reviews_favorites_history.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/designer-api.ts`가 이 문서를 따르고, 후기는 `consultation-review.tsx`(보낸·받은 상담 상세, 후기 작성, 디자이너 프로필 목록)에 연결했습니다. 찜·소속 이력은 아직 화면에 연결하지 않았습니다. 미용실·디자이너 프로필 등록과 목록은 [개발 계약](development-contract.md)의 공개 미용실·디자이너 항목에 있습니다.
+2026-10-16 기준 구현된 계약입니다. 디자이너 후기·찜·소속 이력을 다룹니다. 서버는 `backend`의 `review`·`directory` 패키지와 Flyway `V9__designer_reviews_favorites_history.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/designer-api.ts`가 이 문서를 따르고, 후기는 `consultation-review.tsx`(보낸·받은 상담 상세, 후기 작성, 디자이너 프로필 목록)에 연결했습니다. 찜은 `designer-favorites.ts`, 찜 버튼·소속 이력은 `designer-parts.tsx`에 연결했습니다. 미용실·디자이너 프로필 등록과 목록은 [개발 계약](development-contract.md)의 공개 미용실·디자이너 항목에 있습니다.
 
 ## 한눈에 보기
 

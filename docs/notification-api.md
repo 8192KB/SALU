@@ -1,6 +1,6 @@
 # 알림·실시간 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`이 이 문서를 따릅니다. 화면은 아직 연결하지 않았습니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
+2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`이 이 문서를 따릅니다. 화면은 실시간 연결(4장)만 `frontend/src/realtime.tsx`가 따르고, 알림 목록·안 읽은 수는 아직 연결하지 않았습니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
 
 ## 한눈에 보기
 

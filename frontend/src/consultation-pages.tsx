@@ -4,6 +4,7 @@ import { useDirectory } from './directory';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Completion } from './completion';
 import { useActivePage } from './main-navigation';
+import { useFavorites } from './designer-favorites';
 import type { FormEvent } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useBackTrail } from './back-trail';
@@ -232,6 +233,9 @@ export function DesignerList() {
   // 이 커트를 해 준 디자이너를 먼저 보여 주고, 다른 디자이너는 원할 때 펼침
   const recorded = directory.designers.find((value) => value.id === cut?.designerProfileId);
   const [showAll, setShowAll] = useState(false);
+  const favorites = useFavorites();
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const showFavorites = mode !== 'example' && Boolean(favorites?.loaded) && favoriteOnly;
   const active = useActivePage();
   useEffect(() => {
     if (!active || mode === 'example' || import.meta.env.VITE_SALU_AUTH_MODE === 'prototype')
@@ -305,25 +309,53 @@ export function DesignerList() {
             : '소개와 상담 분야를 보고, 이야기를 나눌 디자이너를 골라 보세요.'
         }
       />
-      {recorded && (
-        <section className="designer-recorded" aria-labelledby="designer-recorded-heading">
-          <h2 id="designer-recorded-heading">이 커트를 해 준 디자이너</h2>
-          <div className="designer-grid">{card(recorded)}</div>
-        </section>
+      {mode !== 'example' && favorites?.loaded && (
+        <button
+          type="button"
+          className="button favorite-filter"
+          aria-pressed={favoriteOnly}
+          onClick={() => setFavoriteOnly((value) => !value)}
+        >
+          <Icon name="heart" size={16} />
+          찜한 디자이너만 보기
+        </button>
       )}
-      {recorded && !showAll ? (
-        others.length > 0 && (
-          <button type="button" className="button" onClick={() => setShowAll(true)}>
-            다른 디자이너 찾기
-          </button>
-        )
-      ) : (
-        <section aria-label={recorded ? '다른 디자이너' : undefined}>
-          {recorded && others.length > 0 && (
-            <h2 className="designer-others-heading">다른 디자이너</h2>
+      {showFavorites ? (
+        <section aria-label="찜한 디자이너">
+          {directory.designers.some((value) => favorites!.ids.has(value.id)) ? (
+            <div className="designer-grid">
+              {directory.designers.filter((value) => favorites!.ids.has(value.id)).map(card)}
+            </div>
+          ) : (
+            <section className="empty-state">
+              <h2>찜한 디자이너가 없어요</h2>
+              <p>디자이너 프로필에서 찜하면 이곳에 모여요.</p>
+            </section>
           )}
-          <div className="designer-grid">{others.map(card)}</div>
         </section>
+      ) : (
+        <>
+          {recorded && (
+            <section className="designer-recorded" aria-labelledby="designer-recorded-heading">
+              <h2 id="designer-recorded-heading">이 커트를 해 준 디자이너</h2>
+              <div className="designer-grid">{card(recorded)}</div>
+            </section>
+          )}
+          {recorded && !showAll ? (
+            others.length > 0 && (
+              <button type="button" className="button" onClick={() => setShowAll(true)}>
+                다른 디자이너 찾기
+              </button>
+            )
+          ) : (
+            <section aria-label={recorded ? '다른 디자이너' : undefined}>
+              {recorded && others.length > 0 && (
+                <h2 className="designer-others-heading">다른 디자이너</h2>
+              )}
+              <div className="designer-grid">{others.map(card)}</div>
+            </section>
+          )}
+        </>
       )}
       {mode !== 'example' && (
         <>

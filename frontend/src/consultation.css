@@ -606,3 +606,43 @@
   outline: 3px solid var(--teal);
   outline-offset: 2px;
 }
+.favorite {
+  margin: -8px 0 20px;
+}
+.button.favorite-button,
+.button.favorite-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.favorite-button[aria-pressed='true'],
+.favorite-filter[aria-pressed='true'] {
+  border-color: var(--teal);
+  background: var(--soft);
+  color: var(--teal);
+}
+.favorite-button[aria-pressed='true'] svg,
+.favorite-filter[aria-pressed='true'] svg {
+  fill: currentColor;
+}
+.favorite-filter {
+  margin-bottom: 20px;
+}
+.affiliation-history ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.affiliation-history li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 17px;
+}
+.affiliation-history li span {
+  color: var(--muted);
+  font-size: 15px;
+}

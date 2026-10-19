@@ -22,6 +22,7 @@ export function Icon({
     | 'calendar'
     | 'consult'
     | 'bell'
+    | 'heart'
     | 'warning';
   size?: number;
 }) {
@@ -68,6 +69,9 @@ export function Icon({
         <path d="M15 4H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h1v3l4-3h5a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z" />
         <path d="M17 9h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-1v2l-3-2h-3" />
       </>
+    ),
+    heart: (
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
     ),
     bell: (
       <>

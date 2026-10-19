@@ -11,6 +11,8 @@ export type PublicProfile = {
   salonName: string | null;
   region: string | null;
   branch: string | null;
+  reviewCount: number;
+  averageRating: number | null;
 };
 export const salonLabel = (salon: Salon) =>
   [salon.name, salon.branch, salon.region].filter(Boolean).join(' · ');
@@ -31,6 +33,7 @@ export function profileModel(profile: PublicProfile): DesignerProfile {
         ]
       : [],
     reviewExamples: [],
+    rating: { count: profile.reviewCount ?? 0, average: profile.averageRating ?? null },
   };
 }
 let snapshot: {

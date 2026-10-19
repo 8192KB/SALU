@@ -29,6 +29,7 @@ import { useLoginPath } from './auth/pages';
 import { listReceivedConsultations } from './consultation-api';
 import { consultationEvent, useLiveRefresh } from './realtime';
 import { ConsultationConversation } from './consultation-conversation';
+import { ConsultationReviewPanel, DesignerReviewList } from './consultation-review';
 
 // 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
@@ -150,6 +151,7 @@ export function ConsultationDesignerProfile({
   const editRecordUrl = recordCut ? `/records/${encodeURIComponent(recordCut.id)}/edit` : '';
   const salon = designer.affiliations.find((value) => value.current)?.salonName;
   const fromRecord = useSearchParams()[0].get('from') === 'record';
+  const mode = useWorkspace();
   return (
     <div className="consultation-screen consultation-profile">
       <PageHeading
@@ -178,22 +180,26 @@ export function ConsultationDesignerProfile({
         <h2>소개</h2>
         <p>{designer.introduction}</p>
       </section>
-      <section className="consultation-soft-panel consultation-profile-reviews">
-        <h2>상담 후기</h2>
-        {designer.reviewExamples.length ? (
-          designer.reviewExamples.map((review) => (
-            <article key={review.id}>
-              <span className="avatar consultation-review-avatar" aria-hidden="true">
-                <Icon name="user" size={22} />
-              </span>
-              <p>{review.content}</p>
-              <time dateTime={review.date}>{review.date.replaceAll('-', '.')}</time>
-            </article>
-          ))
-        ) : (
-          <p>아직 남겨진 후기가 없어요.</p>
-        )}
-      </section>
+      {mode !== 'example' ? (
+        <DesignerReviewList designerId={designer.id} />
+      ) : (
+        <section className="consultation-soft-panel consultation-profile-reviews">
+          <h2>상담 후기</h2>
+          {designer.reviewExamples.length ? (
+            designer.reviewExamples.map((review) => (
+              <article key={review.id}>
+                <span className="avatar consultation-review-avatar" aria-hidden="true">
+                  <Icon name="user" size={22} />
+                </span>
+                <p>{review.content}</p>
+                <time dateTime={review.date}>{review.date.replaceAll('-', '.')}</time>
+              </article>
+            ))
+          ) : (
+            <p>아직 남겨진 후기가 없어요.</p>
+          )}
+        </section>
+      )}
       <div className="consultation-action">
         {cuts.length ? (
           <>
@@ -644,6 +650,7 @@ export function ConsultationDetail() {
   const { state } = useAuth();
   const member = state.status === 'authenticated' ? state.member : null;
   const { thread, error, server } = useThread(id);
+  const { repository } = useConsultations();
   if (access)
     return (
       <div className="consultation-screen">
@@ -676,6 +683,17 @@ export function ConsultationDetail() {
         <h2>첨부한 커트 기록</h2>
         <AttachmentCard attachment={thread.attachment} />
       </section>
+      {server && member && (
+        <ConsultationReviewPanel
+          consultation={{
+            id: thread.id,
+            designerName: thread.designer.name,
+            reviewId: thread.reviewId,
+            canReview: thread.canReview,
+          }}
+          onChange={() => repository?.load?.(thread.id)}
+        />
+      )}
       {server && member ? (
         <ConsultationConversation
           id={thread.id}

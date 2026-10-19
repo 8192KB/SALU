@@ -28,6 +28,8 @@ export type ConsultationThread = {
   // 서버 상담만 있음. 목록 정렬과 안 읽은 메시지 표시에 사용
   lastMessageAt?: string;
   unreadCount?: number;
+  reviewId?: string | null;
+  canReview?: boolean;
 };
 export type ConsultationDraft = {
   id: string;
@@ -217,6 +219,8 @@ export function threadFrom(value: Consultation, draftId = ''): ConsultationThrea
     canReply: value.canReply,
     lastMessageAt: value.lastMessageAt,
     unreadCount: value.unreadCount,
+    reviewId: value.reviewId,
+    canReview: value.canReview,
   };
 }
 

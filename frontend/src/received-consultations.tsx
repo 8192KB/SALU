@@ -11,6 +11,7 @@ import type { Consultation } from './consultation-api';
 import { threadFrom } from './consultation-store';
 import { AttachmentCard, byLatest, UnreadBadge, useConsultationAccess } from './consultation-flow';
 import { ConsultationConversation } from './consultation-conversation';
+import { ReceivedReview } from './consultation-review';
 import { sentTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh } from './realtime';
 
@@ -223,6 +224,7 @@ export function ReceivedDetail() {
         <h2>첨부한 커트 기록</h2>
         <AttachmentCard attachment={threadFrom(item).attachment} />
       </section>
+      <ReceivedReview id={item.id} reviewId={item.reviewId} />
       {member && (
         <ConsultationConversation
           id={item.id}

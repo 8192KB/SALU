@@ -522,3 +522,87 @@
   font-size: 13px;
   color: var(--muted);
 }
+.review-stars {
+  color: var(--teal);
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.review-stars-empty {
+  color: var(--strong-line);
+}
+.review-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+.review-score time {
+  font-size: 13px;
+  color: var(--muted);
+}
+.review-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.consultation-review .button.primary {
+  margin-top: 16px;
+}
+.review-average {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.consultation-profile-reviews .review-item {
+  display: block;
+}
+.review-item strong {
+  font-size: 16px;
+}
+.review-item .review-score {
+  margin: 4px 0 0;
+}
+/* 별 다섯 개를 라디오로. 고른 별까지 채움 */
+.review-rating {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.review-rating legend {
+  margin-bottom: 10px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+}
+.review-rating label {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--strong-line);
+  cursor: pointer;
+}
+.review-rating label.on {
+  color: var(--teal);
+}
+.review-rating input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.review-rating label:has(input:focus-visible) {
+  outline: 3px solid var(--teal);
+  outline-offset: 2px;
+}

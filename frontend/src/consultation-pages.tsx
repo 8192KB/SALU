@@ -276,7 +276,9 @@ export function DesignerList() {
         <span>
           {mode === 'example'
             ? `상담 후기 ${designer.reviewExamples.length}개`
-            : '직접 등록한 프로필'}
+            : designer.rating?.count
+              ? `★ ${designer.rating.average?.toFixed(1)} · 후기 ${designer.rating.count}개`
+              : '아직 후기가 없어요'}
         </span>
         <span className="card-action">
           {sourcePreview ? '상담 요청' : '프로필 보기'} <Icon name="arrow" size={16} />

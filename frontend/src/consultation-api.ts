@@ -20,6 +20,8 @@ export type Consultation = {
   canReply: boolean;
   lastMessageAt: string;
   unreadCount: number;
+  reviewId: string | null;
+  canReview: boolean;
 };
 export type ConsultationMessage = {
   id: number;

@@ -25,6 +25,7 @@ const ROOT_LABELS: Record<string, string> = {
   '/records': '내 기록',
   '/requests': '커트 준비',
   '/consultations': '상담 내역',
+  '/more': '더보기',
 };
 const titles = new Map<string, string>();
 // 작성 단계에 들어오기 직전 화면. 여러 단계 뒤에서 나가기를 눌러도 작업을 시작한 곳으로 돌아감

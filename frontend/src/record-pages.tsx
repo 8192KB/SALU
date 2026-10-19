@@ -625,6 +625,7 @@ export function RecordDetail() {
   const { state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
   const navigate = useNavigate();
+  const mode = useWorkspace();
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
     (value) => value.id === search.get('preview') && value.cut.id === id,
@@ -778,6 +779,21 @@ export function RecordDetail() {
               ))}
               <Link className="text-link" to="/requests">
                 커트 준비 전체 보기 <Icon name="arrow" size={17} />
+              </Link>
+            </section>
+          )}
+          {mode !== 'example' && (
+            <section className="panel record-community">
+              <h3>커뮤니티에 공유</h3>
+              <p className="muted">
+                이 커트를 사례로 올리면 비슷한 고민을 가진 사람이 참고할 수 있어요. 올릴 사진은 직접
+                골라요.
+              </p>
+              <Link
+                className="text-link"
+                to={`/community/new?record=${encodeURIComponent(cut.id)}`}
+              >
+                사례로 올리기 <Icon name="arrow" size={17} />
               </Link>
             </section>
           )}

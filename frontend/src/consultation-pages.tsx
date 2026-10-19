@@ -234,7 +234,8 @@ export function DesignerList() {
   const recorded = directory.designers.find((value) => value.id === cut?.designerProfileId);
   const [showAll, setShowAll] = useState(false);
   const favorites = useFavorites();
-  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  // 더보기의 찜한 디자이너에서 오면 찜한 디자이너만 보여 줌
+  const [favoriteOnly, setFavoriteOnly] = useState(() => search.get('favorites') === '1');
   const showFavorites = mode !== 'example' && Boolean(favorites?.loaded) && favoriteOnly;
   const active = useActivePage();
   useEffect(() => {

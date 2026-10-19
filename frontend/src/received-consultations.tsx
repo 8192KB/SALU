@@ -9,12 +9,9 @@ import { ApiFailure, directoryRequest } from './auth/api';
 import { getConsultation, listReceivedConsultations, replyConsultation } from './consultation-api';
 import type { Consultation } from './consultation-api';
 import { threadFrom } from './consultation-store';
-import {
-  AttachmentCard,
-  ConsultationAnswer,
-  sentTime,
-  useConsultationAccess,
-} from './consultation-flow';
+import { AttachmentCard, byLatest, UnreadBadge, useConsultationAccess } from './consultation-flow';
+import { ConsultationConversation } from './consultation-conversation';
+import { sentTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh } from './realtime';
 
 // 디자이너가 받은 상담. 로그인한 실제 회원 화면이며 예시 체험과 섞지 않음
@@ -83,7 +80,7 @@ export function ReceivedList() {
           <p role="status">받은 상담을 불러오고 있어요.</p>
         ) : items.length ? (
           <div className="consultation-history">
-            {items.map((item) => (
+            {byLatest(items).map((item) => (
               <Link
                 className="consultation-history-card"
                 key={item.id}
@@ -92,6 +89,7 @@ export function ReceivedList() {
                 <div className="consultation-history-heading">
                   <Avatar name={item.customer.displayName} />
                   <h2>{item.customer.displayName}님</h2>
+                  <UnreadBadge count={item.unreadCount} />
                   <span className="consultation-status">{statusLabel(item)}</span>
                 </div>
                 <p>{item.request}</p>
@@ -225,6 +223,15 @@ export function ReceivedDetail() {
         <h2>첨부한 커트 기록</h2>
         <AttachmentCard attachment={threadFrom(item).attachment} />
       </section>
+      {member && (
+        <ConsultationConversation
+          id={item.id}
+          member={member}
+          partner={`${item.customer.displayName}님`}
+          placeholder="예: 오시면 옆머리 숱을 조금 더 정리해 볼게요."
+          canWrite={!item.canReply}
+        />
+      )}
       {item.canReply ? (
         <form onSubmit={submit} noValidate>
           <label className="consultation-request-field">
@@ -245,7 +252,7 @@ export function ReceivedDetail() {
           <Alert message={error} />
           <div className="consultation-action">
             <p className="consultation-privacy">
-              답변은 한 번만 보낼 수 있고 보낸 뒤에는 고칠 수 없어요.
+              보낸 답변은 고칠 수 없어요. 답변한 뒤에는 이 화면에서 메시지를 더 주고받을 수 있어요.
             </p>
             <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
               {busy ? '보내는 중' : '답변 보내기'}
@@ -253,10 +260,7 @@ export function ReceivedDetail() {
           </div>
         </form>
       ) : (
-        <>
-          <Alert message={error} />
-          <ConsultationAnswer reply={item.reply ?? undefined} />
-        </>
+        <Alert message={error} />
       )}
     </div>
   );

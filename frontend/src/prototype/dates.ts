@@ -23,6 +23,12 @@ export function displayDate(value: string, includeYear = false) {
   const [year, month, day] = value.split('-');
   return `${includeYear || year !== today().slice(0, 4) ? `${year}년 ` : ''}${Number(month)}월 ${Number(day)}일`;
 }
+const sentFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+export const sentTime = (date: string) => sentFormatter.format(new Date(date));
 export function cutTitle(date: string, service: string) {
   const [, month, day] = date.split('-');
   return `${Number(month)}월 ${Number(day)}일 ${service}`;

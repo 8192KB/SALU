@@ -22,12 +22,13 @@ import type {
 } from './consultation-store';
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
-import { cutTitle } from './prototype/dates';
+import { cutTitle, sentTime } from './prototype/dates';
 import { previewUrl } from './prototype/request-flow';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
 import { listReceivedConsultations } from './consultation-api';
 import { consultationEvent, useLiveRefresh } from './realtime';
+import { ConsultationConversation } from './consultation-conversation';
 
 // 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
@@ -92,12 +93,6 @@ export function AttachmentCard({ attachment }: { attachment: ConsultationAttachm
     </div>
   );
 }
-const sentFormatter = new Intl.DateTimeFormat('ko-KR', {
-  timeZone: 'Asia/Seoul',
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
-export const sentTime = (date: string) => sentFormatter.format(new Date(date));
 
 // 실제 상담은 로그인한 회원만 사용. 확인 중·연결 실패·비로그인이면 안내를 돌려줌
 export function useConsultationAccess() {
@@ -555,7 +550,7 @@ export function ConsultationList() {
         <p role="status">상담 내역을 불러오고 있어요.</p>
       ) : state.threads.length ? (
         <div className="consultation-history">
-          {[...state.threads].reverse().map((thread) => (
+          {byLatest(state.threads).map((thread) => (
             <Link
               className="consultation-history-card"
               key={thread.id}
@@ -564,6 +559,7 @@ export function ConsultationList() {
               <div className="consultation-history-heading">
                 <Avatar name={thread.designer.name} src={thread.designer.avatarUrl} />
                 <h2>{thread.designer.name} 디자이너</h2>
+                <UnreadBadge count={thread.unreadCount} />
                 <span className="consultation-status">
                   {thread.status === 'ANSWERED' ? '답변 도착' : '답변 대기'}
                 </span>
@@ -628,9 +624,25 @@ export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
     </section>
   );
 }
+// 목록 카드의 이름 옆에 안 읽은 메시지 수를 숫자로 표시함
+export function UnreadBadge({ count }: { count?: number }) {
+  return count ? (
+    <span className="consultation-unread" aria-label={`새 메시지 ${count}개`}>
+      {count > 99 ? '99+' : count}
+    </span>
+  ) : null;
+}
+// 마지막 메시지가 최근인 상담부터. 예시 상담은 메시지가 없어 보낸 시각으로 정렬
+export const byLatest = <T extends { sentAt: string; lastMessageAt?: string }>(items: T[]) =>
+  [...items].sort((a, b) =>
+    (b.lastMessageAt ?? b.sentAt).localeCompare(a.lastMessageAt ?? a.sentAt),
+  );
+
 export function ConsultationDetail() {
   const { id = '' } = useParams();
   const access = useConsultationAccess();
+  const { state } = useAuth();
+  const member = state.status === 'authenticated' ? state.member : null;
   const { thread, error, server } = useThread(id);
   if (access)
     return (
@@ -664,7 +676,17 @@ export function ConsultationDetail() {
         <h2>첨부한 커트 기록</h2>
         <AttachmentCard attachment={thread.attachment} />
       </section>
-      <ConsultationAnswer reply={thread.reply} />
+      {server && member ? (
+        <ConsultationConversation
+          id={thread.id}
+          member={member}
+          partner={`${thread.designer.name} 디자이너`}
+          placeholder="예: 다음 주 토요일에 방문할게요."
+          emptyMessage="디자이너의 답변이 오면 이곳에 보여요. 그 전에도 더 알리고 싶은 내용을 보낼 수 있어요."
+        />
+      ) : (
+        <ConsultationAnswer reply={thread.reply} />
+      )}
     </div>
   );
 }

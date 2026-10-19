@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Client, ReconnectionTimeMode } from '@stomp/stompjs';
 import { useAuth } from './auth/context';
@@ -118,6 +118,12 @@ export function useLiveRefresh(
       offEvent?.();
     };
   }, [enabled, hub]);
+}
+
+// 이 탭에서 바꾼 상태(읽음 등)는 서버가 신호를 보내지 않으므로 같은 신호를 직접 알려 다른 화면이 다시 불러오게 함
+export function useLocalSignal() {
+  const hub = useContext(HubContext);
+  return useCallback((event: RealtimeEvent) => hub?.emit(event), [hub]);
 }
 
 export const consultationEvent = (id?: string) => (event: RealtimeEvent) =>

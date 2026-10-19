@@ -1,6 +1,6 @@
 # 상담 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`·`V8__consultation_messages.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다. 메시지·읽음(7~9장)은 서버만 준비됐고 화면은 아직 연결하지 않았습니다.
+2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`·`V8__consultation_messages.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다. 디자이너의 첫 답변은 지금도 6장 답변 API로 보내고, 그 뒤의 메시지와 읽음은 7~9장을 씁니다.
 
 고객이 지난 커트 기록 하나를 골라 디자이너에게 상담을 요청하고, 같은 상담 안에서 고객과 디자이너가 메시지를 주고받는 기능의 서버 API입니다. 디자이너의 첫 메시지가 답변입니다. 화면과 서버를 나눠 만들 때 이 문서를 기준으로 맞춥니다. 경로·필드·오류를 바꿔야 하면 코드보다 이 문서를 먼저 고치고 함께 작업하는 사람에게 알립니다.
 
@@ -335,8 +335,10 @@ const response = await fetch('/api/consultations', {
 |---|---|
 | `/designers/{id}` | 디자이너 프로필. 이 디자이너가 담당한 커트 기록이 있으면 `상담 요청` |
 | `/consultations/new` | 첨부할 커트 기록 선택과 이번 요청 입력. 준비 내용(`?preview=`)에서 오면 그 내용을 첨부하고 담당이 아닌 디자이너에게도 보냄. 로그인하지 않았으면 로그인 안내 |
-| `/consultations`, `/consultations/{id}` | 보낸 상담 목록과 상세. 들어올 때·창으로 돌아올 때·실시간 신호를 받을 때·`새 답변 확인`으로 다시 조회 |
-| `/consultations/received`, `/consultations/received/{id}` | 받은 상담 목록과 상세·답변 보내기. 내 계정 화면의 `받은 상담`에서 들어감. 다시 조회하는 때는 보낸 상담과 같음 |
+| `/consultations`, `/consultations/{id}` | 보낸 상담 목록과 상세. 상세 아래쪽에서 디자이너와 메시지를 주고받음. 들어올 때·창으로 돌아올 때·실시간 신호를 받을 때·`새 답변 확인`으로 다시 조회 |
+| `/consultations/received`, `/consultations/received/{id}` | 받은 상담 목록과 상세. 첫 답변은 답변 칸으로 보내고 완료 화면을 거침. 그 뒤에는 상세에서 메시지를 주고받음. 내 계정 화면의 `받은 상담`에서 들어감. 다시 조회하는 때는 보낸 상담과 같음 |
+
+목록은 `lastMessageAt`이 최근인 상담부터 보여 주고, `unreadCount`가 있으면 이름 옆에 숫자로 표시합니다. 상대 메시지는 상세 화면이 보이는 동안에만 읽음 표시를 보냅니다.
 
 첨부 사진은 고른 커트 기록(또는 준비 내용에서 고른 사진)의 첫 사진 한 장을 기기 저장소에서 읽어 함께 보냅니다.
 

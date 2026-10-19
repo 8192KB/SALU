@@ -86,6 +86,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `received-consultations.tsx` | 디자이너가 받은 상담 목록·상세·답변 |
 | `consultation-store.tsx` | 상담 자료 저장소. 예시는 메모리, 실제 공간은 서버 |
 | `consultation-api.ts` | 상담 API 호출 |
+| `realtime.tsx` | 실시간 신호 연결(로그인한 동안 하나)과 신호·재연결 때 화면 자료 다시 불러오기(`useLiveRefresh`) |
 | `directory-page.tsx` | 내 디자이너 프로필·매장 등록 |
 | `directory.ts`, `directory-cache.ts` | 미용실·디자이너 목록 불러오기와 캐시 |
 | `storage-page.tsx` | 기록 저장 상태·ZIP 백업·복원 |

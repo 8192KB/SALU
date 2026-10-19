@@ -14,8 +14,8 @@ import {
   ConsultationAnswer,
   sentTime,
   useConsultationAccess,
-  useRefreshOnFocus,
 } from './consultation-flow';
+import { consultationEvent, useLiveRefresh } from './realtime';
 
 // 디자이너가 받은 상담. 로그인한 실제 회원 화면이며 예시 체험과 섞지 않음
 function useMember() {
@@ -62,7 +62,7 @@ export function ReceivedList() {
       setLoading(false);
     }
   }, [member]);
-  useRefreshOnFocus(member && !example ? load : undefined);
+  useLiveRefresh(member && !example ? load : undefined, consultationEvent());
   if (example) return <ExampleNotice />;
   return (
     <div className="consultation-screen">
@@ -153,7 +153,7 @@ export function ReceivedDetail() {
     }
   }, [member, id]);
   // 답변을 쓰는 동안 창으로 돌아와도 입력은 그대로 두고 상담만 다시 받음
-  useRefreshOnFocus(member && !example ? load : undefined);
+  useLiveRefresh(member && !example ? load : undefined, consultationEvent(id));
   if (example) return <ExampleNotice />;
   const heading = (
     <PageHeading

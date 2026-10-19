@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
@@ -27,6 +27,7 @@ import { previewUrl } from './prototype/request-flow';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
 import { listReceivedConsultations } from './consultation-api';
+import { consultationEvent, useLiveRefresh } from './realtime';
 
 // 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
@@ -127,22 +128,6 @@ export function useConsultationAccess() {
     </section>
   );
 }
-// 새 상담과 답변은 실시간으로 오지 않아 화면에 들어올 때와 창으로 돌아올 때 다시 조회함
-export function useRefreshOnFocus(action?: () => unknown) {
-  const current = useRef(action);
-  useEffect(() => {
-    current.current = action;
-  });
-  const enabled = Boolean(action);
-  useEffect(() => {
-    if (!enabled) return;
-    const run = () => void current.current?.();
-    run();
-    window.addEventListener('focus', run);
-    return () => window.removeEventListener('focus', run);
-  }, [enabled]);
-}
-
 export function ConsultationDesignerProfile({
   designer,
   record,
@@ -453,7 +438,7 @@ function useThread(id: string) {
   const thread = state.threads.find((value) => value.id === id);
   const [error, setError] = useState('');
   const load = repository?.load;
-  useRefreshOnFocus(
+  useLiveRefresh(
     load &&
       (() =>
         load(id).then(
@@ -461,6 +446,7 @@ function useThread(id: string) {
           (failure: unknown) =>
             setError(failure instanceof Error ? failure.message : '상담을 불러오지 못했어요.'),
         )),
+    consultationEvent(id),
   );
   return { thread, error, server: Boolean(load) };
 }
@@ -513,7 +499,7 @@ function useReceivedSummary(enabled: boolean) {
   const { state } = useAuth();
   const member = state.status === 'authenticated' ? state.member : null;
   const [summary, setSummary] = useState<{ total: number; waiting: number } | null>(null);
-  useRefreshOnFocus(
+  useLiveRefresh(
     enabled && member
       ? () =>
           listReceivedConsultations(member).then(
@@ -525,6 +511,7 @@ function useReceivedSummary(enabled: boolean) {
             () => setSummary(null),
           )
       : undefined,
+    consultationEvent(),
   );
   return summary;
 }
@@ -533,7 +520,7 @@ export function ConsultationList() {
   const { state, repository } = useConsultations();
   const access = useConsultationAccess();
   const mode = useWorkspace();
-  useRefreshOnFocus(access ? undefined : repository?.refresh);
+  useLiveRefresh(access ? undefined : repository?.refresh, consultationEvent());
   const received = useReceivedSummary(!access && mode !== 'example' && Boolean(repository?.server));
   if (!repository)
     return (

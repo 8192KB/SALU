@@ -34,6 +34,7 @@ import { RetainedPage, useMainNavigation, isTaskPath } from './main-navigation';
 import { ThemeSettings } from './theme';
 import { KEEP_TRAIL, taskOrigin, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
+import { RealtimeProvider } from './realtime';
 import {
   DesignerDetail,
   DesignerList,
@@ -423,7 +424,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AccountScopedPrototype />
+        <RealtimeProvider>
+          <AccountScopedPrototype />
+        </RealtimeProvider>
       </AuthProvider>
     </BrowserRouter>
   );

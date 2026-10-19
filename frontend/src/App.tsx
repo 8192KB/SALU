@@ -35,6 +35,7 @@ import { ThemeSettings } from './theme';
 import { KEEP_TRAIL, taskOrigin, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
 import { RealtimeProvider } from './realtime';
+import { NotificationButton, NotificationList } from './notifications';
 import {
   DesignerDetail,
   DesignerList,
@@ -184,6 +185,7 @@ function Layout() {
           )}
           <div className="header-actions">
             <ThemeSettings />
+            {!focused && <NotificationButton />}
             {focused ? (
               <WorkspaceLink
                 onClick={(event) => {
@@ -345,6 +347,7 @@ function PageRoutes({
           <Route path="account/designer" element={<DirectoryEditor />} />
           <Route path="account" element={<AccountPage />} />
           <Route path="auth/complete" element={<AuthCompletePage />} />
+          <Route path="notifications" element={<NotificationList />} />
           <Route path="records" element={<RecordList />} />
           <Route path="records/new" element={<CutForm />} />
           <Route path="records/:id/complete" element={<RecordComplete />} />

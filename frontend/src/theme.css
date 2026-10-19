@@ -478,3 +478,34 @@ textarea::placeholder {
 .journal-entry h3 {
   font-size: 20px;
 }
+.notification-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  color: var(--muted);
+}
+.notification-button:hover {
+  background: var(--soft);
+  color: var(--teal);
+}
+/* 종 오른쪽 위에 안 읽은 수 */
+.notification-count {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--teal);
+  color: var(--on-action);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}

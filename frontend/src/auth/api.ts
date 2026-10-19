@@ -3,6 +3,8 @@ export type SessionMember = {
   email: string | null;
   displayName: string;
   storageContext: string;
+  // USER 또는 ADMIN. 화면 표시에만 쓰고 권한은 서버가 다시 확인함
+  role?: string;
 };
 
 export class ApiFailure extends Error {
@@ -86,6 +88,7 @@ async function readMember(response: Response): Promise<SessionMember> {
     email: body.email,
     displayName: body.displayName,
     storageContext: body.storageContext,
+    role: typeof body.role === 'string' ? body.role : 'USER',
   };
 }
 

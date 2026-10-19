@@ -82,6 +82,10 @@ const CommunityWrite = lazy(() =>
 const CommunityComplete = lazy(() =>
   community().then((module) => ({ default: module.CommunityComplete })),
 );
+const admin = () => import('./admin-pages');
+const AdminReports = lazy(() => admin().then((module) => ({ default: module.AdminReports })));
+const AdminPost = lazy(() => admin().then((module) => ({ default: module.AdminPost })));
+const AdminMember = lazy(() => admin().then((module) => ({ default: module.AdminMember })));
 const MyPosts = lazy(() => community().then((module) => ({ default: module.MyPosts })));
 const ReceivedComplete = lazy(() =>
   import('./received-consultations').then((module) => ({ default: module.ReceivedComplete })),
@@ -385,6 +389,9 @@ function PageRoutes({
           <Route path="community/:id/edit" element={<CommunityWrite />} />
           <Route path="community/:id/complete" element={<CommunityComplete />} />
           <Route path="community/:id" element={<CommunityDetail />} />
+          <Route path="admin/reports" element={<AdminReports />} />
+          <Route path="admin/posts/:id" element={<AdminPost />} />
+          <Route path="admin/members/:id" element={<AdminMember />} />
           <Route path="records" element={<RecordList />} />
           <Route path="records/new" element={<CutForm />} />
           <Route path="records/:id/complete" element={<RecordComplete />} />

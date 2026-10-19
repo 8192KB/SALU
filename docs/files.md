@@ -75,9 +75,9 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 
 | 파일 | 용도 |
 |---|---|
-| `main.tsx`, `App.tsx` | 시작점과 전체 화면 주소(라우트) |
+| `main.tsx`, `App.tsx`, `vite-env.d.ts` | 시작점과 전체 화면 주소(라우트), Vite 환경 타입 |
 | `workspace.tsx` | 실제 공간과 예시 체험(`/examples`) 주소 구분 |
-| `main-navigation.tsx` | 하단·상단 메뉴, 메뉴별 마지막 화면 기억 |
+| `main-navigation.tsx`, `page-navigation.ts` | 하단·상단 메뉴, 메뉴별 마지막 화면 기억, 보관된 화면 안에서의 이동 |
 | `back-trail.ts` | 화면 위 뒤로 링크가 직전 화면으로 돌아가게 함 |
 | `home-page.tsx` | 홈 |
 | `record-pages.tsx` | 커트 기록 목록·작성·상세, 경과 작성 |
@@ -90,6 +90,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `designer-favorites.ts`, `designer-parts.tsx` | 찜한 디자이너 상태, 디자이너 상세의 찜 버튼·소속 이력 |
 | `more-page.tsx` | 하단 메뉴 더보기 화면 |
 | `community-pages.tsx`, `community-api.ts` | 커뮤니티 목록·상세·글쓰기·내 글과 API 호출 |
+| `admin-pages.tsx`, `admin-api.ts` | 관리자 신고 처리·회원 제재 화면과 API 호출 |
 | `notifications.tsx` | 머리글 알림 버튼과 알림 목록. 알림 종류별 문구와 이동할 화면 |
 | `consultation-store.tsx` | 상담 자료 저장소. 예시는 메모리, 실제 공간은 서버 |
 | `consultation-api.ts` | 상담 API 호출 |

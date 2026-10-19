@@ -73,9 +73,9 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 
 | 파일 | 용도 |
 |---|---|
-| `main.tsx`, `App.tsx` | 시작점과 전체 화면 주소(라우트) |
+| `main.tsx`, `App.tsx`, `vite-env.d.ts` | 시작점과 전체 화면 주소(라우트), Vite 환경 타입 |
 | `workspace.tsx` | 실제 공간과 예시 체험(`/examples`) 주소 구분 |
-| `main-navigation.tsx` | 하단·상단 메뉴, 메뉴별 마지막 화면 기억 |
+| `main-navigation.tsx`, `page-navigation.ts` | 하단·상단 메뉴, 메뉴별 마지막 화면 기억, 보관된 화면 안에서의 이동 |
 | `back-trail.ts` | 화면 위 뒤로 링크가 직전 화면으로 돌아가게 함 |
 | `home-page.tsx` | 홈 |
 | `record-pages.tsx` | 커트 기록 목록·작성·상세, 경과 작성 |

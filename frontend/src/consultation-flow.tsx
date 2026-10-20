@@ -569,9 +569,7 @@ export function ConsultationList() {
                 <Avatar name={thread.designer.name} src={thread.designer.avatarUrl} />
                 <h2>{thread.designer.name} 디자이너</h2>
                 <UnreadBadge count={thread.unreadCount} />
-                <span className="consultation-status">
-                  {thread.status === 'ANSWERED' ? '답변 도착' : '답변 대기'}
-                </span>
+                <ConsultationStatus answered={thread.status === 'ANSWERED'} />
               </div>
               <p>{thread.request}</p>
               <AttachmentCard attachment={thread.attachment} />
@@ -616,6 +614,14 @@ export function ConsultationList() {
         </div>
       )}
     </div>
+  );
+}
+// 답변이 오면 볼 것이 생긴 상태라 색을 채워 대기와 구분함
+function ConsultationStatus({ answered }: { answered: boolean }) {
+  return (
+    <span className={answered ? 'consultation-status filled' : 'consultation-status'}>
+      {answered ? '답변 도착' : '답변 대기'}
+    </span>
   );
 }
 export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
@@ -673,10 +679,9 @@ export function ConsultationDetail() {
       <div className="consultation-history-heading">
         <Avatar name={thread.designer.name} src={thread.designer.avatarUrl} />
         <h2>{thread.designer.name} 디자이너</h2>
-        <span className="consultation-status">
-          {thread.status === 'ANSWERED' ? '답변 도착' : '답변 대기'}
-        </span>
+        <ConsultationStatus answered={thread.status === 'ANSWERED'} />
       </div>
+      {thread.reply && <ConsultationAnswer reply={thread.reply} />}
       <section className="consultation-soft-panel">
         <h2>보낸 요청</h2>
         <p className="consultation-message">{thread.request}</p>
@@ -686,6 +691,22 @@ export function ConsultationDetail() {
         <h2>첨부한 커트 기록</h2>
         <AttachmentCard attachment={thread.attachment} />
       </section>
+      {server && member ? (
+        <ConsultationConversation
+          id={thread.id}
+          member={member}
+          partner={`${thread.designer.name} 디자이너`}
+          placeholder="예: 다음 주 토요일에 방문할게요."
+          emptyMessage={
+            thread.reply
+              ? undefined
+              : '디자이너가 답변하면 화면 맨 위에 보여요. 그 전에도 더 알리고 싶은 내용을 보낼 수 있어요.'
+          }
+          answerAt={thread.reply?.repliedAt}
+        />
+      ) : (
+        !thread.reply && <ConsultationAnswer />
+      )}
       {server && member && (
         <ConsultationReviewPanel
           consultation={{
@@ -696,17 +717,6 @@ export function ConsultationDetail() {
           }}
           onChange={() => repository?.load?.(thread.id)}
         />
-      )}
-      {server && member ? (
-        <ConsultationConversation
-          id={thread.id}
-          member={member}
-          partner={`${thread.designer.name} 디자이너`}
-          placeholder="예: 다음 주 토요일에 방문할게요."
-          emptyMessage="디자이너의 답변이 오면 이곳에 보여요. 그 전에도 더 알리고 싶은 내용을 보낼 수 있어요."
-        />
-      ) : (
-        <ConsultationAnswer reply={thread.reply} />
       )}
     </div>
   );

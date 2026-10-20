@@ -13,15 +13,22 @@ import { AttachmentCard, byLatest, UnreadBadge, useConsultationAccess } from './
 import { ConsultationConversation } from './consultation-conversation';
 import { ReceivedReview } from './consultation-review';
 import { sentTime } from './prototype/dates';
-import { consultationEvent, useLiveRefresh } from './realtime';
+import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
 
 // 디자이너가 받은 상담. 로그인한 실제 회원 화면이며 예시 체험과 섞지 않음
 function useMember() {
   const { state } = useAuth();
   return state.status === 'authenticated' ? state.member : null;
 }
-const statusLabel = (value: Consultation) =>
-  value.status === 'ANSWERED' ? '답변 완료' : '답변 전';
+// 답변할 차례인 상담은 색을 채워 보낸 상담의 '답변 도착'처럼 눈에 띄게 함
+function Status({ item }: { item: Consultation }) {
+  const waiting = item.status !== 'ANSWERED';
+  return (
+    <span className={waiting ? 'consultation-status filled' : 'consultation-status'}>
+      {waiting ? '답변 전' : '답변 완료'}
+    </span>
+  );
+}
 
 function ExampleNotice() {
   return (
@@ -91,7 +98,7 @@ export function ReceivedList() {
                   <Avatar name={item.customer.displayName} />
                   <h2>{item.customer.displayName}님</h2>
                   <UnreadBadge count={item.unreadCount} />
-                  <span className="consultation-status">{statusLabel(item)}</span>
+                  <Status item={item} />
                 </div>
                 <p>{item.request}</p>
                 <AttachmentCard attachment={threadFrom(item).attachment} />
@@ -136,10 +143,13 @@ export function ReceivedDetail() {
   const access = useConsultationAccess();
   const member = useMember();
   const navigate = useNavigate();
+  const signal = useLocalSignal();
   const [item, setItem] = useState<Consultation | null>(null);
   const [loadError, setLoadError] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  // 다른 탭에서 먼저 답변해 이 탭의 답변 입력칸이 사라질 때 대신 보여 줄 안내
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
   const load = useCallback(async () => {
@@ -192,10 +202,10 @@ export function ReceivedDetail() {
         state: { celebrate: true },
       });
     } catch (failure) {
-      // 이미 답변한 상담이면 저장된 답변을 다시 받아 보여 줌. 그 밖의 실패는 입력을 유지함
+      // 이미 답변한 상담이면 상담과 대화를 다시 받아 저장된 답변을 보여 줌. 그 밖의 실패는 입력을 유지함
       if (failure instanceof ApiFailure && failure.code === 'RESOURCE_CONFLICT') {
-        await load();
-        setError('이미 답변한 상담이에요. 저장된 답변을 보여 드려요.');
+        signal({ type: 'CONSULTATION', id });
+        setNotice('이미 답변한 상담이에요. 저장된 답변은 대화에서 볼 수 있어요.');
       } else
         setError(
           failure instanceof Error
@@ -213,7 +223,7 @@ export function ReceivedDetail() {
       <div className="consultation-history-heading">
         <Avatar name={item.customer.displayName} />
         <h2>{item.customer.displayName}님</h2>
-        <span className="consultation-status">{statusLabel(item)}</span>
+        <Status item={item} />
       </div>
       <section className="consultation-soft-panel">
         <h2>받은 요청</h2>
@@ -225,6 +235,11 @@ export function ReceivedDetail() {
         <AttachmentCard attachment={threadFrom(item).attachment} />
       </section>
       <ReceivedReview id={item.id} reviewId={item.reviewId} />
+      {notice && (
+        <section className="consultation-soft-panel" role="status">
+          <p>{notice}</p>
+        </section>
+      )}
       {member && (
         <ConsultationConversation
           id={item.id}
@@ -234,7 +249,7 @@ export function ReceivedDetail() {
           canWrite={!item.canReply}
         />
       )}
-      {item.canReply ? (
+      {item.canReply && (
         <form onSubmit={submit} noValidate>
           <label className="consultation-request-field">
             <span>답변</span>
@@ -261,8 +276,6 @@ export function ReceivedDetail() {
             </button>
           </div>
         </form>
-      ) : (
-        <Alert message={error} />
       )}
     </div>
   );

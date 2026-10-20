@@ -277,6 +277,13 @@
   font-size: 14px;
   font-weight: 600;
 }
+.consultation-status.filled {
+  background: var(--teal);
+  color: var(--on-action);
+}
+.consultation-reply {
+  background: var(--soft);
+}
 .consultation-screen time {
   color: var(--muted);
 }
@@ -550,7 +557,7 @@
   gap: 10px;
   margin-top: 16px;
 }
-.consultation-review .button.primary {
+.consultation-review > .button {
   margin-top: 16px;
 }
 .review-average {

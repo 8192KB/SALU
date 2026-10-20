@@ -293,7 +293,7 @@ const response = await fetch('/api/consultations', {
 | `409 RESOURCE_CONFLICT` | 같은 `clientKey`로 다른 내용을 보냄 |
 | `409 STORAGE_CONTEXT_CHANGED` | 다른 탭에서 로그인 계정이 바뀜 |
 
-보낸 사람은 자기 메시지까지 읽은 것으로 처리됩니다. 상대에게는 `CONSULTATION_MESSAGE` 알림이 쌓입니다.
+보낸 사람은 자기 메시지까지 읽은 것으로 처리됩니다. 상대에게는 `CONSULTATION_MESSAGE` 알림이 쌓입니다. 디자이너의 첫 메시지(답변)만 `CONSULTATION_ANSWERED`입니다.
 
 ## 9. 읽음 표시
 

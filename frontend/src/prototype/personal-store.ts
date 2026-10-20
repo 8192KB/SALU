@@ -71,13 +71,22 @@ const stores = new Set<PersonalStore>();
 export const flushPersonalStores = () => Promise.all([...stores].map((store) => store.flush()));
 
 // 이 기기의 로그인 전 공간에 남은 기록. ids는 로그인 전 주소에 들어 있던 기록 ID를 가려낼 때 씀
-export type GuestRecords = { cuts: number; ids: Set<string> };
+export type GuestRecords = {
+  cuts: number;
+  ids: Set<string>;
+  // 옮길지 물을 때 어떤 기록인지 알아볼 수 있게 최근 커트 3개를 보여 줌
+  recent: { id: string; cutDate: string; service: string }[];
+};
 export async function readGuestRecords(): Promise<GuestRecords | null> {
   const guest: Document | undefined = await (await database()).get('workspaces', 'guest');
   if (!guest) return null;
   const { cuts } = guest.bundle.state;
   if (!cuts.length && isBlankCutDraft(guest.bundle.drafts.cutDraft)) return null;
-  return { cuts: cuts.length, ids: new Set(copyBundle(guest.bundle).ids.keys()) };
+  const recent = [...cuts]
+    .sort((a, b) => b.cutDate.localeCompare(a.cutDate))
+    .slice(0, 3)
+    .map(({ id, cutDate, service }) => ({ id, cutDate, service }));
+  return { cuts: cuts.length, ids: new Set(copyBundle(guest.bundle).ids.keys()), recent };
 }
 
 function groupByCut<T>(values: T[], cutId: (value: T) => string) {

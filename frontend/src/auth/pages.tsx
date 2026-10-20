@@ -10,6 +10,7 @@ import type { SessionMember } from './api';
 import { listReceivedConsultations } from '../consultation-api';
 import { flushPersonalStores, readGuestRecords } from '../prototype/personal-store';
 import type { GuestRecords, PersonalStore } from '../prototype/personal-store';
+import { cutTitle } from '../prototype/dates';
 
 // 로그인 뒤 돌아갈 앱 안 주소. 외부 주소와 계정 화면은 받지 않음
 export function safeReturnPath(value: string | null) {
@@ -695,6 +696,17 @@ export function AccountPage() {
 }
 export const guestRecordsLabel = (guest: GuestRecords) =>
   guest.cuts ? `기록 ${guest.cuts}건` : '작성 중이던 기록';
+export function GuestRecordList({ guest }: { guest: GuestRecords }) {
+  if (!guest.recent.length) return null;
+  return (
+    <ul className="guest-records">
+      {guest.recent.map((cut) => (
+        <li key={cut.id}>{cutTitle(cut.cutDate, cut.service)}</li>
+      ))}
+      {guest.cuts > guest.recent.length && <li>외 {guest.cuts - guest.recent.length}건</li>}
+    </ul>
+  );
+}
 
 // 로그인 뒤 옮기기 질문은 이 기기에서 계정마다 한 번만 띄움. 표시를 남기지 못하면 다음 로그인 때 다시 물음
 function GuestMoveQuestion({
@@ -731,6 +743,7 @@ function GuestMoveQuestion({
         이 기기의 {label}을 계정으로 옮길까요?
       </h1>
       <p>로그인 전에 이 기기에 남긴 기록이에요. 옮기면 다른 기기에서도 볼 수 있어요.</p>
+      <GuestRecordList guest={guest} />
       <p>옮기지 않으면 이 기기에만 남아요. 나중에 내 계정의 기록 저장·백업에서 옮길 수 있어요.</p>
       <Alert message={error} />
       {moving && (

@@ -2140,6 +2140,16 @@ html {
 .guest-move p {
   word-break: keep-all;
 }
+.guest-records {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: var(--surface-subtle);
+  list-style: none;
+  font-weight: 600;
+}
 .completion-description {
   color: var(--muted);
   font-size: 15px;

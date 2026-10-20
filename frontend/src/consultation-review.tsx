@@ -78,7 +78,11 @@ export function ConsultationReviewPanel({
     }
     let current = true;
     fetchConsultationReview(member, id).then(
-      (value) => current && setReview(value),
+      (value) => {
+        if (!current) return;
+        setReview(value);
+        setError('');
+      },
       (failure: unknown) =>
         current &&
         setError(failure instanceof Error ? failure.message : '후기를 불러오지 못했어요.'),

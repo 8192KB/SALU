@@ -454,7 +454,8 @@ export function AdminMember() {
           onClose={() => !busy && setConfirm(false)}
         >
           <p>
-            {DAYS.find((value) => value.value === days)?.label} 동안 커뮤니티 글과 댓글을 쓸 수
+            {name ? `${name}님은` : '이 회원은'}{' '}
+            {days === null ? '해제할 때까지' : `${days}일 동안`} 커뮤니티에 글과 댓글을 쓸 수
             없어요. 이유: {reason.trim()}
           </p>
           <div className="dialog-actions">

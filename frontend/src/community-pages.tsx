@@ -341,11 +341,10 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
     try {
       const saved = await addComment(member, post.id, pending.current.key, content);
       pending.current = null;
-      setComments((value) => {
-        const next = [...(value ?? []).filter((item) => item.id !== saved.id), saved];
-        onCount(next.length);
-        return next;
-      });
+      // 부모의 댓글 수는 state 갱신 함수 밖에서 바꿈. 갱신 함수 안에서 다른 컴포넌트를 바꾸면 React가 경고함
+      const next = [...(comments ?? []).filter((item) => item.id !== saved.id), saved];
+      setComments(next);
+      onCount(next.length);
       setDraft('');
     } catch (failure) {
       setError(errorText(failure, '댓글을 보내지 못했어요. 적은 내용은 그대로 있어요.'));
@@ -358,11 +357,9 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
     setBusy(true);
     try {
       await deleteComment(member, removing.id);
-      setComments((value) => {
-        const next = (value ?? []).filter((item) => item.id !== removing.id);
-        onCount(next.length);
-        return next;
-      });
+      const next = (comments ?? []).filter((item) => item.id !== removing.id);
+      setComments(next);
+      onCount(next.length);
       setRemoving(null);
     } catch (failure) {
       setError(errorText(failure, '댓글을 지우지 못했어요.'));
@@ -950,8 +947,12 @@ export function MyPosts() {
   const [error, setError] = useState('');
   const load = useCallback(() => {
     if (!member) return;
-    return listMyPosts(member).then(setItems, (failure: unknown) =>
-      setError(errorText(failure, '내 글을 불러오지 못했어요.')),
+    return listMyPosts(member).then(
+      (value) => {
+        setItems(value);
+        setError('');
+      },
+      (failure: unknown) => setError(errorText(failure, '내 글을 불러오지 못했어요.')),
     );
     // 로그인 확인 때마다 회원 객체가 새로 만들어지므로 계정 ID로만 다시 받음
   }, [member?.id]);

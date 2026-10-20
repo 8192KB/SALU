@@ -64,7 +64,7 @@ export function MorePage() {
         <Group title="계정">
           <Item to="/notifications" title="알림" />
           <Item to="/account" title="내 계정" />
-          <Item to="/backup" title="저장 상태·백업" />
+          <Item to="/backup" title="기록 저장·백업" />
         </Group>
       )}
     </div>

@@ -9,7 +9,7 @@ import { isBlankCutDraft } from './prototype/memory-repository';
 import { photoIds } from './prototype/storage-model';
 import { readGuestRecords } from './prototype/personal-store';
 import type { GuestRecords } from './prototype/personal-store';
-import { guestRecordsLabel } from './auth/pages';
+import { GuestRecordList, guestRecordsLabel } from './auth/pages';
 
 export function StorageNotice({ compact = false }: { compact?: boolean }) {
   const { storage } = usePrototype();
@@ -24,7 +24,25 @@ function PersonalStorageNotice({
   storage: NonNullable<ReturnType<typeof usePrototype>['storage']>;
 }) {
   const view = useSyncExternalStore(storage.subscribe, storage.getSnapshot);
-  const onBackup = useLocation().pathname === '/backup';
+  const { pathname } = useLocation();
+  const onBackup = pathname === '/backup';
+  // 로그인 전 기록을 옮길 수 있는 두 화면에서는 계정 저장 상태보다 그 기록이 아직 이 기기에만 있다는 것을 먼저 알림
+  const [guest, setGuest] = useState<GuestRecords | null>(null);
+  const asks = storage.scope !== 'guest' && (onBackup || pathname === '/auth/complete');
+  useEffect(() => {
+    if (!asks) {
+      setGuest(null);
+      return;
+    }
+    let live = true;
+    readGuestRecords().then(
+      (records) => live && setGuest(records),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [asks, view]);
   const labels = {
     local: '기기에 저장됨',
     saving: '기기에 저장 중',
@@ -42,7 +60,7 @@ function PersonalStorageNotice({
       <span className="storage-state">
         <Icon
           name={
-            view.status === 'conflict'
+            guest || view.status === 'conflict'
               ? 'warning'
               : view.status === 'local' || view.status === 'synced'
                 ? 'check'
@@ -50,7 +68,7 @@ function PersonalStorageNotice({
           }
           size={14}
         />
-        {labels[view.status]}
+        {guest ? `로그인 전 ${guestRecordsLabel(guest)}은 이 기기에만 있어요` : labels[view.status]}
       </span>
       {view.error && !view.conflicts && !onBackup && <Link to="/backup">저장 상태 확인</Link>}
       {view.error && <Alert message={view.error} />}
@@ -185,6 +203,7 @@ function PersonalBackupPage({
             이 기기에 로그인 전에 남긴 {guestRecordsLabel(guest)}이 있어요. 계정으로 옮기면 다른
             기기에서도 볼 수 있어요.
           </p>
+          <GuestRecordList guest={guest} />
           <button
             type="button"
             className="button primary"
@@ -193,7 +212,13 @@ function PersonalBackupPage({
               const label = guestRecordsLabel(guest);
               void act(
                 async () => {
-                  const moved = await storage.adoptGuest();
+                  let moved: boolean;
+                  try {
+                    moved = await storage.adoptGuest();
+                  } catch {
+                    // 옮기기 오류는 내부 문구라 로그인 직후 질문 화면과 같은 문구로 보여 줌
+                    throw new Error('기록을 옮기지 못했어요. 다시 시도해 주세요.');
+                  }
                   setGuest(null);
                   if (!moved)
                     throw new Error('옮길 기록이 없어요. 다른 창에서 이미 옮겼을 수 있어요.');

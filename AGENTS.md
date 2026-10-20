@@ -3,7 +3,7 @@
 - 개인 AI 지침(`~/.agents/AI_INSTRUCTIONS.md`, `~/.agents/HOST.md`, Codex의 `~/.codex/AGENTS.md`)이 있으면 먼저 확인
 - 로컬 `.local/AGENTS.md`가 있으면 작업 전에 읽고 개인 검증 절차 적용
 - 작업 전 `docs/development-contract.md` 확인. 해당 기능의 로컬 검증 기록이 있으면 함께 확인
-- 구현 범위: README `지금 되는 것`과 GitHub Issue로 합의한 기능. Issue에 없는 기능·메뉴·테이블은 만들지 않음. 개인 기록은 docs/personal-storage.md, 상담·알림·디자이너·커뮤니티 서버 API는 docs/*-api.md 계약 적용. 예시 체험은 메모리 전용. 실제 소셜 제공자 client 설정·동의는 별도 확인 전까지 완료로 보지 않음
+- 구현 범위: README `지금 되는 것`과 GitHub Issue #15 목록에서 맡은 기능. 목록에 없는 기능·메뉴·테이블은 조원과 합의해 #15에 적기 전에는 만들지 않음. 개인 기록은 docs/personal-storage.md, 상담·알림·디자이너·커뮤니티 서버 API는 docs/*-api.md 계약 적용. 예시 체험은 메모리 전용. 실제 소셜 제공자 client 설정·동의는 별도 확인 전까지 완료로 보지 않음
 - 기존 인증 backend와 로컬 검증 기록 보존. 테스트·Playwright·검증 도구·Linux 전용 DB 도구·NAS 설정은 로컬 전용이며 Git 공유 제외. 로컬 검증 환경이 있으면 화면·실제 인증·저장/API/DB 검증을 구분하고, 예시 화면 통과를 업무 DB·전송 검증으로 주장하지 않음
 - Controller는 입력/응답, Service는 업무·소유권·트랜잭션, Mapper는 SQL 담당
 - URL 인증/역할 규칙은 SecurityConfig에 집중. 자원 소유권·상담 참여자 검사는 해당 Service에서 수행
@@ -18,7 +18,7 @@
 
 ## 함께 작업할 때
 
-- Issue 하나당 branch 하나(`feat/<Issue번호>-<짧은 이름>`). main에 직접 push하지 않고 PR로 merge
+- 두 명이 작업해 기능·수정마다 Issue를 만들지 않음. 작업 하나당 branch 하나(`fix/<짧은 이름>`, `feat/<짧은 이름>`). main에 직접 push하지 않고 PR로 merge
 - 새 화면·이동은 `docs/screen-flow.md`를 코드보다 먼저 고치고 PR에서 흐름 확인. 제목·뒤로 링크·완료 화면은 `PageHeading`·`BackLink`·`completion.tsx` 공통 부품 사용
 - 화면을 만들거나 고칠 때는 `DESIGN.md`(색·배치·공통 패턴·문구)와 `PRODUCT.md`(제품 맥락) 적용. 새 색·글꼴·스타일 체계를 만들지 않고 `frontend/src/theme.css` 토큰 사용. 디자인 skill도 이 기준 안에서만 적용
 - `backend/`·DB migration·`docs/`·작업 지침은 CODEOWNERS 승인 필요. 서버 API가 더 필요하면 계약 문서 변경을 먼저 PR로 올림. 화면 작업에서 서버 코드를 함께 고치지 않음

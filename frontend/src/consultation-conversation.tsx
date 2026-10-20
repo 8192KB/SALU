@@ -24,6 +24,7 @@ export function ConsultationConversation({
   placeholder,
   emptyMessage,
   canWrite = true,
+  answerAt,
 }: {
   id: string;
   member: SessionMember;
@@ -34,6 +35,8 @@ export function ConsultationConversation({
   emptyMessage?: string;
   // 디자이너의 첫 답변은 답변 화면에서 따로 보내므로 그 전에는 목록만 보여 줌
   canWrite?: boolean;
+  // 보낸 상담 상세는 첫 답변을 위 카드로 따로 보여 주므로 대화에서 뺌. 답변 시각이 그 메시지를 보낸 시각과 같음
+  answerAt?: string;
 }) {
   const active = useActivePage();
   const signal = useLocalSignal();
@@ -46,13 +49,16 @@ export function ConsultationConversation({
   // 응답을 못 받은 메시지를 같은 내용으로 다시 보낼 때 같은 키를 써서 한 번만 저장되게 함
   const pending = useRef<{ key: string; content: string } | null>(null);
   const latest = useRef<ConsultationMessage[] | null>(null);
+  // 서버 목록으로 받은 마지막 ID. 내가 보낸 메시지는 기준으로 쓰지 않아야 그 사이에 온 상대 메시지를 놓치지 않음
+  const cursor = useRef<number | undefined>(undefined);
   const marked = useRef(0);
   const input = useRef<HTMLTextAreaElement>(null);
 
   const load = useCallback(async () => {
     try {
-      const after = latest.current?.at(-1)?.id;
-      const next = await listMessages(member, id, after);
+      const next = await listMessages(member, id, cursor.current);
+      const last = next.at(-1)?.id;
+      if (last && last > (cursor.current ?? 0)) cursor.current = last;
       const merged = merge(latest.current ?? [], next);
       latest.current = merged;
       setMessages(merged);
@@ -128,13 +134,16 @@ export function ConsultationConversation({
     ) : (
       <p role="status">메시지를 불러오고 있어요.</p>
     );
-  if (!messages.length && !emptyMessage && !canWrite) return null;
+  const shown = answerAt
+    ? messages.filter((message) => message.sender !== 'DESIGNER' || message.sentAt !== answerAt)
+    : messages;
+  if (!shown.length && !emptyMessage && !canWrite) return null;
   return (
     <section className="consultation-conversation">
       <h2>대화</h2>
-      {messages.length ? (
+      {shown.length ? (
         <ol className="consultation-thread">
-          {messages.map((message) => (
+          {shown.map((message) => (
             <li key={message.id} className={message.mine ? 'mine' : 'theirs'}>
               <span className="sr-only">{message.mine ? '나' : partner}</span>
               <p>{message.content}</p>

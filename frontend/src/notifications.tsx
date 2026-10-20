@@ -27,8 +27,9 @@ const notificationEvent = (event: RealtimeEvent) => event.type === 'NOTIFICATION
 const path = (value: string) => encodeURIComponent(value);
 
 // 서버는 종류와 대상 ID만 보내므로 문구와 갈 화면은 이곳 한 곳에서 정함.
-// 상담 메시지는 받는 사람이 고객인지 디자이너인지에 따라 갈 화면이 달라 보낸 상담 ID 목록으로 정함
-function describe(item: Notification, sent: Set<string>) {
+// 상담 메시지는 받는 사람이 고객인지 디자이너인지에 따라 갈 화면이 달라 보낸 상담 ID 목록으로 정함.
+// 목록을 아직 못 받았으면(sent가 null) 누를 때 다시 받아 정함
+function describe(item: Notification, sent: Set<string> | null) {
   const actor = item.actorName ?? '회원';
   switch (item.type) {
     case 'CONSULTATION_REQUESTED':
@@ -37,7 +38,7 @@ function describe(item: Notification, sent: Set<string>) {
         to: `/consultations/received/${path(item.targetId)}`,
       };
     case 'CONSULTATION_MESSAGE':
-      return sent.has(item.targetId)
+      return sent?.has(item.targetId)
         ? {
             text: `${actor} 디자이너가 메시지를 보냈어요`,
             to: `/consultations/${path(item.targetId)}`,
@@ -131,15 +132,19 @@ export function NotificationList() {
   const navigate = useNavigate();
   const signal = useLocalSignal();
   const [inbox, setInbox] = useState<Inbox | null>(null);
-  const [sent, setSent] = useState<Set<string>>(new Set());
+  const [sent, setSent] = useState<Set<string> | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const load = useCallback(async () => {
     if (!member) return;
     try {
-      const [next, sentList] = await Promise.all([fetchInbox(), listSentConsultations(member)]);
+      const [next, sentList] = await Promise.all([
+        fetchInbox(),
+        // 보낸 상담 목록은 메시지 알림이 갈 화면을 정할 때만 씀. 못 받아도 알림은 보여 줌
+        listSentConsultations(member).catch(() => null),
+      ]);
       setInbox(next);
-      setSent(new Set(sentList.map((item) => item.id)));
+      if (sentList) setSent(new Set(sentList.map((item) => item.id)));
       setError('');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '알림을 불러오지 못했어요.');
@@ -165,7 +170,17 @@ export function NotificationList() {
       setBusy(false);
     }
   }
-  function open(item: Notification, to: string) {
+  async function open(item: Notification, to: string) {
+    if (!sent && item.type === 'CONSULTATION_MESSAGE' && member) {
+      try {
+        const known = new Set((await listSentConsultations(member)).map((value) => value.id));
+        setSent(known);
+        to = describe(item, known).to;
+      } catch {
+        setError('알림을 열지 못했어요. 잠시 후 다시 눌러 주세요.');
+        return;
+      }
+    }
     // 읽음 처리를 기다리지 않고 바로 이동함. 실패해도 다음에 목록을 열면 다시 안 읽은 알림으로 보임
     if (!item.read)
       void directoryRequest(`/api/my/notifications/${item.id}/read`, 'POST').then(
@@ -231,7 +246,7 @@ export function NotificationList() {
                     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
                       return;
                     event.preventDefault();
-                    open(item, to);
+                    void open(item, to);
                   }}
                 >
                   <span className="notification-dot" aria-hidden="true" />

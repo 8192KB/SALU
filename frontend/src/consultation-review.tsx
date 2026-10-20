@@ -67,7 +67,10 @@ export function ConsultationReviewPanel({
   // 후기를 고치고 돌아오면 ID는 그대로라 다시 보일 때 새로 받음
   const [version, setVersion] = useState(0);
   useOnReactivate(() => setVersion((value) => value + 1));
+  // 지운 뒤 상담을 다시 받기 전이나 다시 받지 못했을 때도 바로 쓰기 버튼을 보여 줌
+  const [deletedId, setDeletedId] = useState<string | null>(null);
   const { id, reviewId } = consultation;
+  const reviewed = Boolean(reviewId) && reviewId !== deletedId;
   useEffect(() => {
     if (!member || !reviewId) {
       setReview(null);
@@ -75,7 +78,11 @@ export function ConsultationReviewPanel({
     }
     let current = true;
     fetchConsultationReview(member, id).then(
-      (value) => current && setReview(value),
+      (value) => {
+        if (!current) return;
+        setReview(value);
+        setError('');
+      },
       (failure: unknown) =>
         current &&
         setError(failure instanceof Error ? failure.message : '후기를 불러오지 못했어요.'),
@@ -84,26 +91,29 @@ export function ConsultationReviewPanel({
       current = false;
     };
   }, [member, id, reviewId, version]);
-  if (!member || (!reviewId && !consultation.canReview)) return null;
+  if (!member || (!reviewed && !consultation.canReview && !deletedId)) return null;
   async function remove() {
-    if (!member) return;
+    if (!member || !reviewId) return;
     setBusy(true);
     setError('');
     try {
       await deleteReview(member, id);
-      setConfirm(false);
-      setReview(null);
-      await onChange();
-      signal({ type: 'CONSULTATION', id });
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '후기를 지우지 못했어요.');
+      return;
     } finally {
       setBusy(false);
     }
+    setConfirm(false);
+    setDeletedId(reviewId);
+    setReview(null);
+    // 지우기는 이미 끝났으므로 상담을 다시 받지 못해도 오류로 보이지 않음
+    void Promise.resolve(onChange()).catch(() => {});
+    signal({ type: 'CONSULTATION', id });
   }
   return (
     <section className="consultation-soft-panel consultation-review">
-      {reviewId ? (
+      {reviewed ? (
         <>
           <h2>남긴 후기</h2>
           {review ? (
@@ -154,7 +164,7 @@ export function ConsultationReviewPanel({
         <>
           <h2>{consultation.designerName} 디자이너의 상담은 어땠나요?</h2>
           <p>남긴 후기는 디자이너 프로필에서 다른 고객도 볼 수 있어요.</p>
-          <Link className="button primary" to={`/consultations/${id}/review`}>
+          <Link className="button" to={`/consultations/${id}/review`}>
             후기 남기기
           </Link>
         </>

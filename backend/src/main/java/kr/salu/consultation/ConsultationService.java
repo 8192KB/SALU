@@ -143,11 +143,12 @@ public class ConsultationService {
         boolean customer = row.customerId() == sender;
         if (mapper.insertMessage(row.id(), sender, customer ? "CUSTOMER" : "DESIGNER", key, content) != 1) throw ApiException.conflict();
         long messageId = mapper.lastId();
-        if (!customer && "REQUESTED".equals(row.status()) && mapper.markAnswered(row.id(), messageId) != 1) throw ApiException.conflict();
+        boolean answer = !customer && "REQUESTED".equals(row.status());
+        if (answer && mapper.markAnswered(row.id(), messageId) != 1) throw ApiException.conflict();
         // 보낸 사람은 자기 메시지까지 읽은 것으로 둠
         if ((customer ? mapper.readByCustomer(row.id(), messageId) : mapper.readByDesigner(row.id(), messageId)) != 1) throw ApiException.conflict();
         long recipient = customer ? row.designerMemberId() : row.customerId();
-        notifications.create(recipient, NotificationService.CONSULTATION_MESSAGE, row.id(), customer ? row.customerName() : row.designerName());
+        notifications.create(recipient, answer ? NotificationService.CONSULTATION_ANSWERED : NotificationService.CONSULTATION_MESSAGE, row.id(), customer ? row.customerName() : row.designerName());
         realtime.send(row.customerId(), RealtimePublisher.CONSULTATION, row.id());
         realtime.send(row.designerMemberId(), RealtimePublisher.CONSULTATION, row.id());
         return mapper.message(messageId);

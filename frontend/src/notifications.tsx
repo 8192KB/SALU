@@ -12,7 +12,11 @@ import type { RealtimeEvent } from './realtime';
 
 // 알림·실시간 API 계약(docs/notification-api.md)의 응답 모양
 export type NotificationType =
-  'CONSULTATION_REQUESTED' | 'CONSULTATION_MESSAGE' | 'REVIEW_RECEIVED' | 'COMMUNITY_COMMENT';
+  | 'CONSULTATION_REQUESTED'
+  | 'CONSULTATION_ANSWERED'
+  | 'CONSULTATION_MESSAGE'
+  | 'REVIEW_RECEIVED'
+  | 'COMMUNITY_COMMENT';
 export type Notification = {
   id: number;
   type: NotificationType;
@@ -35,6 +39,11 @@ function describe(item: Notification, sent: Set<string>) {
       return {
         text: `${actor}님이 상담을 보냈어요`,
         to: `/consultations/received/${path(item.targetId)}`,
+      };
+    case 'CONSULTATION_ANSWERED':
+      return {
+        text: `${actor} 디자이너가 답변했어요`,
+        to: `/consultations/${path(item.targetId)}`,
       };
     case 'CONSULTATION_MESSAGE':
       return sent.has(item.targetId)
@@ -66,6 +75,7 @@ function isNotification(value: unknown): value is Notification {
     Number.isSafeInteger(item.id) &&
     [
       'CONSULTATION_REQUESTED',
+      'CONSULTATION_ANSWERED',
       'CONSULTATION_MESSAGE',
       'REVIEW_RECEIVED',
       'COMMUNITY_COMMENT',

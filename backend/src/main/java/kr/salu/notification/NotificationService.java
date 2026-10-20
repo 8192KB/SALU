@@ -11,8 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class NotificationService {
-    // 종류를 늘리려면 V7의 CHECK도 새 migration으로 함께 바꿈
+    // 종류를 늘리려면 V11의 CHECK도 새 migration으로 함께 바꿈
     public static final String CONSULTATION_REQUESTED = "CONSULTATION_REQUESTED";
+    public static final String CONSULTATION_ANSWERED = "CONSULTATION_ANSWERED";
     public static final String CONSULTATION_MESSAGE = "CONSULTATION_MESSAGE";
     public static final String REVIEW_RECEIVED = "REVIEW_RECEIVED";
     public static final String COMMUNITY_COMMENT = "COMMUNITY_COMMENT";

@@ -1,6 +1,6 @@
 # 알림·실시간 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/realtime.tsx`(실시간 연결)와 `frontend/src/notifications.tsx`(머리글 알림 버튼·`/notifications` 목록)가 따릅니다. 알림 문구와 눌렀을 때 갈 화면은 `notifications.tsx`의 `describe` 한 곳에서 정합니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
+2026-10-20 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`·`V11__answer_notification.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/realtime.tsx`(실시간 연결)와 `frontend/src/notifications.tsx`(머리글 알림 버튼·`/notifications` 목록)가 따릅니다. 알림 문구와 눌렀을 때 갈 화면은 `notifications.tsx`의 `describe` 한 곳에서 정합니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
 
 ## 한눈에 보기
 
@@ -35,17 +35,21 @@
 | `type` | 받는 사람 | `targetId` | `actorName` | 눌렀을 때 갈 화면(제안) |
 |---|---|---|---|---|
 | `CONSULTATION_REQUESTED` | 상담을 받은 디자이너 | 상담 ID | 보낸 고객 이름 | `/consultations/received/{id}` |
+| `CONSULTATION_ANSWERED` | 상담을 보낸 고객 | 상담 ID | 답변한 디자이너 이름(상담 당시 이름) | `/consultations/{id}` |
 | `CONSULTATION_MESSAGE` | 상대 참여자 | 상담 ID | 보낸 사람 이름(상담 당시 이름) | 고객은 `/consultations/{id}`, 디자이너는 `/consultations/received/{id}` |
 | `REVIEW_RECEIVED` | 후기를 받은 디자이너 | 상담 ID | 후기를 쓴 고객 이름 | `/consultations/received/{id}` |
 | `COMMUNITY_COMMENT` | 글쓴이(자기 댓글은 제외) | 글 ID | 댓글 쓴 사람 이름 | `/community/{id}` |
 
+디자이너의 첫 메시지는 답변이라 `CONSULTATION_ANSWERED`로, 그 뒤의 메시지는 `CONSULTATION_MESSAGE`로 쌓입니다. 2026-10-20 전에 쌓인 답변 알림은 `CONSULTATION_MESSAGE`로 남아 있습니다.
+
 `CONSULTATION_MESSAGE`는 받는 사람이 그 상담의 고객인지 디자이너인지에 따라 갈 화면이 다릅니다. 화면은 상담 상세를 불러와 판단하거나, 보낸 상담 목록에 그 ID가 있는지로 정합니다.
 
-종류를 늘리려면 `NotificationService`의 상수와 `V7`의 CHECK 제약을 새 migration으로 함께 바꾸고, 이 표를 먼저 고칩니다.
+종류를 늘리려면 `NotificationService`의 상수와 `V11`의 CHECK 제약을 새 migration으로 함께 바꾸고, 이 표를 먼저 고칩니다.
 
 ```ts
 export type NotificationType =
   | 'CONSULTATION_REQUESTED'
+  | 'CONSULTATION_ANSWERED'
   | 'CONSULTATION_MESSAGE'
   | 'REVIEW_RECEIVED'
   | 'COMMUNITY_COMMENT';

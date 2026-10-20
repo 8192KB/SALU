@@ -8,7 +8,8 @@ import { usePrototype } from '../prototype/context';
 import { ApiFailure, backupRequest, directoryRequest, signup } from './api';
 import type { SessionMember } from './api';
 import { listReceivedConsultations } from '../consultation-api';
-import { flushPersonalStores } from '../prototype/personal-store';
+import { flushPersonalStores, readGuestRecords } from '../prototype/personal-store';
+import type { GuestRecords, PersonalStore } from '../prototype/personal-store';
 
 // 로그인 뒤 돌아갈 앱 안 주소. 외부 주소와 계정 화면은 받지 않음
 export function safeReturnPath(value: string | null) {
@@ -193,8 +194,6 @@ export function LoginPage() {
     params.has('socialError') ? '소셜 로그인을 완료하지 못했어요. 다시 시도해 주세요.' : '',
   );
   const [credentialError, setCredentialError] = useState(false);
-  const { storage, state: records } = usePrototype();
-  const guestRecords = storage?.scope === 'guest' ? records.cuts.length : 0;
   const passwordInput = useRef<HTMLInputElement>(null);
   const performLogin = async () => {
     if (pending || checking) return;
@@ -263,12 +262,6 @@ export function LoginPage() {
         >
           {!error && <SessionNotice />}
           <Alert message={error} />
-          {guestRecords > 0 && (
-            <p>
-              이 기기에 로그인 전에 남긴 기록 {guestRecords}건이 있어요. 로그인하면 이 기록을
-              계정으로 옮겨요.
-            </p>
-          )}
           <Field label="이메일">
             <input
               name="email"
@@ -700,22 +693,108 @@ export function AccountPage() {
     </div>
   );
 }
+export const guestRecordsLabel = (guest: GuestRecords) =>
+  guest.cuts ? `기록 ${guest.cuts}건` : '작성 중이던 기록';
+
+// 로그인 뒤 옮기기 질문은 이 기기에서 계정마다 한 번만 띄움. 표시를 남기지 못하면 다음 로그인 때 다시 물음
+function GuestMoveQuestion({
+  storage,
+  guest,
+  next,
+}: {
+  storage: PersonalStore;
+  guest: GuestRecords;
+  next: string;
+}) {
+  const navigate = useNavigate();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [moving, setMoving] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [error, setError] = useState('');
+  // 같은 주소에서 로그인 확인 문구가 질문으로 바뀌므로 제목으로 초점을 옮김
+  useEffect(() => heading.current?.focus(), []);
+  const finish = async (moved: boolean) => {
+    await storage.markGuestMoveAsked().catch(() => {});
+    const ids = storage.migratedIds;
+    // 옮긴 기록은 새 ID를 받음. 옮기지 않은 기록의 주소는 계정 공간에 없으므로 내 기록 목록으로 감
+    const path = moved
+      ? next.replace(/[A-Za-z0-9_-]{8,}/g, (id) => ids.get(id) ?? id)
+      : (next.match(/[A-Za-z0-9_-]{8,}/g) ?? []).some((id) => guest.ids.has(id))
+        ? '/records'
+        : next;
+    navigate(path, { replace: true });
+  };
+  const label = guestRecordsLabel(guest);
+  return (
+    <section className="panel guest-move">
+      <h1 tabIndex={-1} ref={heading}>
+        이 기기의 {label}을 계정으로 옮길까요?
+      </h1>
+      <p>로그인 전에 이 기기에 남긴 기록이에요. 옮기면 다른 기기에서도 볼 수 있어요.</p>
+      <p>옮기지 않으면 이 기기에만 남아요. 나중에 내 계정의 기록 저장·백업에서 옮길 수 있어요.</p>
+      <Alert message={error} />
+      {moving && (
+        <p className="working-notice" role="status">
+          <span className="button-spinner" aria-hidden="true" />
+          기록을 옮기고 있어요.
+        </p>
+      )}
+      <div className="backup-actions">
+        <button
+          type="button"
+          className="button primary"
+          disabled={moving || leaving}
+          onClick={async () => {
+            setMoving(true);
+            setError('');
+            let moved: boolean;
+            try {
+              moved = await storage.adoptGuest();
+            } catch {
+              setError('기록을 옮기지 못했어요. 다시 시도해 주세요.');
+              setMoving(false);
+              return;
+            }
+            await finish(moved);
+          }}
+        >
+          계정으로 옮기기
+        </button>
+        <button
+          type="button"
+          className="button"
+          disabled={moving || leaving}
+          onClick={() => {
+            setLeaving(true);
+            void finish(false);
+          }}
+        >
+          이 기기에 두기
+        </button>
+      </div>
+    </section>
+  );
+}
 export function AuthCompletePage() {
   const { state, initialized, refresh } = useAuth();
   const { ready, storage } = usePrototype();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const done = useRef(false);
+  const [question, setQuestion] = useState<{ guest: GuestRecords; next: string } | null>(null);
   useEffect(() => {
     if (done.current || !initialized || !ready || state.status !== 'authenticated') return;
+    if (!storage || storage.scope === 'guest') return;
     done.current = true;
     const next = safeReturnPath(params.get('next')) ?? takeReturnPath() ?? '/';
-    // 로그인하며 계정으로 옮긴 게스트 기록은 새 ID를 받으므로 보던 주소도 새 ID로 바꿈
-    const ids = storage?.migratedIds;
-    navigate(ids?.size ? next.replace(/[A-Za-z0-9_-]{8,}/g, (id) => ids.get(id) ?? id) : next, {
-      replace: true,
-    });
+    const leave = () => void navigate(next, { replace: true });
+    if (storage.guestMoveAsked) {
+      leave();
+      return;
+    }
+    readGuestRecords().then((guest) => (guest ? setQuestion({ guest, next }) : leave()), leave);
   }, [initialized, ready, state, navigate, params, storage]);
+  if (question && storage) return <GuestMoveQuestion storage={storage} {...question} />;
   return (
     <section className="panel">
       <h1 tabIndex={-1}>로그인 확인</h1>
@@ -730,7 +809,7 @@ export function AuthCompletePage() {
       ) : (
         <p className="working-notice" role="status">
           <span className="button-spinner" aria-hidden="true" />
-          기록을 계정에 연결하고 있어요.
+          로그인을 확인하고 있어요.
         </p>
       )}
     </section>

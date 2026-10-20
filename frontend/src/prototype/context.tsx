@@ -183,32 +183,21 @@ export function PrototypeProvider({
   children,
   seed = 'empty',
   scope = 'guest',
-  adoptGuest = false,
 }: {
   children: ReactNode;
   seed?: WorkspaceMode;
   scope?: string;
-  adoptGuest?: boolean;
 }) {
   return seed === 'example' ? (
     <MemoryPrototypeProvider seed={seed}>{children}</MemoryPrototypeProvider>
   ) : (
-    <PersonalPrototypeProvider key={scope} scope={scope} adoptGuest={adoptGuest}>
+    <PersonalPrototypeProvider key={scope} scope={scope}>
       {children}
     </PersonalPrototypeProvider>
   );
 }
-function PersonalPrototypeProvider({
-  children,
-  scope,
-  adoptGuest,
-}: {
-  children: ReactNode;
-  scope: string;
-  adoptGuest: boolean;
-}) {
+function PersonalPrototypeProvider({ children, scope }: { children: ReactNode; scope: string }) {
   const [storage] = useState(() => new PersonalStore(scope));
-  const [adoptAtLoad] = useState(adoptGuest);
   const view = useSyncExternalStore(storage.subscribe, storage.getSnapshot);
   const { bundle, ready } = view;
   const drafts = bundle.drafts;
@@ -266,11 +255,7 @@ function PersonalPrototypeProvider({
     [storage],
   );
   useEffect(() => {
-    // 서버에 연결하지 못해 마지막 계정으로 연 경우, 로그인을 확인한 뒤에 게스트 기록을 옮김
-    if (adoptGuest && ready) void storage.adoptGuest();
-  }, [adoptGuest, ready, storage]);
-  useEffect(() => {
-    void storage.load(adoptAtLoad);
+    void storage.load();
     const save = () => {
       void storage.flush().catch(() => {});
     };
@@ -281,7 +266,7 @@ function PersonalPrototypeProvider({
       document.removeEventListener('visibilitychange', save);
       storage.dispose();
     };
-  }, [storage, adoptAtLoad]);
+  }, [storage]);
   const value = useMemo<PrototypeContextValue>(
     () => ({
       repository: storage.repository,

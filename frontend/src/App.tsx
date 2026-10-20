@@ -438,7 +438,7 @@ function AccountScopedPrototype() {
   const example = pathname === '/examples' || pathname.startsWith('/examples/');
   const scope = activeMember ? `member-${activeMember.id}` : 'guest';
   return (
-    <PrototypeProvider scope={scope} adoptGuest={auth.status === 'authenticated'}>
+    <PrototypeProvider scope={scope}>
       <CloudSync />
       <FeedbackProvider key={`${scope}:${example ? 'example' : 'personal'}`}>
         <Routes>

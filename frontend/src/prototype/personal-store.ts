@@ -28,6 +28,8 @@ type Document = {
   generation: number;
   bundle: Bundle;
   items: Record<string, SyncItem>;
+  // 로그인 뒤 로그인 전 기록을 옮길지 이 기기에서 이미 물었음. 서버로 보내지 않음
+  guestMoveAsked?: boolean;
 };
 export type StoreView = {
   bundle: Bundle;
@@ -67,6 +69,16 @@ function requestPersistentStorage() {
 }
 const stores = new Set<PersonalStore>();
 export const flushPersonalStores = () => Promise.all([...stores].map((store) => store.flush()));
+
+// 이 기기의 로그인 전 공간에 남은 기록. ids는 로그인 전 주소에 들어 있던 기록 ID를 가려낼 때 씀
+export type GuestRecords = { cuts: number; ids: Set<string> };
+export async function readGuestRecords(): Promise<GuestRecords | null> {
+  const guest: Document | undefined = await (await database()).get('workspaces', 'guest');
+  if (!guest) return null;
+  const { cuts } = guest.bundle.state;
+  if (!cuts.length && isBlankCutDraft(guest.bundle.drafts.cutDraft)) return null;
+  return { cuts: cuts.length, ids: new Set(copyBundle(guest.bundle).ids.keys()) };
+}
 
 function groupByCut<T>(values: T[], cutId: (value: T) => string) {
   const groups = new Map<string, T[]>();
@@ -350,12 +362,11 @@ export class PersonalStore {
     });
     return runtime;
   }
-  async load(adoptGuest = false) {
+  async load() {
     this.activate();
     return this.enqueue(async () => {
       if (this.view.ready) return;
       try {
-        if (this.scope !== 'guest' && adoptGuest) await this.migrateGuest();
         await this.read();
       } catch {
         this.setView({
@@ -367,17 +378,25 @@ export class PersonalStore {
       }
     });
   }
-  // 로그인을 서버에서 확인한 뒤에만 이 기기의 게스트 기록을 계정 공간으로 옮김
+  // 사용자가 옮기기를 고른 때만 이 기기의 게스트 기록을 계정 공간으로 옮김. 옮긴 것이 없으면 false
   async adoptGuest() {
-    if (this.scope === 'guest') return;
+    if (this.scope === 'guest') return false;
+    return this.enqueue(async () => {
+      if (!this.view.ready) return false;
+      if (this.pendingDrafts) await this.commit(this.view.bundle);
+      const moved = await this.migrateGuest();
+      if (moved) await this.read();
+      return moved;
+    });
+  }
+  get guestMoveAsked() {
+    return this.document.guestMoveAsked === true;
+  }
+  async markGuestMoveAsked() {
     await this.enqueue(async () => {
-      if (!this.view.ready) return;
-      try {
-        if (this.pendingDrafts) await this.commit(this.view.bundle);
-        if (await this.migrateGuest()) await this.read();
-      } catch {
-        this.setView({ status: 'error', error: storageError(), errorSource: 'local' });
-      }
+      if (this.document.guestMoveAsked) return;
+      this.document = { ...this.document, guestMoveAsked: true };
+      await this.commit(this.view.bundle);
     });
   }
   // 옮긴 게스트 기록의 이전 ID → 새 ID. 로그인 전에 보던 주소를 새 주소로 바꿀 때 씀
@@ -496,11 +515,12 @@ export class PersonalStore {
   private async commit(bundle: Bundle, items = this.changedItems(bundle)) {
     const serial = serialize(bundle);
     const draftVersion = this.draftVersion;
-    const next = {
+    const next: Document = {
       scope: this.scope,
       generation: this.document.generation + 1,
       bundle: serial,
       items,
+      guestMoveAsked: this.document.guestMoveAsked,
     };
     try {
       const db = await database();

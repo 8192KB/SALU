@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { usePrototype } from './prototype/context';
 import { PageHeading, BackLink, Icon, Alert } from './components';
@@ -7,6 +7,9 @@ import { useAuth } from './auth/context';
 import { Dialog } from './dialog';
 import { isBlankCutDraft } from './prototype/memory-repository';
 import { photoIds } from './prototype/storage-model';
+import { readGuestRecords } from './prototype/personal-store';
+import type { GuestRecords } from './prototype/personal-store';
+import { guestRecordsLabel } from './auth/pages';
 
 export function StorageNotice({ compact = false }: { compact?: boolean }) {
   const { storage } = usePrototype();
@@ -84,6 +87,18 @@ function PersonalBackupPage({
     ReturnType<typeof storage.readBackup>
   > | null>(null);
   const [removeDraft, setRemoveDraft] = useState<number | null>(null);
+  const [guest, setGuest] = useState<GuestRecords | null>(null);
+  useEffect(() => {
+    if (storage.scope === 'guest') return;
+    let live = true;
+    readGuestRecords().then(
+      (records) => live && setGuest(records),
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [storage]);
   const act = async (task: () => Promise<unknown>, success: string, records = false) => {
     setBusy(true);
     setError('');
@@ -134,7 +149,7 @@ function PersonalBackupPage({
               로그인 전 기록은 이 브라우저에만 저장돼요. 브라우저 데이터를 지우면 기록이 사라질 수
               있어요.
             </p>
-            <p>로그인하면 지금 작성한 기록과 사진도 계정에 보관해요.</p>
+            <p>로그인한 뒤 지금 남긴 기록과 사진을 계정으로 옮길 수 있어요.</p>
             <div className="backup-actions">
               <Link className="button primary" to="/login">
                 로그인
@@ -163,6 +178,35 @@ function PersonalBackupPage({
           </>
         )}
       </section>
+      {guest && (
+        <section className="panel" id="guest-records">
+          <h2>로그인 전에 남긴 기록</h2>
+          <p>
+            이 기기에 로그인 전에 남긴 {guestRecordsLabel(guest)}이 있어요. 계정으로 옮기면 다른
+            기기에서도 볼 수 있어요.
+          </p>
+          <button
+            type="button"
+            className="button primary"
+            disabled={busy}
+            onClick={() => {
+              const label = guestRecordsLabel(guest);
+              void act(
+                async () => {
+                  const moved = await storage.adoptGuest();
+                  setGuest(null);
+                  if (!moved)
+                    throw new Error('옮길 기록이 없어요. 다른 창에서 이미 옮겼을 수 있어요.');
+                },
+                `${label}을 계정으로 옮겼어요.`,
+                true,
+              );
+            }}
+          >
+            계정으로 옮기기
+          </button>
+        </section>
+      )}
       <section className="panel">
         <h2>파일 백업</h2>
         <p>

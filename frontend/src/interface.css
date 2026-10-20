@@ -2136,6 +2136,10 @@ html {
   letter-spacing: -0.025em;
   word-break: keep-all;
 }
+.guest-move h1,
+.guest-move p {
+  word-break: keep-all;
+}
 .completion-description {
   color: var(--muted);
   font-size: 15px;

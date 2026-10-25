@@ -278,6 +278,29 @@ export function createMemoryRepository(
       await publish({ ...state, previews: [...state.previews, preview] });
       return preview;
     },
+    async updatePreview(previewId, draft) {
+      const original = state.previews.find((value) => value.id === previewId);
+      if (!original || draft.id !== previewId || draft.cutId !== original.cut.id)
+        throw new InputError({
+          form: '고칠 준비를 찾을 수 없어요. 준비 목록에서 다시 골라 주세요.',
+        });
+      const preview: RequestPreview = {
+        ...prepareRequest(state, draft),
+        id: previewId,
+        createdAt: original.createdAt,
+      };
+      await publish({
+        ...state,
+        previews: state.previews.map((value) => {
+          if (value.id === previewId) return preview;
+          // 이 준비의 자료를 참고해 만든 준비는 고친 뒤 자료가 빠질 수 있어 자기 자료를 참고하게 함
+          return value.sourceDraft.referencePreviewId === previewId
+            ? { ...value, sourceDraft: { ...value.sourceDraft, referencePreviewId: value.id } }
+            : value;
+        }),
+      });
+      return preview;
+    },
     async createPreviewForDesigner(previewId, designerId) {
       const source = state.previews.find((value) => value.id === previewId);
       const designer = state.designers.find((value) => value.id === designerId);

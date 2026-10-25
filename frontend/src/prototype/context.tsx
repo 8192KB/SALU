@@ -18,7 +18,14 @@ import type {
   PrototypeRepository,
   PrototypeState,
 } from './types';
-import { materialUrl, requestTarget, requestUrl, hasDraftContent } from './request-flow';
+import {
+  materialUrl,
+  requestTarget,
+  requestUrl,
+  hasDraftContent,
+  isEditDraft,
+  settleRequestDrafts,
+} from './request-flow';
 import type { WorkspaceMode } from '../workspace';
 import { PersonalStore } from './personal-store';
 import type { Drafts } from './storage-model';
@@ -47,8 +54,9 @@ type PrototypeContextValue = {
   reset: () => void;
 };
 const PrototypeContext = createContext<PrototypeContextValue | null>(null);
-// 이미 준비 내용으로 저장한 초안은 같은 기록의 새 준비로 이어 쓰지 않음
+// 이미 준비 내용으로 저장한 초안과 저장한 준비를 고치는 초안은 같은 기록의 새 준비로 이어 쓰지 않음
 const savedAsPreview = (previews: PrototypeState['previews'], draft: RequestDraft) =>
+  isEditDraft({ previews }, draft) ||
   previews.some((preview) => JSON.stringify(preview.sourceDraft) === JSON.stringify(draft));
 type RequestDraftState = {
   current: RequestDraft | null;
@@ -63,8 +71,8 @@ function MemoryPrototypeProvider({
   children: ReactNode;
   seed?: WorkspaceMode;
 }) {
-  const [repository] = useState(() => createMemoryRepository(seed));
-  const state = useSyncExternalStore(repository.subscribe, repository.getSnapshot);
+  const [memory] = useState(() => createMemoryRepository(seed));
+  const state = useSyncExternalStore(memory.subscribe, memory.getSnapshot);
   const [cutDraft, setCutDraft] = useState(newCutDraft);
   const [progressDrafts, setProgressDrafts] = useState<Record<string, ProgressDraft>>({});
   const [cutEdits, setCutEdits] = useState<Record<string, CutDraft>>({});
@@ -75,6 +83,33 @@ function MemoryPrototypeProvider({
     targets: {},
   });
   const requestDraft = requestDrafts.current;
+  // 준비를 고치면 그 준비를 만든 초안이 저장하지 않은 초안으로 남지 않게 정리함(PersonalStore와 같은 기준)
+  const repository = useMemo<PrototypeRepository>(
+    () => ({
+      ...memory,
+      async updatePreview(previewId, draft) {
+        const before = memory.getSnapshot().previews;
+        const preview = await memory.updatePreview(previewId, draft);
+        const after = memory.getSnapshot().previews;
+        setRequestDrafts((previous) => {
+          const saved = settleRequestDrafts(previous.saved, before, after);
+          if (saved === previous.saved) return previous;
+          return {
+            current:
+              previous.current && Object.hasOwn(saved, previous.current.id)
+                ? saved[previous.current.id]
+                : null,
+            saved,
+            targets: Object.fromEntries(
+              Object.entries(previous.targets).filter(([, id]) => Object.hasOwn(saved, id)),
+            ),
+          };
+        });
+        return preview;
+      },
+    }),
+    [memory],
+  );
   const [requestSteps, setRequestSteps] = useState<Record<string, 'materials' | 'write'>>({});
   const markRequestStep = useCallback((id: string, step: 'materials' | 'write') => {
     setRequestSteps((previous) => (previous[id] === step ? previous : { ...previous, [id]: step }));
@@ -137,9 +172,9 @@ function MemoryPrototypeProvider({
     [repository],
   );
   useEffect(() => {
-    void repository.load();
-    return () => repository.dispose();
-  }, [repository]);
+    void memory.load();
+    return () => memory.dispose();
+  }, [memory]);
   const reset = () => {
     repository.reset();
     setCutDraft(newCutDraft());

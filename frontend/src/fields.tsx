@@ -5,7 +5,7 @@ import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
 import { Icon } from './components';
 import { usePrototype } from './prototype/context';
-import { photoOrigin } from './prototype/request-flow';
+import { photoOrigin, visibleCaption } from './prototype/request-flow';
 import { displayDate } from './prototype/dates';
 import { PhotoButton } from './photo-viewer';
 export { PhotoButton } from './photo-viewer';
@@ -108,11 +108,14 @@ export function PhotoList({
   onRemove,
   cutDate,
   removeDisabled = false,
+  captions = true,
 }: {
   photos: (PhotoDraft | RecordPhoto)[];
   onRemove?: (photo: PhotoDraft) => void;
   cutDate?: string;
   removeDisabled?: boolean;
+  // 날짜·설명이 이미 보이는 자리에서는 사진만 보여 줌. 설명은 확대 창과 대체 글에 남음
+  captions?: boolean;
 }) {
   if (!photos.length) return null;
   return (
@@ -120,20 +123,22 @@ export function PhotoList({
       {photos.map((photo) => (
         <figure key={photo.id}>
           <PhotoButton photo={photo} cutDate={cutDate} />
-          <figcaption>
-            {cutDate && 'date' in photo && (
-              <strong className="photo-moment">
-                {photoOrigin(photo, cutDate)} · {displayDate(photo.date)}
-              </strong>
-            )}
-            {photo.caption}
-          </figcaption>
+          {captions && (
+            <figcaption>
+              {cutDate && 'date' in photo && (
+                <strong className="photo-moment">
+                  {photoOrigin(photo, cutDate)} · {displayDate(photo.date)}
+                </strong>
+              )}
+              {visibleCaption(photo.caption)}
+            </figcaption>
+          )}
           {onRemove && (
             <button
               className="photo-remove"
               type="button"
               disabled={removeDisabled}
-              aria-label={`${photo.caption} 제거`}
+              aria-label={`${photo.caption.trim() || '사진'} 제거`}
               onClick={() => onRemove(photo)}
             >
               ×

@@ -965,8 +965,8 @@ h2 {
     display: none;
   }
   .storage-notice {
-    padding: 6px 20px;
-    line-height: 1.8;
+    padding: 2px 20px;
+    line-height: 1.5;
   }
   .record-next-action {
     padding: 20px;
@@ -1052,12 +1052,14 @@ h2 {
   max-width: 760px;
   margin: auto;
 }
+/* 구역을 선으로만 나눔. 흰 판을 남기면 좌우 여백 없이 글이 판 끝에 붙어 보임 */
 .backup-page .panel {
   margin-bottom: 20px;
   padding: 24px 0;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
+  background: transparent;
 }
 .backup-page .panel p {
   line-height: 1.8;
@@ -1617,8 +1619,10 @@ html {
   .heading-title-row h1 {
     padding-top: 4px;
   }
-  .account-name {
+  .account-controls .account-name {
+    display: block;
     max-width: 80px;
+    line-height: 44px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2152,6 +2156,7 @@ html {
 }
 .completion-description {
   color: var(--muted);
+  word-break: keep-all;
   font-size: 15px;
   line-height: 1.7;
 }
@@ -2581,4 +2586,116 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* 오류 화면(없음·권한·로그인·연결·화면 오류) 공통. 버튼은 세로로 쌓아 폰에서 누르기 쉽게 */
+.error-state {
+  max-width: 420px;
+  margin: 0 auto;
+}
+.error-state p {
+  word-break: keep-all;
+}
+.error-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.error-actions .button {
+  width: min(100%, 280px);
+}
+.error-actions .text-link {
+  margin-top: 4px;
+  min-height: 44px;
+}
+.app-crash {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--page);
+}
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  word-break: keep-all;
+}
+.loading-state .button-spinner {
+  flex-shrink: 0;
+  color: var(--teal);
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-state .button-spinner {
+    animation: none;
+    border-right-color: currentColor;
+    opacity: 0.5;
+  }
+}
+/* 한국어 본문은 단어 단위로 줄을 바꿈(DESIGN.md). 긴 주소·영문은 칸을 넘지 않게 끊음 */
+body {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+/* 작은 사진 목록에서는 확대 안내 글자를 빼고, 제거 버튼은 눌리는 범위만 44px로 두어 사진을 덜 가림 */
+.photo-list .photo-open-hint {
+  display: none;
+}
+.photo-list .photo-remove {
+  top: -10px;
+  right: -10px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: transparent;
+  font-size: 0;
+}
+.photo-list .photo-remove::before {
+  content: '×';
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  font-size: 18px;
+  line-height: 1;
+}
+.record-hero-content .photo-list {
+  gap: 8px;
+}
+.record-hero-content .photo-list figure,
+.record-hero-content .photo-list img {
+  width: 72px;
+}
+.record-hero-content .photo-list img {
+  height: 72px;
+}
+.journal-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-top: 20px;
+}
+.journal-links .journal-next {
+  margin: 0;
+}
+/* 아래 고정 바(선택 수·다음 버튼)가 마지막 카드의 선택 원을 가리지 않게 스크롤 여유를 충분히 둠 */
+@media (max-width: 700px) {
+  .materials-layout,
+  .task-focused .materials-layout {
+    padding-bottom: 220px;
+  }
+}
+.calendar-range {
+  margin: 12px 0 0;
+  text-align: center;
 }

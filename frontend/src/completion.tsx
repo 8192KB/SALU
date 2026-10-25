@@ -15,6 +15,7 @@ export function Completion({
   secondary,
   secondaryTo,
   description,
+  after,
 }: {
   title: string;
   children: ReactNode;
@@ -23,15 +24,21 @@ export function Completion({
   secondary: string;
   secondaryTo: string;
   description?: string;
+  // 주 버튼·보조 링크 다음에 둘 덜 중요한 동작
+  after?: ReactNode;
 }) {
   const location = useLocation();
   const mode = useWorkspace();
-  // 예시 체험은 제목만으로 결과가 분명해 '저장했어요'를 덧붙이지 않음
+  const { storage } = usePrototype();
+  // 예시 체험은 제목만으로 결과가 분명해 '저장했어요'를 덧붙이지 않음. 로그인한 계정 공간은 저장 뒤
+  // 자동으로 서버에 올리므로 올리는 중임을, 로그인 전 공간은 이 기기에만 있음을 알림
   const note =
     description ??
     (mode === 'example'
       ? undefined
-      : '기기에 저장했어요. 계정 백업 상태는 내 기록에서 확인할 수 있어요.');
+      : storage && storage.scope !== 'guest'
+        ? '이 기기에 저장했고 계정에도 자동으로 올려요.'
+        : '이 기기에만 저장했어요. 로그인하면 계정에도 보관할 수 있어요.');
   return (
     <section className="preparation-complete" aria-label="저장 결과">
       <SuccessMark className="completion-check" celebrate={Boolean(location.state?.celebrate)} />
@@ -44,6 +51,7 @@ export function Completion({
       <Link className="text-link" to={secondaryTo}>
         {secondary}
       </Link>
+      {after}
     </section>
   );
 }

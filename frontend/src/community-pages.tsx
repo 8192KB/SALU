@@ -1,17 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
-import { useParams, useSearchParams } from 'react-router';
-import { Alert, BackLink, Icon, Missing, PageHeading, PhotoThumbnail } from './components';
+import type { FormEvent, RefObject } from 'react';
+import { Navigate, useParams, useSearchParams } from 'react-router';
+import {
+  Alert,
+  BackLink,
+  ErrorState,
+  Icon,
+  LoadFailure,
+  loadProblem,
+  PageHeading,
+  PhotoThumbnail,
+  Loading,
+} from './components';
+import type { LoadProblem } from './components';
 import { Completion } from './completion';
 import { Dialog } from './dialog';
+import { useFeedback } from './feedback';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
+import { ApiFailure } from './auth/api';
 import type { SessionMember } from './auth/api';
 import { usePrototype } from './prototype/context';
 import { cutTitle, sentTime } from './prototype/dates';
 import { newId } from './prototype/ids';
 import { useOnReactivate } from './realtime';
+import { useReadNotifications } from './notifications';
 import {
   CATEGORY_LABELS,
   REPORT_REASONS,
@@ -19,6 +33,7 @@ import {
   createPost,
   deleteComment,
   deletePost,
+  getCommunityStatus,
   getPost,
   listComments,
   listMyPosts,
@@ -31,6 +46,7 @@ import type {
   CommunityComment,
   CommunityPost,
   CommunityPostSummary,
+  CommunityStatus,
   PostCategory,
   ReportReason,
 } from './community-api';
@@ -44,13 +60,58 @@ function useMember(): SessionMember | null {
 }
 const errorText = (error: unknown, fallback: string) =>
   error instanceof Error ? error.message : fallback;
+const suspendedError = (error: unknown) =>
+  error instanceof ApiFailure && error.code === 'COMMUNITY_SUSPENDED';
+
+// 글·댓글을 쓸 수 있는지 서버에서 확인함. 확인하지 못하면 막지 않고, 쓰기 요청이 403이면 다시 확인함
+function useCommunityStatus(member: SessionMember | null) {
+  const [status, setStatus] = useState<CommunityStatus | null>(null);
+  const [checked, setChecked] = useState(false);
+  const refresh = useCallback(() => {
+    if (!member) return;
+    return getCommunityStatus(member).then(
+      (value) => {
+        setStatus(value);
+        setChecked(true);
+      },
+      () => setChecked(true),
+    );
+    // 로그인 확인 때마다 회원 객체가 새로 만들어지므로 계정 ID로만 다시 받음
+  }, [member?.id]);
+  useEffect(() => {
+    setStatus(null);
+    setChecked(false);
+    void refresh();
+  }, [refresh]);
+  useOnReactivate(refresh);
+  return { suspended: status?.suspended ? status : null, checked, refresh };
+}
+const suspendedUntil = (status: CommunityStatus) =>
+  status.endsAt ? `${sentTime(status.endsAt)}까지` : '운영자가 풀 때까지';
+
+function SuspendedNotice({ status }: { status: CommunityStatus }) {
+  return (
+    <section className="consultation-soft-panel community-suspended" role="status">
+      <h2>지금은 글과 댓글을 쓸 수 없어요</h2>
+      <p>{suspendedUntil(status)} 이용이 제한돼요.</p>
+      {status.reason && <p className="community-suspended-reason">이유 · {status.reason}</p>}
+      <p className="muted">글 읽기, 도움돼요, 신고는 그대로 할 수 있어요.</p>
+    </section>
+  );
+}
 
 function PostCard({ post }: { post: CommunityPostSummary }) {
   const body = (
     <>
       <div>
         <span className="community-category">{CATEGORY_LABELS[post.category]}</span>
-        {post.status === 'HIDDEN' && <span className="community-hidden">숨김 · 신고 검토 중</span>}
+        {post.status === 'HIDDEN' && (
+          <span className="community-hidden">
+            {post.hiddenBy === 'ADMIN'
+              ? '숨김 · 운영 기준에 따라 숨겼어요'
+              : '숨김 · 신고가 쌓여 검토 중이에요'}
+          </span>
+        )}
         <h2>{post.title}</h2>
         <p>{post.excerpt}</p>
         {post.cut && (
@@ -61,7 +122,8 @@ function PostCard({ post }: { post: CommunityPostSummary }) {
           댓글 {post.commentCount}
         </p>
       </div>
-      {post.photoUrl && (
+      {/* 숨겨진 글의 사진은 공개 주소에서 열리지 않으므로 자리를 두지 않음 */}
+      {post.photoUrl && post.status === 'VISIBLE' && (
         <div className="community-thumb">
           <PhotoThumbnail src={post.photoUrl} alt="" />
           {post.photoCount > 1 && <span>+{post.photoCount - 1}</span>}
@@ -173,7 +235,7 @@ export function CommunityList() {
       )}
       <Alert message={error} />
       {!items ? (
-        !error && <p role="status">글을 불러오고 있어요.</p>
+        !error && <Loading>글을 불러오고 있어요.</Loading>
       ) : items.length ? (
         <div className="community-list">
           {items.map((post) => (
@@ -262,21 +324,24 @@ function ReportDialog({
         <form onSubmit={submit} noValidate>
           <fieldset className="community-reasons" disabled={busy}>
             <legend>신고 이유</legend>
-            {(Object.keys(REPORT_REASONS) as ReportReason[]).map((value) => (
-              <label key={value}>
-                <input
-                  type="radio"
-                  name="reason"
-                  value={value}
-                  checked={reason === value}
-                  onChange={() => {
-                    setReason(value);
-                    setError('');
-                  }}
-                />
-                {REPORT_REASONS[value]}
-              </label>
-            ))}
+            {/* 앱의 다른 선택 칩과 같은 모양. 손가락으로 누르기 쉬운 크기로 둠 */}
+            <div className="choice-pills">
+              {(Object.keys(REPORT_REASONS) as ReportReason[]).map((value) => (
+                <label key={value}>
+                  <input
+                    type="radio"
+                    name="reason"
+                    value={value}
+                    checked={reason === value}
+                    onChange={() => {
+                      setReason(value);
+                      setError('');
+                    }}
+                  />
+                  <span>{REPORT_REASONS[value]}</span>
+                </label>
+              ))}
+            </div>
           </fieldset>
           {reason === 'OTHER' && (
             <label className="consultation-request-field">
@@ -305,9 +370,24 @@ function ReportDialog({
   );
 }
 
-function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: number) => void }) {
+// 숨겨진 내 댓글은 나에게만 보이고 댓글 수에는 들어가지 않음
+const visibleCount = (comments: CommunityComment[]) =>
+  comments.filter((comment) => !comment.hidden).length;
+
+function Comments({
+  post,
+  onCount,
+  reload,
+}: {
+  post: CommunityPost;
+  onCount: (count: number) => void;
+  // 글 화면이 새 댓글·숨김 알림을 받으면 이 댓글 목록을 다시 받게 함
+  reload: RefObject<(() => Promise<unknown>) | null>;
+}) {
   const member = useMember();
   const loginPath = useLoginPath();
+  const notify = useFeedback();
+  const { suspended, refresh } = useCommunityStatus(member);
   const [comments, setComments] = useState<CommunityComment[] | null>(null);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState('');
@@ -325,7 +405,8 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
   );
   useEffect(() => {
     void loadComments();
-  }, [loadComments]);
+    reload.current = loadComments;
+  }, [loadComments, reload]);
   useOnReactivate(loadComments);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -344,9 +425,11 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
       // 부모의 댓글 수는 state 갱신 함수 밖에서 바꿈. 갱신 함수 안에서 다른 컴포넌트를 바꾸면 React가 경고함
       const next = [...(comments ?? []).filter((item) => item.id !== saved.id), saved];
       setComments(next);
-      onCount(next.length);
+      onCount(visibleCount(next));
       setDraft('');
     } catch (failure) {
+      // 쓰는 사이 이용이 제한됐으면 기간·이유 안내로 바꿈
+      if (suspendedError(failure)) void refresh();
       setError(errorText(failure, '댓글을 보내지 못했어요. 적은 내용은 그대로 있어요.'));
     } finally {
       setBusy(false);
@@ -357,9 +440,10 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
     setBusy(true);
     try {
       await deleteComment(member, removing.id);
+      notify('댓글을 지웠어요');
       const next = (comments ?? []).filter((item) => item.id !== removing.id);
       setComments(next);
-      onCount(next.length);
+      onCount(visibleCount(next));
       setRemoving(null);
     } catch (failure) {
       setError(errorText(failure, '댓글을 지우지 못했어요.'));
@@ -370,14 +454,15 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
   }
   return (
     <section className="community-comments">
-      <h2>댓글 {comments?.length ?? post.commentCount}</h2>
+      <h2>댓글 {comments ? visibleCount(comments) : post.commentCount}</h2>
       {comments?.length ? (
         <ul>
           {comments.map((comment) => (
-            <li key={comment.id}>
+            <li key={comment.id} className={comment.hidden ? 'hidden' : undefined}>
               <div className="community-comment-head">
                 <strong>{comment.author.displayName}</strong>
                 <time dateTime={comment.createdAt}>{sentTime(comment.createdAt)}</time>
+                {comment.hidden && <span className="community-hidden">숨김 · 나에게만 보여요</span>}
               </div>
               <p>{comment.content}</p>
               {member &&
@@ -398,9 +483,21 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
           ))}
         </ul>
       ) : (
-        comments && <p className="muted">첫 댓글을 남겨 보세요.</p>
+        comments && (
+          // 댓글을 쓸 수 없는 동안에는 첫 댓글을 권하지 않음
+          <p className="muted">
+            {member && !suspended ? '첫 댓글을 남겨 보세요.' : '아직 댓글이 없어요.'}
+          </p>
+        )
       )}
-      {member ? (
+      {member && suspended ? (
+        <>
+          <p className="muted community-suspended-line">
+            이용이 제한돼 {suspendedUntil(suspended)} 댓글을 쓸 수 없어요.
+          </p>
+          <Alert message={error} />
+        </>
+      ) : member ? (
         <form className="community-comment-form" onSubmit={submit} noValidate>
           <label className="consultation-request-field">
             <span className="sr-only">댓글</span>
@@ -460,10 +557,11 @@ function Comments({ post, onCount }: { post: CommunityPost; onCount: (count: num
 export function CommunityDetail() {
   const { id = '' } = useParams();
   const member = useMember();
+  const notify = useFeedback();
   const loginPath = useLoginPath();
   const navigate = useNavigate();
   const [post, setPost] = useState<CommunityPost | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState<LoadProblem | null>(null);
   const [error, setError] = useState('');
   const [reporting, setReporting] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -473,9 +571,9 @@ export function CommunityDetail() {
       getPost(id).then(
         (value) => {
           setPost(value);
-          setLoadError('');
+          setLoadError(null);
         },
-        (failure: unknown) => setLoadError(errorText(failure, '글을 불러오지 못했어요.')),
+        (failure: unknown) => setLoadError(loadProblem(failure, '글을 불러오지 못했어요.')),
       ),
     [id],
   );
@@ -485,15 +583,27 @@ export function CommunityDetail() {
   }, [load, member?.id]);
   // 글을 고치고 돌아오면 숨겨져 있던 이 화면이 다시 보이므로 새로 받음
   useOnReactivate(load);
+  const reloadComments = useRef<(() => Promise<unknown>) | null>(null);
+  // 이 화면은 실시간으로 바뀌지 않으므로 새 댓글·숨김 알림이 오면 글과 댓글을 다시 받은 뒤 읽음으로 바꿈
+  useReadNotifications(
+    post ? id : undefined,
+    ['COMMUNITY_COMMENT', 'COMMUNITY_COMMENT_HIDDEN'],
+    () => Promise.all([load(), reloadComments.current?.()]),
+  );
   const back = <BackLink to="/community">커뮤니티</BackLink>;
   if (!post)
     return loadError ? (
       <div className="community-screen">
         <PageHeading title="커뮤니티 글" back={back} />
-        <Missing title="글을 찾을 수 없어요" message={loadError} />
+        <LoadFailure
+          problem={loadError}
+          title="글을 찾을 수 없어요"
+          missingMessage="글쓴이가 지웠거나 운영 기준에 따라 숨겨진 글일 수 있어요."
+          onRetry={() => void load()}
+        />
       </div>
     ) : (
-      <p role="status">글을 불러오고 있어요.</p>
+      <Loading>글을 불러오고 있어요.</Loading>
     );
   async function react() {
     if (!post || busy) return;
@@ -515,6 +625,7 @@ export function CommunityDetail() {
     setBusy(true);
     try {
       await deletePost(member, post.id);
+      notify('글을 지웠어요');
       navigate('/community', { replace: true });
     } catch (failure) {
       setError(errorText(failure, '글을 지우지 못했어요.'));
@@ -587,6 +698,7 @@ export function CommunityDetail() {
       <Alert message={error} />
       <Comments
         post={post}
+        reload={reloadComments}
         onCount={(count) => setPost((value) => value && { ...value, commentCount: count })}
       />
       <ReportDialog
@@ -636,10 +748,14 @@ export function CommunityWrite() {
   const loginPath = useLoginPath();
   const example = useWorkspace() === 'example';
   const navigate = useNavigate();
+  const notify = useFeedback();
   const { state } = usePrototype();
   const recordParam = search.get('record');
   const [category, setCategory] = useState<PostCategory>(
-    recordParam || search.get('category') !== 'QUESTION' ? 'CASE' : 'QUESTION',
+    // 기록이 없으면 사례를 올릴 수 없으므로 고민 질문부터 보여 줌
+    recordParam || (search.get('category') !== 'QUESTION' && state.cuts.length > 0)
+      ? 'CASE'
+      : 'QUESTION',
   );
   const [cutId, setCutId] = useState(
     recordParam && state.cuts.some((cut) => cut.id === recordParam) ? recordParam : '',
@@ -650,8 +766,10 @@ export function CommunityWrite() {
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState<LoadProblem | null>(null);
+  const [notMine, setNotMine] = useState(false);
   const [loaded, setLoaded] = useState(!editing);
+  const { suspended, checked, refresh } = useCommunityStatus(member);
   const pending = useRef<{ key: string; payload: string } | null>(null);
   const cut = state.cuts.find((value) => value.id === cutId);
   const progress = state.progress.filter((value) => value.cutId === cutId);
@@ -662,12 +780,13 @@ export function CommunityWrite() {
     setSummary(summaryOf(cut, progress));
     setPhotoIds([]);
   }, [cutId]);
-  useEffect(() => {
+  const loadPost = useCallback(() => {
     if (!editing || !id) return;
+    setLoadError(null);
     getPost(id).then(
       (post) => {
         if (!post.mine) {
-          setLoadError('내가 쓴 글만 고칠 수 있어요.');
+          setNotMine(true);
           return;
         }
         setCategory(post.category);
@@ -675,9 +794,12 @@ export function CommunityWrite() {
         setContent(post.content);
         setLoaded(true);
       },
-      (failure: unknown) => setLoadError(errorText(failure, '글을 불러오지 못했어요.')),
+      (failure: unknown) => setLoadError(loadProblem(failure, '글을 불러오지 못했어요.')),
     );
   }, [editing, id]);
+  useEffect(() => {
+    loadPost();
+  }, [loadPost]);
   const back = editing ? (
     <BackLink to={`/community/${id}`}>커뮤니티 글</BackLink>
   ) : (
@@ -690,23 +812,58 @@ export function CommunityWrite() {
       back={back}
     />
   );
-  if (example || auth.status !== 'authenticated' || !member)
+  if (example || auth.status === 'prototype')
     return (
       <div className="community-screen">
         {heading}
         <section className="consultation-soft-panel">
-          <h2>{example ? '예시 체험에서는 글을 올릴 수 없어요' : '로그인이 필요해요'}</h2>
+          <h2>예시 체험에서는 글을 올릴 수 없어요</h2>
           <p>로그인하면 내 커트 기록을 사례로 올리거나 고민을 물어볼 수 있어요.</p>
-          {!example && (
-            <Link className="button primary" to={loginPath}>
-              로그인
-            </Link>
-          )}
         </section>
       </div>
     );
-  if (loadError) return <Missing title="글을 고칠 수 없어요" message={loadError} />;
-  if (!loaded) return <p role="status">글을 불러오고 있어요.</p>;
+  // 로그인 전이면 쓰기 화면을 열지 않고 로그인한 뒤 이 화면으로 돌아오게 함
+  if (auth.status === 'guest') return <Navigate to={loginPath} replace />;
+  if (auth.status === 'unavailable')
+    return (
+      <div className="community-screen">
+        {heading}
+        <ErrorState kind="offline" message={auth.message} />
+      </div>
+    );
+  if (!member || (!checked && !suspended))
+    return <Loading>글을 쓸 수 있는지 확인하고 있어요.</Loading>;
+  if (suspended)
+    return (
+      <div className="community-screen">
+        {heading}
+        <SuspendedNotice status={suspended} />
+      </div>
+    );
+  if (notMine)
+    return (
+      <div className="community-screen">
+        {heading}
+        <ErrorState
+          kind="denied"
+          title="글을 고칠 수 없어요"
+          message="내가 쓴 글만 고칠 수 있어요."
+        />
+      </div>
+    );
+  if (loadError)
+    return (
+      <div className="community-screen">
+        {heading}
+        <LoadFailure
+          problem={loadError}
+          title="고칠 글을 찾을 수 없어요"
+          missingMessage="이미 지웠거나 운영 기준에 따라 숨겨진 글이에요."
+          onRetry={loadPost}
+        />
+      </div>
+    );
+  if (!loaded) return <Loading>글을 불러오고 있어요.</Loading>;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !member) return;
@@ -728,6 +885,7 @@ export function CommunityWrite() {
     try {
       if (editing && id) {
         await updatePost(member, id, values);
+        notify('고친 글을 저장했어요');
         navigate(`/community/${id}`, { replace: true });
         return;
       }
@@ -753,6 +911,8 @@ export function CommunityWrite() {
       const saved = await createPost(member, { requestKey: pending.current.key, ...input }, blobs);
       navigate(`/community/${saved.id}/complete`, { replace: true, state: { celebrate: true } });
     } catch (failure) {
+      // 쓰는 사이 이용이 제한됐으면 기간·이유 안내로 바꿈
+      if (suspendedError(failure)) void refresh();
       setError(errorText(failure, '글을 올리지 못했어요. 적은 내용은 그대로 있어요.'));
     } finally {
       setBusy(false);
@@ -825,8 +985,11 @@ export function CommunityWrite() {
                   </label>
                 ))
               ) : (
-                <p className="muted">
-                  아직 커트 기록이 없어요. <Link to="/records/new">기록부터 남기기</Link>
+                <p className="community-no-records">
+                  아직 커트 기록이 없어요.
+                  <Link to="/records/new">
+                    기록부터 남기기 <Icon name="arrow" size={16} />
+                  </Link>
                 </p>
               )}
             </fieldset>
@@ -914,7 +1077,14 @@ export function CommunityWrite() {
             <p className="consultation-privacy">글은 로그인하지 않은 사람도 볼 수 있어요.</p>
           )}
           <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
-            {busy ? '올리는 중' : editing ? '고친 글 저장' : '글 올리기'}
+            {busy
+              ? editing
+                ? '저장하는 중'
+                : '올리는 중'
+              : editing
+                ? '고친 글 저장'
+                : '글 올리기'}
+            {busy && <span className="button-spinner" aria-hidden="true" />}
           </button>
         </div>
       </form>
@@ -943,6 +1113,7 @@ export function CommunityComplete() {
 export function MyPosts() {
   const member = useMember();
   const loginPath = useLoginPath();
+  const { suspended } = useCommunityStatus(member);
   const [items, setItems] = useState<CommunityPostSummary[] | null>(null);
   const [error, setError] = useState('');
   const load = useCallback(() => {
@@ -963,17 +1134,24 @@ export function MyPosts() {
   return (
     <div className="community-screen">
       <PageHeading title="내 글" back={<BackLink to="/community">커뮤니티</BackLink>} />
+      {suspended && <SuspendedNotice status={suspended} />}
       {!member ? (
         <section className="consultation-soft-panel">
           <h2>로그인이 필요해요</h2>
+          <p>로그인하면 내가 올린 글과 숨겨진 글을 볼 수 있어요.</p>
           <Link className="button primary" to={loginPath}>
             로그인
           </Link>
         </section>
       ) : error ? (
-        <Alert message={error} />
+        <section className="consultation-soft-panel">
+          <Alert message={error} />
+          <button type="button" className="button" onClick={() => void load()}>
+            다시 불러오기
+          </button>
+        </section>
       ) : !items ? (
-        <p role="status">내 글을 불러오고 있어요.</p>
+        <Loading>내 글을 불러오고 있어요.</Loading>
       ) : items.length ? (
         <div className="community-list">
           {items.map((post) => (
@@ -983,9 +1161,11 @@ export function MyPosts() {
       ) : (
         <section className="consultation-soft-panel">
           <h2>아직 올린 글이 없어요</h2>
-          <Link className="button" to="/community/new">
-            글쓰기
-          </Link>
+          {!suspended && (
+            <Link className="button" to="/community/new">
+              글쓰기
+            </Link>
+          )}
         </section>
       )}
     </div>

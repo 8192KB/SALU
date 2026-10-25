@@ -1,17 +1,24 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { newId } from './prototype/ids';
-import { getConsultation, listSentConsultations, sendConsultation } from './consultation-api';
+import {
+  getConsultation,
+  listSentConsultations,
+  MAX_CONSULTATION_PHOTOS,
+  sendConsultation,
+} from './consultation-api';
 import type { Consultation } from './consultation-api';
 import type { SessionMember } from './auth/api';
 
+// label은 디자이너가 어느 때 사진인지 알 수 있게 붙이는 이름(커트 당일·경과 D+12)
+export type AttachmentPhoto = { id: string; url: string; caption: string; label: string };
 export type ConsultationAttachment = {
   cutId: string;
   designerId: string;
   cutDate: string;
   service: string;
   summary: string;
-  photo?: { id: string; url: string; caption: string };
+  photos: AttachmentPhoto[];
 };
 export type ConsultationReply = { content: string; repliedAt: string };
 export type ConsultationThread = {
@@ -53,6 +60,8 @@ type ConsultationSnapshot = {
   loading?: boolean;
   loaded?: boolean;
   error?: string;
+  // 보낸 상담 주소로 열었지만 내가 받은 디자이너인 상담. 받은 상담 화면으로 바꿔 엶
+  received?: Record<string, true>;
 };
 export interface ConsultationRepository {
   subscribe(listener: () => void): () => void;
@@ -99,7 +108,13 @@ export class MemoryConsultationRepository implements ConsultationRepository {
     const key = JSON.stringify([designerId, recordId, sourceId]);
     const existingId = this.targets.get(key);
     const existing = existingId && this.drafts.get(existingId);
-    if (existing) return existing;
+    if (existing) {
+      // 손대지 않은 초안(화면에서 고친 적이 없어 snapshot에 없음)은 그사이 준비를 고쳤으면 바뀐 내용으로 다시 채움
+      if (existing.request === request || this.snapshot.drafts[existing.id]) return existing;
+      const refreshed = { ...existing, request };
+      this.drafts.set(existing.id, refreshed);
+      return refreshed;
+    }
     const draft: ConsultationDraft = {
       id: newId(),
       designerId,
@@ -192,7 +207,42 @@ export class MemoryConsultationRepository implements ConsultationRepository {
   }
 }
 
+const MAX_EDGE = 1600;
+const KEEP_BYTES = 1.5 * 1024 * 1024;
+// 휴대폰 원본 사진을 여러 장 그대로 보내면 요청이 커지고 느려 긴 변을 1,600px로 줄임.
+// 줄이지 못하는 브라우저·파일은 원본을 보내고 크기·형식은 서버가 다시 검사함
+async function fitForSending(blob: Blob): Promise<Blob> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(blob);
+  } catch {
+    return blob;
+  }
+  try {
+    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+    if (scale === 1 && blob.size <= KEEP_BYTES) return blob;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext('2d');
+    if (!context) return blob;
+    // JPEG에는 투명한 곳이 없어 흰 바탕에 그림(화면 색 토큰과 무관한 사진 내용)
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const fitted = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/jpeg', 0.85),
+    );
+    return fitted && fitted.size < blob.size ? fitted : blob;
+  } finally {
+    bitmap.close();
+  }
+}
+
 export function threadFrom(value: Consultation, draftId = ''): ConsultationThread {
+  const photos =
+    value.attachment.photos ??
+    (value.attachment.photoUrl ? [{ url: value.attachment.photoUrl, label: '사진' }] : []);
   return {
     id: value.id,
     draftId,
@@ -207,9 +257,12 @@ export function threadFrom(value: Consultation, draftId = ''): ConsultationThrea
       cutDate: value.attachment.cutDate,
       service: value.attachment.service,
       summary: value.attachment.summary,
-      photo: value.attachment.photoUrl
-        ? { id: `${value.id}-photo`, url: value.attachment.photoUrl, caption: '첨부한 사진' }
-        : undefined,
+      photos: photos.map((photo, index) => ({
+        id: `${value.id}-photo-${index}`,
+        url: photo.url,
+        caption: photo.label,
+        label: photo.label,
+      })),
     },
     request: value.request,
     sentAt: value.sentAt,
@@ -227,6 +280,8 @@ export function threadFrom(value: Consultation, draftId = ''): ConsultationThrea
 // 로그인한 회원의 실제 상담. 작성 중인 초안은 메모리에 두고 보낸 상담은 서버에서 읽음
 export class ServerConsultationRepository extends MemoryConsultationRepository {
   readonly server = true;
+  // 응답을 못 받아 다시 보낼 때 같은 파일을 보내야 서버가 같은 요청으로 알아봄
+  private prepared = new Map<string, Blob[]>();
   constructor(private member: SessionMember | null) {
     super();
     this.snapshot = { ...this.snapshot, loaded: false, loading: false, error: '' };
@@ -236,6 +291,7 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     const changed = member?.id !== this.member?.id;
     this.member = member;
     if (changed) {
+      this.prepared.clear();
       this.reset();
       this.publish({ ...this.snapshot, loaded: false, loading: false, error: '' });
     }
@@ -279,19 +335,39 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     }
   };
   load = async (id: string) => {
-    this.upsert(threadFrom(await getConsultation(this.account(), id)));
+    const value = await getConsultation(this.account(), id);
+    if (value.viewerRole === 'DESIGNER') {
+      this.publish({
+        ...this.snapshot,
+        threads: this.snapshot.threads.filter((thread) => thread.id !== id),
+        received: { ...this.snapshot.received, [id]: true },
+      });
+      return;
+    }
+    this.upsert(threadFrom(value));
   };
+  private async photosFor(input: ConsultationSend) {
+    const saved = this.prepared.get(input.draftId);
+    if (saved) return saved;
+    let photos: Blob[];
+    try {
+      photos = await Promise.all(
+        input.attachment.photos.map(async (photo) =>
+          fitForSending(await (await fetch(photo.url)).blob()),
+        ),
+      );
+    } catch {
+      throw new Error('첨부할 사진을 읽지 못했어요. 기록 화면을 새로고침한 뒤 다시 보내 주세요.');
+    }
+    this.prepared.set(input.draftId, photos);
+    return photos;
+  }
   async send(input: ConsultationSend) {
     const member = this.account();
     const request = this.checked(input);
-    let photo: Blob | undefined;
-    if (input.attachment.photo) {
-      try {
-        photo = await (await fetch(input.attachment.photo.url)).blob();
-      } catch {
-        throw new Error('첨부할 사진을 읽지 못했어요. 기록 화면을 새로고침한 뒤 다시 보내 주세요.');
-      }
-    }
+    if (input.attachment.photos.length > MAX_CONSULTATION_PHOTOS)
+      throw new Error(`사진은 ${MAX_CONSULTATION_PHOTOS}장까지 보낼 수 있어요.`);
+    const photos = await this.photosFor(input);
     const sent = await sendConsultation(
       member,
       {
@@ -302,10 +378,12 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
           cutDate: input.attachment.cutDate,
           service: input.attachment.service,
           summary: input.attachment.summary,
+          photoLabels: input.attachment.photos.map((photo) => photo.label),
         },
       },
-      photo,
+      photos,
     );
+    this.prepared.delete(input.draftId);
     const thread = threadFrom(sent, input.draftId);
     this.forgetDraft(input.draftId);
     this.upsert(thread);

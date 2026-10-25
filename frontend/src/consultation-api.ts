@@ -13,6 +13,8 @@ export type Consultation = {
     service: string;
     summary: string;
     photoUrl: string | null;
+    // V12 전 서버 응답에는 없을 수 있어 photoUrl로 채움
+    photos?: { url: string; label: string }[];
   };
   request: string;
   sentAt: string;
@@ -22,6 +24,8 @@ export type Consultation = {
   unreadCount: number;
   reviewId: string | null;
   canReview: boolean;
+  // 지금 회원이 이 상담에서 보낸 사람인지 받은 디자이너인지
+  viewerRole?: 'CUSTOMER' | 'DESIGNER';
 };
 export type ConsultationMessage = {
   id: number;
@@ -34,8 +38,9 @@ export type ConsultationInput = {
   requestKey: string;
   designerId: string;
   request: string;
-  attachment: { cutDate: string; service: string; summary: string };
+  attachment: { cutDate: string; service: string; summary: string; photoLabels?: string[] };
 };
+export const MAX_CONSULTATION_PHOTOS = 6;
 
 // 화면 문구는 서버 message가 아니라 code로 정함
 const sendMessages: Record<string, string> = {
@@ -44,7 +49,7 @@ const sendMessages: Record<string, string> = {
   RESOURCE_NOT_FOUND: '지금은 이 디자이너에게 상담을 보낼 수 없어요.',
   RESOURCE_CONFLICT: '이미 보낸 요청이에요. 새로운 상담 요청을 작성해 주세요.',
   STORAGE_CONTEXT_CHANGED: '로그인 계정이 바뀌었어요. 화면을 새로고침해 주세요.',
-  UPLOAD_TOO_LARGE: '사진은 5MB 이하만 보낼 수 있어요.',
+  UPLOAD_TOO_LARGE: '사진이 너무 커서 보낼 수 없어요. 사진을 줄이거나 몇 장 빼고 보내 주세요.',
   UNSUPPORTED_MEDIA_TYPE: 'JPEG, PNG, WebP 사진만 보낼 수 있어요.',
 };
 const readMessages: Record<string, string> = {
@@ -85,7 +90,11 @@ function isConsultation(value: unknown): value is Consultation {
     typeof item.lastMessageAt === 'string' &&
     typeof item.unreadCount === 'number' &&
     Boolean(designer && typeof designer.id === 'string' && typeof designer.name === 'string') &&
-    Boolean(attachment && typeof attachment.cutDate === 'string')
+    Boolean(attachment && typeof attachment.cutDate === 'string') &&
+    (attachment!.photos === undefined || Array.isArray(attachment!.photos)) &&
+    (item.viewerRole === undefined ||
+      item.viewerRole === 'CUSTOMER' ||
+      item.viewerRole === 'DESIGNER')
   );
 }
 async function readOne(response: Response): Promise<Consultation> {
@@ -104,12 +113,13 @@ async function readList(response: Response): Promise<Consultation[]> {
 export async function sendConsultation(
   member: SessionMember,
   input: ConsultationInput,
-  photo?: Blob,
+  photos: Blob[] = [],
 ): Promise<Consultation> {
   const form = new FormData();
   // JSON 부분은 application/json Blob으로 넣어야 서버가 JSON으로 읽음
   form.append('consultation', new Blob([JSON.stringify(input)], { type: 'application/json' }));
-  if (photo) form.append('photo', photo, 'cut');
+  // 같은 이름으로 보낸 순서가 서버의 사진 순서
+  photos.forEach((photo, index) => form.append('photo', photo, `photo-${index + 1}`));
   try {
     // 휴대폰에서 5MB 사진을 올리면 8초를 넘을 수 있어 길게 기다림
     const response = await memberRequest(

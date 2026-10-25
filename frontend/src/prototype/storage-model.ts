@@ -1,6 +1,7 @@
 import { newId } from './ids';
 import { z } from 'zod';
 import { AREAS, INTENTS } from './types';
+import type { CutDraft, ProgressEntry, RecordPhoto, RequestDraft, RequestPreview } from './types';
 import { isBlankCutDraft, newCutDraft } from './memory-repository';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
@@ -212,10 +213,14 @@ export function validateBundle(value: unknown): Bundle {
     throw new Error('edit reference');
   return serialize(bundle);
 }
-export function copyBundle(bundle: Bundle): { bundle: Bundle; ids: Map<string, string> } {
+// known: 새 ID 대신 쓸 ID. 복원에서 이미 있는 같은 기록을 가리키는 초안을 그 기록에 붙일 때 씀
+export function copyBundle(
+  bundle: Bundle,
+  known: ReadonlyMap<string, string> = new Map(),
+): { bundle: Bundle; ids: Map<string, string> } {
   const ids = new Map<string, string>();
   const remap = (id: string) => {
-    if (!ids.has(id)) ids.set(id, newId());
+    if (!ids.has(id)) ids.set(id, known.get(id) ?? newId());
     return ids.get(id)!;
   };
   const idKeys = new Set(['id', 'cutId', 'progressId', 'referencePreviewId', 'currentRequestId']);
@@ -286,17 +291,227 @@ export function appendBundle(target: Bundle, added: Bundle): Bundle {
     },
     drafts: {
       cutDraft: target.drafts.cutDraft,
-      progressDrafts: { ...target.drafts.progressDrafts, ...added.drafts.progressDrafts },
-      cutEdits: { ...target.drafts.cutEdits, ...added.drafts.cutEdits },
-      progressEdits: { ...target.drafts.progressEdits, ...added.drafts.progressEdits },
-      requests: { ...target.drafts.requests, ...added.drafts.requests },
-      steps: { ...target.drafts.steps, ...added.drafts.steps },
+      // 복원한 초안이 이미 있는 기록을 가리키면 같은 키가 생길 수 있음. 이 기기의 초안을 둠
+      progressDrafts: { ...added.drafts.progressDrafts, ...target.drafts.progressDrafts },
+      cutEdits: { ...added.drafts.cutEdits, ...target.drafts.cutEdits },
+      progressEdits: { ...added.drafts.progressEdits, ...target.drafts.progressEdits },
+      requests: { ...added.drafts.requests, ...target.drafts.requests },
+      steps: { ...added.drafts.steps, ...target.drafts.steps },
       currentRequestId: target.drafts.currentRequestId ?? added.drafts.currentRequestId,
       recoveredCuts: [
         ...target.drafts.recoveredCuts,
         ...added.drafts.recoveredCuts,
         ...(isBlankCutDraft(added.drafts.cutDraft) ? [] : [added.drafts.cutDraft]),
       ],
+    },
+  };
+}
+
+// ---------- 복원할 때 같은 기록 찾기 ----------
+
+// 기록 하나(커트·경과·사진·준비)를 ID 없이 비교하는 열쇠. 사진은 파일 내용(hash)으로 비교하고,
+// hash를 모르는 사진이 있으면 어느 기록과도 같지 않음
+type RecordUnit = {
+  key: string;
+  cut: string;
+  progress: [string, string][];
+  photos: [string, string][];
+  previews: [string, RequestPreview][];
+};
+// 기기에 저장한 객체와 백업에서 읽은 객체는 속성 순서가 달라 속성 이름 순서로 맞춰 비교함
+export function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, child: unknown) =>
+    child && typeof child === 'object' && !Array.isArray(child)
+      ? Object.fromEntries(Object.entries(child).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : child,
+  );
+}
+const byKey = <T>(values: [string, T][]) =>
+  values.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+function recordUnits(bundle: Bundle, hash: (id: string) => string | undefined) {
+  const { state } = bundle;
+  const progressById = new Map<string, ProgressEntry>();
+  const photoById = new Map<string, RecordPhoto>();
+  for (const entry of [...state.progress, ...state.previews.flatMap((p) => p.progress)])
+    if (!progressById.has(entry.id)) progressById.set(entry.id, entry);
+  for (const photo of [...state.photos, ...state.previews.flatMap((p) => p.photos)])
+    if (!photoById.has(photo.id)) photoById.set(photo.id, photo);
+  const progressKey = (entry: ProgressEntry | undefined) =>
+    entry
+      ? JSON.stringify([
+          entry.observedOn,
+          entry.areas,
+          entry.discomfort,
+          entry.styling,
+          entry.question,
+        ])
+      : '?';
+  const photoKey = (photo: RecordPhoto | undefined) =>
+    photo
+      ? JSON.stringify([
+          hash(photo.id) ?? `?${photo.id}`,
+          photo.caption,
+          photo.date,
+          photo.progressId ? progressKey(progressById.get(photo.progressId)) : null,
+        ])
+      : '?';
+  const requestsKey = (draft: Pick<RequestDraft, 'requests'>) =>
+    draft.requests.map((item) => [item.area, item.intent, item.content]);
+  const previewKey = (preview: RequestPreview) => {
+    const draft = preview.sourceDraft;
+    const reference = state.previews.find((value) => value.id === draft.referencePreviewId);
+    return JSON.stringify([
+      preview.createdAt,
+      canonical(preview.designer ?? null),
+      [preview.cut.cutDate, preview.cut.service, preview.cut.areas],
+      preview.goodNote ?? null,
+      preview.progress.map(progressKey),
+      preview.photos.map(photoKey),
+      requestsKey(preview),
+      preview.homeStyling,
+      preview.additionalQuestion,
+      [
+        draft.id === preview.id,
+        draft.designerId ?? null,
+        canonical(draft.designerSnapshot ?? null),
+        reference ? (reference.id === preview.id ? 'self' : reference.createdAt) : null,
+        draft.includeGoodNote,
+        draft.progressIds.map((id) => progressKey(progressById.get(id))),
+        draft.photoIds.map((id) => photoKey(photoById.get(id))),
+        requestsKey(draft),
+        draft.homeStyling,
+        draft.additionalQuestion,
+      ],
+    ]);
+  };
+  return state.cuts.map((cut): RecordUnit => {
+    const progress = byKey(
+      state.progress
+        .filter((entry) => entry.cutId === cut.id)
+        .map((entry): [string, string] => [progressKey(entry), entry.id]),
+    );
+    const photos = byKey(
+      state.photos
+        .filter((photo) => photo.cutId === cut.id)
+        .map((photo): [string, string] => [photoKey(photo), photo.id]),
+    );
+    const previews = byKey(
+      state.previews
+        .filter((preview) => preview.cut.id === cut.id)
+        .map((preview): [string, RequestPreview] => [previewKey(preview), preview]),
+    );
+    return {
+      key: JSON.stringify([
+        [
+          cut.cutDate,
+          cut.service,
+          cut.areas,
+          cut.goodNote,
+          cut.salonName,
+          cut.salonId ?? null,
+          cut.designerName,
+          cut.designerProfileId ?? null,
+          cut.price ?? null,
+        ],
+        progress.map(([key]) => key),
+        photos.map(([key]) => key),
+        previews.map(([key]) => key),
+      ]),
+      cut: cut.id,
+      progress,
+      photos,
+      previews,
+    };
+  });
+}
+// added에서 target에 이미 있는 같은 기록(cut ID)과, 그 기록을 가리키는 ID → target의 ID
+export function matchRecords(
+  target: Bundle,
+  targetHash: (id: string) => string | undefined,
+  added: Bundle,
+  addedHash: (id: string) => string | undefined,
+) {
+  const existing = new Map<string, RecordUnit>();
+  for (const unit of recordUnits(target, targetHash))
+    if (!existing.has(unit.key)) existing.set(unit.key, unit);
+  const matched = new Set<string>();
+  const known = new Map<string, string>();
+  const link = (from: string, to: string) => {
+    if (!known.has(from)) known.set(from, to);
+  };
+  for (const unit of recordUnits(added, addedHash)) {
+    const same = existing.get(unit.key);
+    if (!same) continue;
+    matched.add(unit.cut);
+    link(unit.cut, same.cut);
+    // 열쇠가 모두 같으므로 정렬한 순서대로 짝이 맞음
+    unit.progress.forEach(([, id], index) => link(id, same.progress[index][1]));
+    unit.photos.forEach(([, id], index) => link(id, same.photos[index][1]));
+    unit.previews.forEach(([, preview], index) => {
+      const other = same.previews[index][1];
+      link(preview.id, other.id);
+      link(preview.sourceDraft.id, other.sourceDraft.id);
+      preview.progress.forEach((entry, i) => link(entry.id, other.progress[i].id));
+      preview.photos.forEach((photo, i) => link(photo.id, other.photos[i].id));
+      preview.requests.forEach((item, i) => link(item.id, other.requests[i].id));
+      preview.sourceDraft.requests.forEach((item, i) =>
+        link(item.id, other.sourceDraft.requests[i].id),
+      );
+    });
+  }
+  return { matched, known };
+}
+export function withoutRecords(bundle: Bundle, cuts: ReadonlySet<string>): Bundle {
+  if (!cuts.size) return bundle;
+  const { state } = bundle;
+  return {
+    ...bundle,
+    state: {
+      cuts: state.cuts.filter((cut) => !cuts.has(cut.id)),
+      progress: state.progress.filter((entry) => !cuts.has(entry.cutId)),
+      photos: state.photos.filter((photo) => !cuts.has(photo.cutId)),
+      designers: [],
+      previews: state.previews.filter((preview) => !cuts.has(preview.cut.id)),
+    },
+  };
+}
+// 복사한 초안 중 이 기기에 이미 같은 내용이 있는 것을 뺌. 초안 ID와 요청 항목 ID는 비교하지 않음
+export function withoutSameDrafts(
+  target: Bundle,
+  added: Bundle,
+  sameCut: (a: CutDraft, b: CutDraft) => boolean,
+): Bundle {
+  const requestKey = (draft: RequestDraft) =>
+    canonical({
+      ...draft,
+      id: '',
+      requests: draft.requests.map((item) => ({ ...item, id: '' })),
+    });
+  const existing = new Set(
+    [
+      ...Object.values(target.drafts.requests),
+      ...target.state.previews.map((p) => p.sourceDraft),
+    ].map(requestKey),
+  );
+  const requests = Object.fromEntries(
+    Object.entries(added.drafts.requests).filter(([, draft]) => !existing.has(requestKey(draft))),
+  );
+  const cutDrafts = [target.drafts.cutDraft, ...target.drafts.recoveredCuts];
+  const known = (draft: CutDraft) => cutDrafts.some((value) => sameCut(value, draft));
+  return {
+    ...added,
+    drafts: {
+      ...added.drafts,
+      requests,
+      steps: Object.fromEntries(
+        Object.entries(added.drafts.steps).filter(([id]) => Object.hasOwn(requests, id)),
+      ),
+      currentRequestId:
+        added.drafts.currentRequestId && Object.hasOwn(requests, added.drafts.currentRequestId)
+          ? added.drafts.currentRequestId
+          : null,
+      cutDraft: known(added.drafts.cutDraft) ? newCutDraft() : added.drafts.cutDraft,
+      recoveredCuts: added.drafts.recoveredCuts.filter((draft) => !known(draft)),
     },
   };
 }

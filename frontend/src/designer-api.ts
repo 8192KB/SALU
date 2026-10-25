@@ -31,7 +31,7 @@ export type ReviewInput = { rating: number; content: string };
 const reviewMessages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: '로그인 후 후기를 남길 수 있어요.',
   INVALID_REQUEST: '별점을 고르고 후기를 1,000자 이내로 적어 주세요.',
-  ACCESS_DENIED: '상담을 보낸 고객만 후기를 남길 수 있어요.',
+  ACCESS_DENIED: '후기는 상담을 보낸 고객만 남기거나 지울 수 있어요.',
   RESOURCE_NOT_FOUND: '후기를 찾을 수 없어요.',
   RESOURCE_CONFLICT: '이미 후기를 남겼거나 아직 답변을 받지 않은 상담이에요.',
   STORAGE_CONTEXT_CHANGED: '로그인 계정이 바뀌었어요. 화면을 새로고침해 주세요.',

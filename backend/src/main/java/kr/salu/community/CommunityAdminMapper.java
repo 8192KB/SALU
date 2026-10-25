@@ -23,6 +23,9 @@ public interface CommunityAdminMapper {
     @Update("UPDATE community_comments SET status=#{status} WHERE id=#{comment} AND status IN ('VISIBLE','HIDDEN')") int setCommentStatus(long comment, String status);
     @Update("UPDATE community_post_reports SET status=#{status},handled_at=CURRENT_TIMESTAMP(6),handled_by=#{admin} WHERE post_id=#{post} AND status='OPEN'") int closePostReports(String post, String status, long admin);
     @Update("UPDATE community_comment_reports SET status=#{status},handled_at=CURRENT_TIMESTAMP(6),handled_by=#{admin} WHERE comment_id=#{comment} AND status='OPEN'") int closeCommentReports(long comment, String status, long admin);
+    // 숨겼던 것을 다시 보이게 하면 받아들였던 신고도 기각으로 바꿔 실제 상태와 맞춤
+    @Update("UPDATE community_post_reports SET status='DISMISSED',handled_at=CURRENT_TIMESTAMP(6),handled_by=#{admin} WHERE post_id=#{post} AND status='ACCEPTED'") int dismissAcceptedPostReports(String post, long admin);
+    @Update("UPDATE community_comment_reports SET status='DISMISSED',handled_at=CURRENT_TIMESTAMP(6),handled_by=#{admin} WHERE comment_id=#{comment} AND status='ACCEPTED'") int dismissAcceptedCommentReports(long comment, long admin);
     @Select("SELECT COUNT(*) FROM members WHERE id=#{member}") int memberExists(long member);
     @Insert("INSERT INTO member_sanctions(member_id,reason,ends_at,created_by) VALUES(#{member},#{reason},CASE WHEN #{days,jdbcType=INTEGER} IS NULL THEN NULL ELSE CURRENT_TIMESTAMP(6) + INTERVAL #{days,jdbcType=INTEGER} DAY END,#{admin})") int insertSanction(long member, String reason, Integer days, long admin);
     @Select("SELECT LAST_INSERT_ID()") long lastId();

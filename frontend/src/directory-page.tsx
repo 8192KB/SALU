@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, KeyboardEvent } from 'react';
 import { useAuth } from './auth/context';
 import { ApiFailure, directoryRequest } from './auth/api';
 import { useLoginPath } from './auth/pages';
-import { Alert, BackLink, PageHeading, focusFirstError } from './components';
+import { Alert, BackLink, PageHeading, focusFirstError, Loading } from './components';
 import { Field } from './fields';
 import { Link } from './workspace';
 import { usePrototype } from './prototype/context';
@@ -42,7 +42,13 @@ export function DirectoryEditor() {
   const [error, setError] = useState('');
   const [salonError, setSalonError] = useState('');
   const [salonResult, setSalonResult] = useState('');
+  const [addingSalon, setAddingSalon] = useState(false);
   const [busy, setBusy] = useState(false);
+  const salonEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void createSalon();
+  };
   const [complete, setComplete] = useState(false);
   const generation = useRef(0);
   const load = async () => {
@@ -119,9 +125,13 @@ export function DirectoryEditor() {
       setBusy(false);
     }
   };
-  const createSalon = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  // 매장 등록 칸은 프로필 양식 안, 소속 매장 바로 아래에 펼침. 양식 안이라 Enter는 직접 받아 등록함
+  const createSalon = async () => {
     if (busy) return;
+    if (!salon.name.trim() || !salon.region.trim()) {
+      setSalonError('매장 이름과 지역을 적어 주세요.');
+      return;
+    }
     setBusy(true);
     setSalonError('');
     setSalonResult('');
@@ -130,8 +140,9 @@ export function DirectoryEditor() {
       if (result) {
         setForm((previous) => ({ ...previous, salonId: result.id }));
         setSalon({ name: '', region: '', branch: '' });
+        setAddingSalon(false);
         setSalonResult(
-          `‘${salonLabel(result)}’ 매장을 등록하고 소속 매장으로 골라 뒀어요. 위의 ‘프로필 저장’을 눌러야 프로필에 반영돼요.`,
+          `‘${salonLabel(result)}’ 매장을 등록하고 골라 뒀어요. 아래 ‘프로필 저장’을 눌러야 프로필에 반영돼요.`,
         );
         await refreshDirectory();
       }
@@ -148,7 +159,7 @@ export function DirectoryEditor() {
       setBusy(false);
     }
   };
-  if (auth.status === 'checking') return <p role="status">로그인 상태를 확인하고 있어요.</p>;
+  if (auth.status === 'checking') return <Loading>로그인 상태를 확인하고 있어요.</Loading>;
   if (auth.status !== 'authenticated')
     return (
       <section className="empty-state">
@@ -172,6 +183,11 @@ export function DirectoryEditor() {
         to={profile.visibility === 'PUBLIC' ? `/designers/${profile.id}` : '/account'}
         secondary="디자이너 목록으로"
         secondaryTo="/designers"
+        after={
+          <button className="text-link" type="button" onClick={() => setComplete(false)}>
+            프로필 다시 고치기
+          </button>
+        }
       >
         <div className="completed-summary">
           <div>
@@ -182,9 +198,6 @@ export function DirectoryEditor() {
             </p>
           </div>
         </div>
-        <button className="text-link" type="button" onClick={() => setComplete(false)}>
-          다시 수정
-        </button>
       </Completion>
     );
   return (
@@ -204,7 +217,7 @@ export function DirectoryEditor() {
               </button>
             </>
           ) : (
-            <p role="status">프로필을 불러오고 있어요.</p>
+            <Loading>프로필을 불러오고 있어요.</Loading>
           )}
         </section>
       ) : (
@@ -242,7 +255,10 @@ export function DirectoryEditor() {
               <Field label="현재 소속 매장">
                 <select
                   value={form.salonId}
-                  onChange={(event) => setForm({ ...form, salonId: event.target.value })}
+                  onChange={(event) => {
+                    setForm({ ...form, salonId: event.target.value });
+                    setSalonResult('');
+                  }}
                 >
                   <option value="">소속 없음</option>
                   {directory.salons.map((salon) => (
@@ -252,6 +268,74 @@ export function DirectoryEditor() {
                   ))}
                 </select>
               </Field>
+              {salonResult && (
+                <p className="working-notice" role="status">
+                  {salonResult}
+                </p>
+              )}
+              {addingSalon ? (
+                <div className="salon-inline" role="group" aria-labelledby="salon-inline-heading">
+                  <h3 id="salon-inline-heading">목록에 없는 매장 등록</h3>
+                  <p className="form-note">등록한 매장은 다른 사용자도 선택할 수 있어요.</p>
+                  <Field label="매장 이름">
+                    <input
+                      maxLength={100}
+                      value={salon.name}
+                      onKeyDown={salonEnter}
+                      onChange={(event) => setSalon({ ...salon, name: event.target.value })}
+                    />
+                  </Field>
+                  <Field label="지역">
+                    <input
+                      maxLength={100}
+                      placeholder="예: 서울 마포구"
+                      value={salon.region}
+                      onKeyDown={salonEnter}
+                      onChange={(event) => setSalon({ ...salon, region: event.target.value })}
+                    />
+                  </Field>
+                  <Field label="지점" hint="선택">
+                    <input
+                      maxLength={100}
+                      value={salon.branch}
+                      onKeyDown={salonEnter}
+                      onChange={(event) => setSalon({ ...salon, branch: event.target.value })}
+                    />
+                  </Field>
+                  {salonError && <Alert message={salonError} />}
+                  <div className="salon-inline-actions">
+                    <button
+                      type="button"
+                      className="button"
+                      aria-busy={busy}
+                      onClick={() => void createSalon()}
+                    >
+                      매장 등록하고 고르기
+                    </button>
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => {
+                        setAddingSalon(false);
+                        setSalonError('');
+                      }}
+                    >
+                      닫기
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="text-link salon-inline-open"
+                  onClick={() => {
+                    setAddingSalon(true);
+                    setSalonResult('');
+                  }}
+                >
+                  찾는 매장이 목록에 없나요? 매장 등록
+                </button>
+              )}
               <Field label="공개 범위">
                 <select
                   value={form.visibility}
@@ -265,41 +349,6 @@ export function DirectoryEditor() {
             {error && <Alert message={error} />}
             <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
               {busy ? '저장 중' : '프로필 저장'}
-            </button>
-          </form>
-          <form className="panel directory-form" onSubmit={createSalon}>
-            <h2>목록에 없는 매장 등록</h2>
-            <p className="form-note">등록한 매장은 다른 사용자도 선택할 수 있어요.</p>
-            <fieldset disabled={busy}>
-              <Field label="매장 이름">
-                <input
-                  required
-                  maxLength={100}
-                  value={salon.name}
-                  onChange={(event) => setSalon({ ...salon, name: event.target.value })}
-                />
-              </Field>
-              <Field label="지역">
-                <input
-                  required
-                  maxLength={100}
-                  placeholder="예: 서울 마포구"
-                  value={salon.region}
-                  onChange={(event) => setSalon({ ...salon, region: event.target.value })}
-                />
-              </Field>
-              <Field label="지점" hint="선택">
-                <input
-                  maxLength={100}
-                  value={salon.branch}
-                  onChange={(event) => setSalon({ ...salon, branch: event.target.value })}
-                />
-              </Field>
-            </fieldset>
-            {salonError && <Alert message={salonError} />}{' '}
-            {salonResult && <p role="status">{salonResult}</p>}
-            <button type="submit" className="button full" disabled={busy}>
-              매장 등록
             </button>
           </form>
           {directory.error && <Alert message={directory.error} />}

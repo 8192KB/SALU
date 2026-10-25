@@ -109,6 +109,8 @@ export interface PrototypeRepository {
   addProgress(cutId: Id, input: ProgressDraft): Promise<ProgressEntry>;
   updateProgress(cutId: Id, id: Id, input: Omit<ProgressDraft, 'photos'>): Promise<ProgressEntry>;
   createPreview(draft: RequestDraft): Promise<RequestPreview>;
+  // 저장한 준비를 고친 내용으로 바꿈. 고치는 초안의 ID는 준비 ID와 같음
+  updatePreview(previewId: Id, draft: RequestDraft): Promise<RequestPreview>;
   createPreviewForDesigner(previewId: Id, designerId: Id): Promise<RequestPreview>;
   preparePhotos(files: File[], existingCount: number): Promise<PhotoDraft[]>;
   releasePhoto(photo: PhotoDraft): void;

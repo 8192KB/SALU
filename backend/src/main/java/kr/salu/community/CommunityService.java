@@ -34,10 +34,11 @@ public class CommunityService {
     public record AuthorView(String displayName) {}
     public record CutView(String cutDate, String service, String summary) {}
     public record PostSummary(String id, String category, String title, String excerpt, AuthorView author, CutView cut, String photoUrl,
-        int photoCount, int commentCount, int reactionCount, String status, String createdAt) {}
+        int photoCount, int commentCount, int reactionCount, String status, String hiddenBy, String createdAt) {}
     public record Post(String id, String category, String title, String content, AuthorView author, CutView cut, List<String> photoUrls,
         int commentCount, int reactionCount, boolean reacted, boolean mine, String status, String createdAt, String updatedAt) {}
-    public record Comment(long id, AuthorView author, String content, boolean mine, String createdAt) {}
+    public record Comment(long id, AuthorView author, String content, boolean mine, boolean hidden, String createdAt) {}
+    public record Status(boolean suspended, String endsAt, String reason) {}
     public record Created<T>(boolean created, T body) {}
     public record PhotoFile(String contentType, byte[] bytes) {}
 
@@ -57,6 +58,13 @@ public class CommunityService {
     private static String like(String value) { return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"); }
 
     @Transactional(readOnly=true) public List<PostSummary> mine(MemberPrincipal principal) { return mapper.mine(principal.id()).stream().map(CommunityService::summary).toList(); }
+
+    // 글·댓글을 쓰기 전에 화면이 막힌 이유와 기간을 먼저 보여 주려고 씀
+    @Transactional(readOnly=true)
+    public Status status(MemberPrincipal principal) {
+        var sanction = mapper.activeSanction(principal.id());
+        return sanction == null ? new Status(false, null, null) : new Status(true, Inputs.time(sanction.endsAt()), sanction.reason());
+    }
 
     @Transactional(readOnly=true)
     public Post post(MemberPrincipal viewer, String id) { return detail(visible(id, id(viewer)), id(viewer)); }
@@ -127,7 +135,8 @@ public class CommunityService {
     public List<Comment> comments(MemberPrincipal viewer, String postId) {
         visible(postId, id(viewer));
         long me = id(viewer);
-        return mapper.comments(postId).stream().map(c -> comment(c, me)).toList();
+        // 숨긴 댓글은 쓴 회원에게만 숨김 표시와 함께 보임
+        return mapper.comments(postId, me).stream().map(c -> comment(c, me)).toList();
     }
 
     @Transactional(rollbackFor=Exception.class)
@@ -168,7 +177,10 @@ public class CommunityService {
         var post = lockedVisible(postId);
         if (post.authorId() == principal.id()) throw ApiException.invalidRequest();
         if (mapper.reportPost(postId, principal.id(), reason[0], reason[1]) != 1) throw ApiException.conflict();
-        if (mapper.openPostReports(postId) >= AUTO_HIDE_REPORTS && mapper.hidePost(postId) != 1) throw ApiException.conflict();
+        if (mapper.openPostReports(postId) >= AUTO_HIDE_REPORTS) {
+            if (mapper.hidePost(postId) != 1) throw ApiException.conflict();
+            notifications.create(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, postId, null);
+        }
     }
 
     @Transactional(rollbackFor=Exception.class)
@@ -179,7 +191,10 @@ public class CommunityService {
         if (comment == null || !"VISIBLE".equals(comment.status())) throw ApiException.notFound();
         if (comment.authorId() == principal.id()) throw ApiException.invalidRequest();
         if (mapper.reportComment(commentId, principal.id(), reason[0], reason[1]) != 1) throw ApiException.conflict();
-        if (mapper.openCommentReports(commentId) >= AUTO_HIDE_REPORTS && mapper.hideComment(commentId) != 1) throw ApiException.conflict();
+        if (mapper.openCommentReports(commentId) >= AUTO_HIDE_REPORTS) {
+            if (mapper.hideComment(commentId) != 1) throw ApiException.conflict();
+            notifications.create(comment.authorId(), NotificationService.COMMUNITY_COMMENT_HIDDEN, comment.postId(), null);
+        }
     }
 
     private static String[] reason(ReportInput input) {
@@ -226,9 +241,11 @@ public class CommunityService {
         int end = content.codePointCount(0, content.length()) <= 120 ? content.length() : content.offsetByCodePoints(0, 120);
         return content.substring(0, end);
     }
+    // 처리 전 신고가 남아 있으면 신고가 쌓여 자동으로 숨긴 것, 없으면 관리자가 숨기기로 정한 것
     static PostSummary summary(CommunityMapper.PostRow p) {
+        String hiddenBy = "HIDDEN".equals(p.status()) ? (p.openReports() > 0 ? "REPORTS" : "ADMIN") : null;
         return new PostSummary(p.id(), p.category(), p.title(), excerpt(p.content()), new AuthorView(p.authorName()), cut(p),
-            p.photoCount() > 0 ? photoUrl(p.id(), 0) : null, p.photoCount(), p.commentCount(), p.reactionCount(), p.status(), Inputs.time(p.createdAt()));
+            p.photoCount() > 0 ? photoUrl(p.id(), 0) : null, p.photoCount(), p.commentCount(), p.reactionCount(), p.status(), hiddenBy, Inputs.time(p.createdAt()));
     }
     static Post detail(CommunityMapper.PostRow p, long viewer) {
         return new Post(p.id(), p.category(), p.title(), p.content(), new AuthorView(p.authorName()), cut(p),
@@ -236,6 +253,6 @@ public class CommunityService {
             p.commentCount(), p.reactionCount(), p.reacted(), p.authorId() == viewer, p.status(), Inputs.time(p.createdAt()), Inputs.time(p.updatedAt()));
     }
     private static Comment comment(CommunityMapper.CommentRow c, long viewer) {
-        return new Comment(c.id(), new AuthorView(c.authorName()), c.content(), c.authorId() == viewer, Inputs.time(c.createdAt()));
+        return new Comment(c.id(), new AuthorView(c.authorName()), c.content(), c.authorId() == viewer, "HIDDEN".equals(c.status()), Inputs.time(c.createdAt()));
     }
 }

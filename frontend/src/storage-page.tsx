@@ -6,7 +6,6 @@ import { displayDate, validDate } from './prototype/dates';
 import { useAuth } from './auth/context';
 import { Dialog } from './dialog';
 import { isBlankCutDraft } from './prototype/memory-repository';
-import { photoIds } from './prototype/storage-model';
 import { readGuestRecords } from './prototype/personal-store';
 import type { GuestRecords } from './prototype/personal-store';
 import { GuestRecordList, guestRecordsLabel } from './auth/pages';
@@ -51,6 +50,9 @@ function PersonalStorageNotice({
     conflict: '변경 확인 필요',
     error: view.errorSource === 'cloud' ? '서버 저장 대기' : '기기 저장 확인 필요',
   };
+  // 평소 저장 상태는 기록을 다루는 화면에서만 작게 보이고, 확인이 필요한 상태는 어느 화면에서나 보임
+  const attention = Boolean(guest) || view.status === 'error' || view.status === 'conflict';
+  if (!attention && !RECORD_PATHS.test(pathname)) return null;
   return (
     <div className={`storage-notice${compact ? ' compact' : ''}`}>
       {/* 입력할 때마다 바뀌는 저장 중·저장됨은 읽지 않고, 확인이 필요한 상태만 알림 */}
@@ -85,6 +87,34 @@ function PersonalStorageNotice({
     </div>
   );
 }
+// 복원 확인 창. 같은 기록은 기록·경과·사진·커트 준비가 모두 같은 기록
+function restoreSummary({
+  newRecords,
+  newPhotos,
+  same,
+}: {
+  newRecords: number;
+  newPhotos: number;
+  same: number;
+}) {
+  if (!newRecords && same)
+    return `이 파일의 기록 ${same}건은 모두 이 기기에 이미 있어요. 불러와도 기록이 늘지 않아요.`;
+  const adding = newRecords
+    ? `기록 ${newRecords}건${newPhotos ? `·사진 ${newPhotos}장` : ''}을 새로 추가해요.`
+    : '작성 중이던 내용만 불러와요.';
+  return same
+    ? `${adding} 이미 있는 같은 기록 ${same}건은 건너뛰고, 기존 기록은 바뀌지 않아요.`
+    : `${adding} 기존 기록은 바뀌지 않아요.`;
+}
+function restoredMessage({ added, same }: { added: number; same: number }) {
+  if (!added && same) return `이 파일의 기록 ${same}건은 모두 이미 있어 새로 추가하지 않았어요.`;
+  if (!added) return '백업 파일을 불러왔어요.';
+  return same
+    ? `기록 ${added}건을 추가했어요. 이미 있던 같은 기록 ${same}건은 건너뛰었어요.`
+    : `기록 ${added}건을 추가했어요. 기존 기록은 그대로 있어요.`;
+}
+const RECORD_PATHS =
+  /^\/(examples\/)?(records|requests|backup|auth\/complete|consultations\/(materials|request))(\/|$)/;
 export function BackupPage() {
   const { storage } = usePrototype();
   return storage ? <PersonalBackupPage storage={storage} /> : null;
@@ -117,14 +147,19 @@ function PersonalBackupPage({
       live = false;
     };
   }, [storage]);
-  const act = async (task: () => Promise<unknown>, success: string, records = false) => {
+  const act = async <T,>(
+    task: () => Promise<T>,
+    success: string | ((result: T) => string),
+    records = false,
+  ) => {
     setBusy(true);
     setError('');
     setMessage('');
     setShowRecords(false);
     try {
-      await task();
-      if (success) setMessage(success);
+      const result = await task();
+      const text = typeof success === 'function' ? success(result) : success;
+      if (text) setMessage(text);
       setShowRecords(records);
     } catch (error) {
       setError(error instanceof Error ? error.message : '처리하지 못했어요. 다시 시도해 주세요.');
@@ -235,8 +270,8 @@ function PersonalBackupPage({
       <section className="panel">
         <h2>파일 백업</h2>
         <p>
-          기록·경과·사진·커트 준비를 ZIP 파일로 받을 수 있어요. 복원하면 기존 기록 옆에 새 복사본을
-          추가해요.
+          기록·경과·사진·커트 준비를 ZIP 파일로 받을 수 있어요. 복원하면 이 기기에 없는 기록만
+          추가하고, 기존 기록은 그대로 둬요.
         </p>
         <div className="backup-actions">
           <button
@@ -275,16 +310,10 @@ function PersonalBackupPage({
       </section>
       <Dialog
         open={Boolean(pendingRestore)}
-        title="백업 파일을 복사본으로 추가할까요?"
+        title="백업 파일을 불러올까요?"
         onClose={() => setPendingRestore(null)}
       >
-        {pendingRestore && (
-          <p>
-            기록 {pendingRestore.bundle.state.cuts.length}건·사진{' '}
-            {photoIds(pendingRestore.bundle).length}장을 새 복사본으로 추가해요. 이미 같은 기록이
-            있으면 두 벌이 되고, 기존 기록은 바뀌지 않아요.
-          </p>
-        )}
+        {pendingRestore && <p>{restoreSummary(pendingRestore)}</p>}
         <div className="dialog-actions">
           <button type="button" className="button" onClick={() => setPendingRestore(null)}>
             취소
@@ -297,12 +326,12 @@ function PersonalBackupPage({
               setPendingRestore(null);
               void act(
                 () => storage.importBackup(restore),
-                `기존 기록은 그대로 두고 복사본 ${restore.bundle.state.cuts.length}건을 추가했어요.`,
-                restore.bundle.state.cuts.length > 0,
+                restoredMessage,
+                restore.newRecords > 0,
               );
             }}
           >
-            복사본 추가
+            불러오기
           </button>
         </div>
       </Dialog>

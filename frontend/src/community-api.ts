@@ -33,6 +33,7 @@ export type CommunityPostSummary = {
   commentCount: number;
   reactionCount: number;
   status: PostStatus;
+  hiddenBy: 'REPORTS' | 'ADMIN' | null;
   createdAt: string;
 };
 export type CommunityComment = {
@@ -40,8 +41,11 @@ export type CommunityComment = {
   author: { displayName: string };
   content: string;
   mine: boolean;
+  // 내가 쓴 댓글이 숨겨졌을 때만 true. 다른 사람에게는 보이지 않음
+  hidden: boolean;
   createdAt: string;
 };
+export type CommunityStatus = { suspended: boolean; endsAt: string | null; reason: string | null };
 export type ReportReason = 'SPAM' | 'ABUSE' | 'PRIVACY' | 'ILLEGAL' | 'OTHER';
 export type PostInput = {
   requestKey: string;
@@ -126,6 +130,14 @@ export async function listMyPosts(member: SessionMember) {
     return await json<CommunityPostSummary[]>(
       await memberRequest('/api/my/community-posts', member),
     );
+  } catch (error) {
+    translate(error);
+  }
+}
+// 글·댓글을 쓸 수 있는지. 이용 제한이면 끝나는 때와 이유를 함께 받음
+export async function getCommunityStatus(member: SessionMember) {
+  try {
+    return await json<CommunityStatus>(await memberRequest('/api/my/community-status', member));
   } catch (error) {
     translate(error);
   }

@@ -22,6 +22,7 @@
 - 비공개 프로필이나 정지된 계정의 디자이너는 후기·소속 이력이 `404`입니다.
 - 후기 쓰기·고치기·지우기에는 CSRF와 `X-SALU-Storage-Context`를 넣습니다. 찜에는 CSRF만 넣습니다.
 - 응답에는 `Cache-Control: no-store`가 붙고, 오류는 `{ "code", "message" }`입니다. 화면 문구는 `code`로 정합니다.
+- 응답의 TypeScript 타입은 `frontend/src/designer-api.ts`에 있습니다.
 - 디자이너 목록·상세(`GET /api/designers`, `GET /api/designers/{id}`) 응답에 `reviewCount`(후기 수)와 `averageRating`(소수 첫째 자리, 후기가 없으면 `null`)이 함께 옵니다.
 
 ## 1. 후기
@@ -88,28 +89,3 @@
 ```
 
 이력은 내 디자이너 프로필 저장(`PUT /api/my/designer-profile`)에서 소속이 바뀔 때 서버가 자동으로 남깁니다. 따로 쓰는 API는 없습니다. 열린 기간은 디자이너마다 하나만 있도록 DB가 막습니다. V9 적용 전부터 있던 소속은 프로필 마지막 수정 시각을 시작 시각으로 넣었습니다.
-
-```ts
-export type DesignerReview = {
-  id: string;
-  consultationId: string;
-  designerId: string;
-  author: { displayName: string };
-  rating: number;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  mine: boolean;
-};
-
-export type DesignerReviews = { count: number; averageRating: number | null; items: DesignerReview[] };
-
-export type Affiliation = {
-  salonId: string;
-  salonName: string;
-  region: string;
-  branch: string;
-  startedAt: string;
-  endedAt: string | null;
-};
-```

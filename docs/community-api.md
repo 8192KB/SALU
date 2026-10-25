@@ -1,6 +1,6 @@
 # 커뮤니티 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `community` 패키지와 Flyway `V10__community.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/community-api.ts`·`community-pages.tsx`가 1~3장을 따르고, 하단 메뉴 맨 오른쪽 더보기에서 들어갑니다([화면 흐름](screen-flow.md)). 4장 관리자는 `admin-api.ts`·`admin-pages.tsx`(더보기의 `신고 처리`)가 따릅니다.
+2026-10-23 기준 구현된 계약입니다. 서버는 `backend`의 `community` 패키지와 Flyway `V10__community.sql`·`V13__moderation_notifications.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/community-api.ts`·`community-pages.tsx`가 1~3장을 따르고, 하단 메뉴 맨 오른쪽 더보기에서 들어갑니다([화면 흐름](screen-flow.md)). 4장 관리자는 `admin-api.ts`·`admin-pages.tsx`(더보기의 `신고 처리`)가 따릅니다.
 
 공개한 커트 사례와 고민 질문을 올리고, 댓글·도움돼요·신고로 함께 보는 기능입니다. 개인 기록 원본은 서버가 읽지 못하므로, 글을 올릴 때 화면이 고른 커트 정보와 사진을 복사해 보냅니다.
 
@@ -13,6 +13,7 @@
 | 글 사진 | `GET /api/community/posts/{id}/photos/{position}` | 누구나 |
 | 댓글 목록 | `GET /api/community/posts/{id}/comments` | 누구나 |
 | 내 글 | `GET /api/my/community-posts` | 로그인한 회원 |
+| 내 이용 제한 | `GET /api/my/community-status` | 로그인한 회원 |
 | 글 쓰기 | `POST /api/community/posts` | 로그인한 회원(제재 중 제외) |
 | 글 고치기·지우기 | `PUT`·`DELETE /api/community/posts/{id}` | 글쓴이 |
 | 댓글 쓰기 | `POST /api/community/posts/{id}/comments` | 로그인한 회원(제재 중 제외) |
@@ -26,9 +27,12 @@
 - 조회는 로그인 없이 됩니다. 쓰기는 로그인이 필요합니다.
 - 글·댓글·신고를 만들거나 고치고 지울 때는 CSRF와 `X-SALU-Storage-Context`를 넣습니다. 도움돼요와 관리자 요청에는 CSRF만 넣습니다.
 - 공개 응답에는 작성자의 표시 이름만 넣고 이메일·회원 ID는 넣지 않습니다.
-- 숨김(`HIDDEN`)·삭제(`DELETED`)된 글과 그 사진·댓글은 공개 조회에서 `404`입니다. 내 글 목록에는 숨김 글이 `status`와 함께 보입니다.
+- 숨김(`HIDDEN`)·삭제(`DELETED`)된 글과 그 사진·댓글은 공개 조회에서 `404`입니다. 내 글 목록에는 숨김 글이 `status`·`hiddenBy`와 함께 보입니다.
+- 숨긴 댓글은 그 댓글을 쓴 회원에게만 `hidden: true`로 보입니다. 다른 사람에게는 빠지고 댓글 수에도 들어가지 않습니다.
 - 수(댓글·도움돼요)는 저장된 표에서 셉니다. 별도 숫자 컬럼을 두지 않습니다.
-- 제재 중인 회원이 글·댓글을 쓰면 `403 COMMUNITY_SUSPENDED`입니다. 도움돼요·신고는 할 수 있습니다.
+- 응답의 TypeScript 타입은 `frontend/src/community-api.ts`에 있습니다.
+- 제재 중인 회원이 글·댓글을 쓰면 `403 COMMUNITY_SUSPENDED`입니다. 도움돼요·신고는 할 수 있습니다. 화면은 글쓰기·댓글 입력을 열기 전에 `GET /api/my/community-status`로 확인해 막힌 이유와 기간을 먼저 보여 주고, `403 COMMUNITY_SUSPENDED`를 받으면 같은 API를 다시 불러 안내를 바꿉니다.
+- 관리자가 숨기거나 신고가 쌓여 자동으로 숨겨지면 작성자에게 `COMMUNITY_POST_HIDDEN`·`COMMUNITY_COMMENT_HIDDEN`, 제재하면 `COMMUNITY_SUSPENDED` 알림이 갑니다([알림 API](notification-api.md)). 이미 숨겨진 것을 관리자가 확정할 때는 다시 보내지 않습니다.
 
 ## 1. 글
 
@@ -112,6 +116,29 @@
 
 목록 항목은 상세에서 `content` 대신 앞 120자 `excerpt`, `photoUrls` 대신 첫 사진 `photoUrl`과 `photoCount`가 옵니다. `reacted`·`mine`·`updatedAt`은 없습니다.
 
+목록 항목의 `hiddenBy`는 숨김 글에서만 값이 있고 그 밖에는 `null`입니다. 공개 목록에는 숨김 글이 없으므로 내 글 목록에서만 씁니다.
+
+| `hiddenBy` | 뜻 | 화면 문구(제안) |
+|---|---|---|
+| `REPORTS` | 처리 전 신고가 5건 쌓여 자동으로 숨김. 관리자가 아직 보지 않음 | 숨김 · 신고가 쌓여 검토 중이에요 |
+| `ADMIN` | 관리자가 숨기기로 정함 | 숨김 · 운영 기준에 따라 숨겼어요 |
+
+### 내 이용 제한
+
+`GET /api/my/community-status`
+
+```json
+{ "suspended": true, "endsAt": "2026-10-30T03:00:00.000Z", "reason": "반복 광고" }
+```
+
+| 필드 | 뜻 |
+|---|---|
+| `suspended` | 지금 글·댓글을 쓸 수 없는지 |
+| `endsAt` | 제한이 끝나는 시각. 기간 없는 제재이거나 제한이 없으면 `null` |
+| `reason` | 관리자가 적은 이유. 제한이 없으면 `null`. 관리자 화면에서 이 이유가 회원에게 보인다고 알림 |
+
+제재가 여러 건이면 가장 늦게 끝나는 제재(기간 없음이 가장 늦음)를 돌려줍니다.
+
 ### 고치기·지우기
 
 - `PUT /api/community/posts/{id}` 본문 `{ "title": "…", "content": "…" }` → `200` + 글. 분류·커트 정보·사진은 바꾸지 않습니다. 다른 회원이면 `403`, 공개 글이 아니면 `404`, 제재 중이면 `403 COMMUNITY_SUSPENDED`입니다.
@@ -125,8 +152,10 @@
 - `PUT /api/community/posts/{id}/reaction` → `204`, `DELETE …/reaction` → `204`. 여러 번 눌러도 회원당 하나입니다.
 
 ```json
-{ "id": 77, "author": { "displayName": "바다" }, "content": "저도 그래요", "mine": false, "createdAt": "2026-10-16T09:20:00.000Z" }
+{ "id": 77, "author": { "displayName": "바다" }, "content": "저도 그래요", "mine": false, "hidden": false, "createdAt": "2026-10-16T09:20:00.000Z" }
 ```
+
+`hidden`은 내가 쓴 댓글이 숨겨졌을 때만 `true`입니다. 숨긴 댓글은 지우기만 할 수 있습니다.
 
 ## 3. 신고
 
@@ -161,61 +190,13 @@
 | 제재 해제 | `POST /api/admin/sanctions/{id}/lift` |
 
 - 처리할 신고는 대상별로 묶어 `{ "posts": [...], "comments": [...] }`로 돌려줍니다. 항목에는 `openCount`, `reasons`, `latestAt`, 그리고 제재에 쓸 `authorId`가 들어갑니다.
-- 처리 본문은 `{ "action": "HIDE" }` 또는 `{ "action": "KEEP" }`입니다. `HIDE`는 숨기고 열린 신고를 받아들임(`ACCEPTED`), `KEEP`은 다시 보이게 하고 열린 신고를 기각(`DISMISSED`)합니다. 작성자가 지운 글은 상태를 바꾸지 않고 신고만 정리합니다. 성공은 `204`입니다.
+- 처리 본문은 `{ "action": "HIDE" }` 또는 `{ "action": "KEEP" }`입니다. `HIDE`는 숨기고 열린 신고를 받아들임(`ACCEPTED`), `KEEP`은 다시 보이게 하고 열린 신고와 앞서 받아들인 신고를 모두 기각(`DISMISSED`)합니다. 숨겼던 글을 다시 보이게 하면 신고 목록도 기각으로 바뀌어 실제 상태와 맞습니다. 작성자가 지운 글은 상태를 바꾸지 않고 신고만 정리합니다. 성공은 `204`입니다.
 - 제재 본문은 `{ "days": 7, "reason": "반복 광고" }`입니다. `days`는 3·7·30 또는 `null`(기간 없음)이고, `reason`은 1~200자입니다. 자기 자신은 제재할 수 없습니다(`400`). 성공은 `201` + 제재 한 건입니다.
 - 해제는 `204`, 이미 해제했으면 `409`입니다. 해제해도 기록은 남습니다.
-
-```ts
-export type PostCategory = 'CASE' | 'QUESTION';
-export type PostStatus = 'VISIBLE' | 'HIDDEN' | 'DELETED';
-export type Cut = { cutDate: string; service: string; summary: string };
-
-export type CommunityPost = {
-  id: string;
-  category: PostCategory;
-  title: string;
-  content: string;
-  author: { displayName: string };
-  cut: Cut | null;
-  photoUrls: string[];
-  commentCount: number;
-  reactionCount: number;
-  reacted: boolean;
-  mine: boolean;
-  status: PostStatus;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type CommunityPostSummary = {
-  id: string;
-  category: PostCategory;
-  title: string;
-  excerpt: string;
-  author: { displayName: string };
-  cut: Cut | null;
-  photoUrl: string | null;
-  photoCount: number;
-  commentCount: number;
-  reactionCount: number;
-  status: PostStatus;
-  createdAt: string;
-};
-
-export type CommunityComment = {
-  id: number;
-  author: { displayName: string };
-  content: string;
-  mine: boolean;
-  createdAt: string;
-};
-
-export type ReportReason = 'SPAM' | 'ABUSE' | 'PRIVACY' | 'ILLEGAL' | 'OTHER';
-```
 
 ## 이번 범위에 넣지 않은 것
 
 - 얼굴 가림, 사진 편집
 - 대댓글, 글 사진 바꾸기
 - 머리 상태 같은 세부 조건 검색, 인기순 정렬
-- 관리자 화면, 신고자에게 처리 결과 알림
+- 신고자에게 처리 결과 알림, 다시 보이게 했을 때 작성자 알림

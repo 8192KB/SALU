@@ -1,8 +1,9 @@
 import { Component, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Link as RouterLink, useLocation } from 'react-router';
+import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import { Link, scopedTo, useWorkspace } from './workspace';
 import { KEEP_TRAIL, useBackTrail } from './back-trail';
+import { ApiFailure } from './auth/api';
 
 export function Icon({
   name,
@@ -24,10 +25,31 @@ export function Icon({
     | 'bell'
     | 'heart'
     | 'more'
-    | 'warning';
+    | 'warning'
+    | 'search'
+    | 'lock'
+    | 'offline';
   size?: number;
 }) {
   const paths = {
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
+      </>
+    ),
+    lock: (
+      <>
+        <rect x="4" y="10" width="16" height="11" rx="3" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </>
+    ),
+    offline: (
+      <>
+        <path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M12 19h.01" />
+        <path d="m3 3 18 18" />
+      </>
+    ),
     warning: (
       <>
         <path d="m12 3 10 18H2L12 3Z" />
@@ -181,44 +203,228 @@ export function BackLink({
   );
 }
 
-// 배포 직후 예전 탭이 사라진 화면 파일을 요청하면 lazy 화면이 실패해 앱 전체가 비는 것을 막음
-export class LoadBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
+// 배포 직후 예전 탭이 사라진 화면 파일을 요청하면 lazy 화면이 실패함. 그 밖의 오류는 화면을 그리다 멈춘 것
+const chunkFailure = (error: unknown) =>
+  error instanceof Error &&
+  /dynamically imported module|importing a module script failed|error loading dynamically|ChunkLoadError/i.test(
+    `${error.name} ${error.message}`,
+  );
+
+// 화면 하나가 멈춰도 머리글·메뉴는 남겨 다른 메뉴로 갈 수 있게 함
+export class LoadBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+  state = { error: null as unknown };
+  static getDerivedStateFromError(error: unknown) {
+    return { error: error ?? new Error('unknown') };
   }
   render() {
-    if (!this.state.failed) return this.props.children;
+    const { error } = this.state;
+    if (!error) return this.props.children;
+    if (chunkFailure(error))
+      return (
+        <ErrorState
+          kind="offline"
+          title="화면을 불러오지 못했어요"
+          message="새 버전이 올라왔거나 연결이 끊겼을 수 있어요. 새로고침하면 다시 불러와요."
+          onRetry={() => window.location.reload()}
+          retryLabel="새로고침"
+          home={false}
+        />
+      );
     return (
-      <section className="empty-state" role="alert">
-        <h1 tabIndex={-1}>화면을 불러오지 못했어요</h1>
-        <p>새 버전이 올라왔거나 연결이 끊겼을 수 있어요. 새로고침하면 다시 불러와요.</p>
-        <button type="button" className="button primary" onClick={() => window.location.reload()}>
-          새로고침
-        </button>
-      </section>
+      <ErrorState
+        kind="crash"
+        title="화면을 보여 주지 못했어요"
+        message="잠시 문제가 생겼어요. 저장한 기록은 그대로 있어요. 다시 불러오거나 다른 화면에서 다시 시작해 주세요."
+        onRetry={() => this.setState({ error: null })}
+        retryLabel="다시 불러오기"
+      />
     );
   }
 }
 
+export type ErrorKind = 'missing' | 'denied' | 'login' | 'offline' | 'crash';
+export type LoadProblem = { kind: ErrorKind; message: string };
+
+// 서버 오류를 화면 종류로 나눔. 상태 코드가 없는 실패(연결 끊김·응답 이상)는 다시 시도할 수 있는 연결 문제로 봄
+export function loadProblem(
+  failure: unknown,
+  fallback = '잠시 후 다시 시도해 주세요.',
+): LoadProblem {
+  if (failure instanceof ApiFailure) {
+    if (failure.status === 404) return { kind: 'missing', message: '' };
+    if (failure.status === 401) return { kind: 'login', message: '' };
+    if (failure.status === 403 && failure.code !== 'CSRF_INVALID')
+      return { kind: 'denied', message: failure.message };
+    return { kind: 'offline', message: failure.message || fallback };
+  }
+  return { kind: 'offline', message: fallback };
+}
+
+const KIND_COPY: Record<
+  ErrorKind,
+  { icon: Parameters<typeof Icon>[0]['name']; title: string; message: string }
+> = {
+  missing: {
+    icon: 'search',
+    title: '찾을 수 없어요',
+    message: '주소가 바뀌었거나 지워졌을 수 있어요.',
+  },
+  denied: { icon: 'lock', title: '볼 수 없는 화면이에요', message: '이 계정으로는 열 수 없어요.' },
+  login: { icon: 'lock', title: '로그인이 필요해요', message: '로그인하면 이어서 볼 수 있어요.' },
+  offline: {
+    icon: 'offline',
+    title: '잠시 연결할 수 없어요',
+    message: '연결을 확인한 뒤 다시 시도해 주세요.',
+  },
+  crash: {
+    icon: 'warning',
+    title: '화면을 보여 주지 못했어요',
+    message: '다시 불러오거나 다른 화면에서 다시 시작해 주세요.',
+  },
+};
+
+// 오류가 난 화면이 속한 메뉴의 첫 화면. 예시 체험에는 홈이 없어 내 기록으로 감
+function sectionHome(pathname: string, example: boolean): [string, string] {
+  const path = pathname.replace(/^\/examples/, '') || '/';
+  if (path.startsWith('/community')) return ['/community', '커뮤니티로'];
+  if (path.startsWith('/consultations/received'))
+    return ['/consultations/received', '받은 상담으로'];
+  if (path.startsWith('/consultations')) return ['/consultations', '상담 내역으로'];
+  if (path.startsWith('/requests')) return ['/requests', '커트 준비로'];
+  if (path.startsWith('/designers')) return ['/designers', '디자이너 찾기로'];
+  if (path.startsWith('/records') || example) return ['/records', '내 기록으로'];
+  if (path.startsWith('/admin') || path.startsWith('/notifications')) return ['/more', '더보기로'];
+  return ['/', '홈으로'];
+}
+
+// 404·403·401·연결 실패·화면 오류를 같은 모양으로 보여 줌. 버튼은 지금 갈 수 있는 곳만
+export function ErrorState({
+  kind,
+  title,
+  message,
+  onRetry,
+  retryLabel = '다시 시도',
+  home = true,
+  children,
+}: {
+  kind: ErrorKind;
+  title?: string;
+  message?: string;
+  onRetry?: () => void;
+  retryLabel?: string;
+  home?: boolean;
+  children?: ReactNode;
+}) {
+  const location = useLocation();
+  const mode = useWorkspace();
+  const navigate = useNavigate();
+  const copy = KIND_COPY[kind];
+  const [homePath, homeLabel] = sectionHome(location.pathname, mode === 'example');
+  const next = `${location.pathname}${location.search}`;
+  // 같은 탭에서 들어온 화면이 있을 때만 이전 화면 버튼을 둠(react-router가 history.state에 순서를 남김)
+  const canGoBack = ((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0;
+  const atHome = scopedTo(homePath, mode) === location.pathname;
+  return (
+    <section className="empty-state error-state" role={kind === 'crash' ? 'alert' : undefined}>
+      <span className="empty-symbol">
+        <Icon name={copy.icon} size={30} />
+      </span>
+      <h1 tabIndex={-1}>{title ?? copy.title}</h1>
+      <p>{message || copy.message}</p>
+      <div className="error-actions">
+        {kind === 'login' && (
+          <RouterLink
+            className="button primary"
+            to={next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login'}
+          >
+            로그인
+          </RouterLink>
+        )}
+        {onRetry && (
+          <button
+            type="button"
+            className={`button${kind === 'login' ? '' : ' primary'}`}
+            onClick={onRetry}
+          >
+            {retryLabel}
+          </button>
+        )}
+        {home && !atHome && (
+          <Link className={`button${kind === 'login' || onRetry ? '' : ' primary'}`} to={homePath}>
+            {homeLabel}
+          </Link>
+        )}
+        {children}
+        {canGoBack && kind !== 'crash' && (
+          <button type="button" className="text-link" onClick={() => void navigate(-1)}>
+            이전 화면으로
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// 앱에 없는 주소
+export function NotFound() {
+  return (
+    <ErrorState
+      kind="missing"
+      title="페이지를 찾을 수 없어요"
+      message="주소가 바뀌었거나 지워진 화면일 수 있어요."
+    />
+  );
+}
+
+// 서버에서 받은 자료가 없거나 불러오지 못했을 때. 없음이면 제목 그대로, 그 밖에는 종류에 맞는 제목
+export function LoadFailure({
+  problem,
+  title,
+  missingMessage,
+  onRetry,
+}: {
+  problem: LoadProblem;
+  title: string;
+  // 대상이 없을 때 그 메뉴에 맞게 바꿀 설명
+  missingMessage?: string;
+  onRetry?: () => void;
+}) {
+  const missing = problem.kind === 'missing';
+  return (
+    <ErrorState
+      kind={problem.kind}
+      title={missing ? title : undefined}
+      message={missing ? missingMessage : problem.message}
+      onRetry={problem.kind === 'offline' ? onRetry : undefined}
+    />
+  );
+}
+
 export function Missing({
   title = '자료를 찾을 수 없어요',
-  message = '내 기록에서 자료를 다시 선택해 주세요.',
+  message,
 }: {
   title?: string;
   message?: string;
 }) {
+  const { pathname } = useLocation();
+  const record = /^(\/examples)?\/records/.test(pathname);
   return (
-    <section className="empty-state">
-      <span className="empty-symbol">
-        <Icon name="photo" size={30} />
-      </span>
-      <h1 tabIndex={-1}>{title}</h1>
-      <p>{message}</p>
-      <Link className="button primary" to="/records">
-        내 기록으로
-      </Link>
-    </section>
+    <ErrorState
+      kind="missing"
+      title={title}
+      message={message ?? (record ? '내 기록에서 자료를 다시 선택해 주세요.' : undefined)}
+    />
+  );
+}
+
+// 불러오는 동안 돌아가는 표시와 문구. 버튼 안 진행 표시와 같은 모양
+export function Loading({ children }: { children: ReactNode }) {
+  return (
+    <p className="loading-state" role="status">
+      <span className="button-spinner" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   );
 }
 

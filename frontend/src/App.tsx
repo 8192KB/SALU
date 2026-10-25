@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   BrowserRouter,
   Link,
@@ -11,12 +12,12 @@ import {
 import type { Location } from 'react-router';
 import { DirectoryEditor } from './directory-page';
 import { RecordComplete } from './completion';
-import { Icon, LoadBoundary, Missing } from './components';
+import { Icon, LoadBoundary, NotFound, Loading } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 import { RequestList } from './request-pages';
 import { Dialog } from './dialog';
-import { FeedbackProvider } from './feedback';
+import { FeedbackProvider, useFeedback } from './feedback';
 import { AuthProvider, useAuth } from './auth/context';
 import {
   AccountControls,
@@ -94,6 +95,7 @@ const ReceivedComplete = lazy(() =>
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const notify = useFeedback();
   const { reset, ready, storage, loadFailed } = usePrototype();
   const { repository: consultations } = useConsultations();
   const mode = useWorkspace();
@@ -301,6 +303,7 @@ function Layout() {
               consultations?.reset();
               navigation.forget();
               navigate('/examples/records');
+              notify('예시를 처음 상태로 되돌렸어요');
             }}
           >
             모두 초기화
@@ -327,7 +330,7 @@ function Layout() {
         ) : !ready && path !== '/' ? (
           <section className="empty-state">
             <h1 tabIndex={-1}>기록 불러오기</h1>
-            <p role="status">기기에 보관한 기록을 불러오고 있어요.</p>
+            <Loading>기기에 보관한 기록을 불러오고 있어요.</Loading>
           </section>
         ) : (
           <div ref={setPageSlot}>
@@ -367,7 +370,7 @@ function PageRoutes({
 }) {
   return (
     <LoadBoundary key={location.pathname}>
-      <Suspense fallback={<p role="status">상담 화면을 불러오고 있어요.</p>}>
+      <Suspense fallback={<Loading>화면을 불러오고 있어요.</Loading>}>
         <Routes location={location}>
           <Route
             index
@@ -420,12 +423,7 @@ function PageRoutes({
           <Route path="requests/review" element={<ReviewPage />} />
           <Route path="requests/complete/:id" element={<CompletePage />} />
           <Route path="requests/previews/:id" element={<PreviewPage />} />
-          <Route
-            path="*"
-            element={
-              <Missing title="페이지를 찾을 수 없어요" message="내 기록에서 다시 시작해 주세요." />
-            }
-          />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
     </LoadBoundary>
@@ -469,14 +467,50 @@ function AccountScopedPrototype() {
   );
 }
 
+// 머리글·저장소처럼 화면 밖 공통 부분이 멈추면 아무것도 안 보이므로 마지막으로 받아 안내함
+class AppBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <main className="app-crash">
+        <section className="empty-state error-state" role="alert">
+          <span className="empty-symbol">
+            <Icon name="warning" size={30} />
+          </span>
+          <h1>화면을 보여 주지 못했어요</h1>
+          <p>잠시 문제가 생겼어요. 저장한 기록은 그대로 있어요. 새로고침하면 다시 불러와요.</p>
+          <div className="error-actions">
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => window.location.reload()}
+            >
+              새로고침
+            </button>
+            <a className="button" href="/">
+              홈으로
+            </a>
+          </div>
+        </section>
+      </main>
+    );
+  }
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <RealtimeProvider>
-          <AccountScopedPrototype />
-        </RealtimeProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <AppBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <RealtimeProvider>
+            <AccountScopedPrototype />
+          </RealtimeProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </AppBoundary>
   );
 }

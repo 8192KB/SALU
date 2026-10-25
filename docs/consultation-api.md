@@ -1,6 +1,6 @@
 # 상담 API 계약
 
-2026-10-16 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`·`V8__consultation_messages.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다. 디자이너의 첫 답변은 지금도 6장 답변 API로 보내고, 그 뒤의 메시지와 읽음은 7~9장을 씁니다.
+2026-10-23 기준 구현된 계약입니다. 서버는 `backend`의 `consultation` 패키지와 Flyway `V5__consultations.sql`·`V8__consultation_messages.sql`·`V12__consultation_photos.sql`, 화면은 `frontend/src/consultation-api.ts`가 이 문서를 따릅니다. 디자이너의 첫 답변은 지금도 6장 답변 API로 보내고, 그 뒤의 메시지와 읽음은 7~9장을 씁니다.
 
 고객이 지난 커트 기록 하나를 골라 디자이너에게 상담을 요청하고, 같은 상담 안에서 고객과 디자이너가 메시지를 주고받는 기능의 서버 API입니다. 디자이너의 첫 메시지가 답변입니다. 화면과 서버를 나눠 만들 때 이 문서를 기준으로 맞춥니다. 경로·필드·오류를 바꿔야 하면 코드보다 이 문서를 먼저 고치고 함께 작업하는 사람에게 알립니다.
 
@@ -12,7 +12,7 @@
 | 보낸 상담 목록 | `GET /api/my/sent-consultations` | 로그인한 회원 |
 | 받은 상담 목록 | `GET /api/my/received-consultations` | 디자이너 프로필이 있는 회원 |
 | 상담 상세 | `GET /api/consultations/{id}` | 보낸 회원, 받은 디자이너 |
-| 첨부 사진 | `GET /api/consultations/{id}/photo` | 보낸 회원, 받은 디자이너 |
+| 첨부 사진 | `GET /api/consultations/{id}/photos/{position}` | 보낸 회원, 받은 디자이너 |
 | 답변 보내기(첫 메시지) | `POST /api/consultations/{id}/reply` | 받은 디자이너 |
 | 메시지 목록 | `GET /api/consultations/{id}/messages` | 보낸 회원, 받은 디자이너 |
 | 메시지 보내기 | `POST /api/consultations/{id}/messages` | 보낸 회원, 받은 디자이너 |
@@ -24,7 +24,7 @@
 
 1. 고객이 디자이너 프로필에서 커트 기록을 고르고 이번 요청을 적어 보냅니다. `POST /api/consultations`
 2. 디자이너가 받은 상담 목록에서 상담을 열어 봅니다. `GET /api/my/received-consultations`, `GET /api/consultations/{id}`
-3. 디자이너가 첫 메시지(답변)를 보냅니다. 이때 상태가 `ANSWERED`로 바뀝니다. `POST /api/consultations/{id}/messages`
+3. 디자이너가 첫 답변을 보냅니다. 이때 상태가 `ANSWERED`로 바뀝니다. `POST /api/consultations/{id}/reply`(메시지 보내기로 보낸 디자이너의 첫 메시지도 답변이 됨)
 4. 고객과 디자이너가 같은 상담 안에서 메시지를 더 주고받습니다. 고객은 답변 전에도 메시지를 덧붙일 수 있습니다.
 5. 상대가 보낸 메시지를 화면에 보여 준 뒤 읽음 위치를 올립니다. `POST /api/consultations/{id}/read`
 
@@ -59,7 +59,11 @@
     "cutDate": "2026-09-01",
     "service": "커트",
     "summary": "옆머리가 떠요",
-    "photoUrl": "/api/consultations/5b1e7c2a-3f4d-4e8a-9c61-0d2f7a8b9e10/photo"
+    "photoUrl": "/api/consultations/5b1e7c2a-3f4d-4e8a-9c61-0d2f7a8b9e10/photos/0",
+    "photos": [
+      { "url": "/api/consultations/5b1e7c2a-3f4d-4e8a-9c61-0d2f7a8b9e10/photos/0", "label": "커트 당일" },
+      { "url": "/api/consultations/5b1e7c2a-3f4d-4e8a-9c61-0d2f7a8b9e10/photos/1", "label": "경과 D+12" }
+    ]
   },
   "request": "옆머리가 뜨는데 손질 방법이 궁금해요",
   "sentAt": "2026-10-14T03:12:45.123Z",
@@ -71,7 +75,8 @@
   "lastMessageAt": "2026-10-14T05:40:02.511Z",
   "unreadCount": 0,
   "reviewId": null,
-  "canReview": true
+  "canReview": true,
+  "viewerRole": "CUSTOMER"
 }
 ```
 
@@ -84,8 +89,9 @@
 | `designer` | 보낼 때의 디자이너 이름·소속 매장. 소속이 없으면 `salonName`은 `null` |
 | `customer.displayName` | 보낸 회원의 표시 이름. 이메일은 넣지 않음 |
 | `attachment` | 보낼 때의 커트 기록 복사본. 원본 기록을 고쳐도 바뀌지 않음 |
-| `attachment.summary` | 카드에 보이는 한 줄 설명. 좋았던 점, 없으면 가장 최근 불편한 점, 둘 다 없으면 `커트한 날의 기록` |
-| `attachment.photoUrl` | 첨부 사진 주소. `<img src>`에 그대로 사용. 사진이 없으면 `null` |
+| `attachment.summary` | 첨부한 기록 내용. 기록에서 바로 보내면 좋았던 점이나 가장 최근 불편한 점 한 줄, 커트 준비에서 보내면 고른 좋았던 점·경과를 줄마다 적은 글. 둘 다 없으면 `커트한 날의 기록` |
+| `attachment.photoUrl` | 첫 사진 주소. `photos[0].url`과 같음. 사진이 없으면 `null`. 이전 화면과 맞추려고 남김 |
+| `attachment.photos` | 첨부 사진 전부(보낸 순서, 최대 6장). `url`은 `<img src>`에 그대로 쓰고, `label`은 `커트 당일`·`경과 D+12`처럼 어느 때 사진인지. 사진이 없으면 `[]` |
 | `request` | 고객이 적은 이번 요청 |
 | `sentAt` | 보낸 시각 |
 | `reply` | 디자이너의 첫 메시지와 그 시각. 답변 전이면 `null` |
@@ -94,59 +100,29 @@
 | `unreadCount` | 상대가 보낸 메시지 중 내가 아직 읽음 표시하지 않은 수 |
 | `reviewId` | 이 상담의 후기 ID. 없으면 `null` |
 | `canReview` | 지금 로그인한 회원이 후기를 쓸 수 있는지. 보낸 회원이고 답변을 받았고 후기가 없을 때만 `true` |
+| `viewerRole` | 지금 로그인한 회원이 이 상담에서 `CUSTOMER`(보낸 회원)인지 `DESIGNER`(받은 디자이너)인지. 화면은 이 값으로 보낸 상담·받은 상담 화면을 고름 |
 
 화면에는 상태를 이렇게 표시합니다. 고객 화면 문구는 지금 예시 상담 화면과 같습니다.
 
 | `status` | 고객 화면 | 디자이너 화면 |
 |---|---|---|
-| `REQUESTED` | 답변 대기 | 답변 전 |
+| `REQUESTED` | 답변 대기 | 답변 대기 |
 | `ANSWERED` | 답변 도착 | 답변 완료 |
 
-TypeScript로 쓰면 다음과 같습니다.
-
-```ts
-export type ConsultationStatus = 'REQUESTED' | 'ANSWERED';
-
-export type Consultation = {
-  id: string;
-  status: ConsultationStatus;
-  designer: { id: string; name: string; salonName: string | null };
-  customer: { displayName: string };
-  attachment: {
-    cutDate: string;
-    service: string;
-    summary: string;
-    photoUrl: string | null;
-  };
-  request: string;
-  sentAt: string;
-  reply: { content: string; repliedAt: string } | null;
-  canReply: boolean;
-  lastMessageAt: string;
-  unreadCount: number;
-  reviewId: string | null;
-  canReview: boolean;
-};
-
-export type ConsultationMessage = {
-  id: number;
-  sender: 'CUSTOMER' | 'DESIGNER';
-  content: string;
-  sentAt: string;
-  mine: boolean;
-};
-```
+TypeScript 타입은 `frontend/src/consultation-api.ts`의 `Consultation`·`ConsultationMessage`입니다.
 
 ## 1. 상담 요청 보내기
 
 `POST /api/consultations`
 
-글과 사진을 한 번에 보내려고 `multipart/form-data`를 씁니다. 서버는 둘을 한 트랜잭션으로 저장하므로 글이나 사진 한쪽만 남지 않습니다.
+글과 사진을 한 번에 보내려고 `multipart/form-data`를 씁니다. 서버는 둘을 한 트랜잭션으로 저장하므로 글이나 사진 일부만 남지 않습니다.
 
 | 부분 이름 | 형식 | 필수 | 내용 |
 |---|---|---|---|
 | `consultation` | `application/json` | 필수 | 아래 JSON |
-| `photo` | `image/jpeg`, `image/png`, `image/webp` | 선택 | 첨부할 커트 사진 1장, 5 MiB 이하 |
+| `photo` | `image/jpeg`, `image/png`, `image/webp` | 선택 | 첨부할 사진. 같은 이름으로 0~6개, 장당 5 MiB 이하, 요청 전체 16 MiB 이하. 보낸 순서가 `position` 0~5 |
+
+화면은 긴 변이 1,600px을 넘거나 1.5 MiB보다 큰 사진을 줄여서 보냅니다. 같은 요청을 다시 보낼 때는 처음 줄인 파일을 그대로 씁니다.
 
 ```json
 {
@@ -156,7 +132,8 @@ export type ConsultationMessage = {
   "attachment": {
     "cutDate": "2026-09-01",
     "service": "커트",
-    "summary": "옆머리가 떠요"
+    "summary": "옆머리가 떠요",
+    "photoLabels": ["커트 당일", "경과 D+12"]
   }
 }
 ```
@@ -169,6 +146,7 @@ export type ConsultationMessage = {
 | `attachment.cutDate` | `YYYY-MM-DD`, 서울 기준 오늘 이하 |
 | `attachment.service` | 1~60자 |
 | `attachment.summary` | 1~2,000자 |
+| `attachment.photoLabels` | 선택. 사진마다 1~30자. 있으면 `photo` 개수와 같아야 함. 없으면 모두 `사진` |
 
 브라우저에서는 이렇게 보냅니다.
 
@@ -176,7 +154,7 @@ export type ConsultationMessage = {
 const form = new FormData();
 // JSON 부분은 application/json Blob으로 넣어야 서버가 JSON으로 읽음
 form.append('consultation', new Blob([JSON.stringify(body)], { type: 'application/json' }));
-if (photo) form.append('photo', photo);
+photos.forEach((photo) => form.append('photo', photo));
 
 const response = await fetch('/api/consultations', {
   method: 'POST',
@@ -191,11 +169,11 @@ const response = await fetch('/api/consultations', {
 |---|---|
 | `201` + 상담 한 건 | 새로 저장함 |
 | `200` + 상담 한 건 | 같은 `requestKey`로 같은 내용을 다시 보냄. 처음 저장한 상담을 그대로 돌려줌 |
-| `400 INVALID_REQUEST` | 필수 값 누락, 길이 초과, 날짜 오류, 내 디자이너 프로필에 보냄 |
+| `400 INVALID_REQUEST` | 필수 값 누락, 길이 초과, 날짜 오류, 내 디자이너 프로필에 보냄, 사진 7장 이상, `photoLabels` 개수가 사진과 다름 |
 | `404 RESOURCE_NOT_FOUND` | 디자이너 프로필이 없거나 비공개이거나 정지된 계정 |
 | `409 RESOURCE_CONFLICT` | 같은 `requestKey`로 다른 내용을 보냄 |
 | `409 STORAGE_CONTEXT_CHANGED` | 다른 탭에서 로그인 계정이 바뀜 |
-| `413 UPLOAD_TOO_LARGE` | 사진이 5 MiB를 넘음 |
+| `413 UPLOAD_TOO_LARGE` | 사진 한 장이 5 MiB를 넘거나 요청 전체가 16 MiB를 넘음 |
 | `415 UNSUPPORTED_MEDIA_TYPE` | JPEG·PNG·WebP가 아니거나 열 수 없는 사진 |
 
 버튼을 두 번 누르거나 응답을 받지 못해 다시 보내도 같은 `requestKey`면 상담은 한 건만 생깁니다. 화면은 `200`과 `201`을 같은 성공으로 처리합니다. 보낸 뒤 새 상담을 쓰려면 새 `requestKey`를 만듭니다.
@@ -222,9 +200,9 @@ const response = await fetch('/api/consultations', {
 
 ## 5. 첨부 사진
 
-`GET /api/consultations/{id}/photo`
+`GET /api/consultations/{id}/photos/{position}`
 
-사진 파일을 그대로 돌려줍니다. `Content-Type`은 `image/jpeg`·`image/png`·`image/webp` 중 하나이고 `X-Content-Type-Options: nosniff`가 붙습니다. 볼 수 있는 사람은 상세와 같고, 사진이 없는 상담도 `404`입니다.
+`position`은 0부터 보낸 순서입니다. 사진 파일을 그대로 돌려줍니다. `Content-Type`은 `image/jpeg`·`image/png`·`image/webp` 중 하나이고 `X-Content-Type-Options: nosniff`가 붙습니다. 볼 수 있는 사람은 상세와 같고, 그 위치에 사진이 없어도 `404`입니다. 예전 주소 `GET /api/consultations/{id}/photo`는 `position` 0과 같습니다.
 
 `<img src>`로 불러올 때는 헤더를 넣을 수 없으므로 이 요청에는 `X-SALU-Storage-Context`를 요구하지 않습니다. 로그인 cookie로만 확인합니다.
 
@@ -238,7 +216,7 @@ const response = await fetch('/api/consultations', {
 { "content": "드라이할 때 옆머리를 아래로 눌러 말리면 덜 떠요." }
 ```
 
-`content`는 앞뒤 공백을 뺀 1~2,000자입니다. 디자이너의 첫 메시지를 보내는 API이며, 이미 답변한 상담에는 `409`입니다. 지금 화면과 맞추려고 남겼습니다. 대화 화면은 아래 메시지 보내기를 쓰면 되고, 디자이너의 첫 메시지도 같은 방식으로 답변이 됩니다.
+`content`는 앞뒤 공백을 뺀 1~2,000자입니다. 받은 상담 화면의 첫 답변이 이 API를 씁니다. 이미 답변한 상담에는 `409`입니다.
 
 | 응답 | 언제 |
 |---|---|
@@ -316,7 +294,7 @@ const response = await fetch('/api/consultations', {
 | `RESOURCE_NOT_FOUND` | 404 | "상담을 찾을 수 없어요." 보낼 때는 "지금은 이 디자이너에게 상담을 보낼 수 없어요." |
 | `RESOURCE_CONFLICT` | 409 | 보낼 때는 "이미 보낸 요청이에요. 새로운 상담 요청을 작성해 주세요." 답변할 때는 상세를 다시 불러옴 |
 | `STORAGE_CONTEXT_CHANGED` | 409 | "로그인 계정이 바뀌었어요. 화면을 새로고침해 주세요." |
-| `UPLOAD_TOO_LARGE` | 413 | "사진은 5MB 이하만 보낼 수 있어요." |
+| `UPLOAD_TOO_LARGE` | 413 | "사진이 너무 커서 보낼 수 없어요. 사진을 줄이거나 몇 장 빼고 보내 주세요." |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | "JPEG, PNG, WebP 사진만 보낼 수 있어요." |
 | `INTERNAL_ERROR`, `DATABASE_UNAVAILABLE` | 500, 503 | "잠시 후 다시 시도해 주세요." 입력 내용은 지우지 않음 |
 | 연결 실패 | — | 자동으로 다시 보내지 않음. 입력을 유지하고 다시 보내기 안내 |
@@ -326,26 +304,23 @@ const response = await fetch('/api/consultations', {
 - 서버는 개인 커트 기록 원본을 읽지 못합니다. 기록은 기기와 암호화 백업에만 있습니다. 그래서 보내는 순간 화면이 넣은 복사본만 저장합니다.
 - 고른 커트의 담당자가 이 디자이너인지는 화면에서 확인합니다. 서버는 디자이너 프로필이 공개 상태인지, 보내는 회원 자신의 프로필이 아닌지만 확인합니다.
 - 디자이너 자격은 확인하지 않습니다. 로그인한 회원이 직접 등록한 프로필입니다.
-- `/examples` 예시 체험은 이 API를 쓰지 않고 지금처럼 메모리에서만 동작합니다.
+- `/examples` 예시 체험은 이 API를 쓰지 않습니다. 예시 상담과 예시 답변은 화면의 메모리에서만 만듭니다([개발 계약](development-contract.md)의 화면과 자료).
 - 개인 암호화 백업에 저장된 것은 상담 전달이 아닙니다. 이 API가 `201` 또는 `200`을 돌려줬을 때만 디자이너에게 전달된 것입니다.
 
 ## 화면
 
-| 주소 | 화면 |
-|---|---|
-| `/designers/{id}` | 디자이너 프로필. 이 디자이너가 담당한 커트 기록이 있으면 `상담 요청` |
-| `/consultations/new` | 첨부할 커트 기록 선택과 이번 요청 입력. 준비 내용(`?preview=`)에서 오면 그 내용을 첨부하고 담당이 아닌 디자이너에게도 보냄. 로그인하지 않았으면 로그인 안내 |
-| `/consultations`, `/consultations/{id}` | 보낸 상담 목록과 상세. 상세 아래쪽에서 디자이너와 메시지를 주고받음. 들어올 때·창으로 돌아올 때·실시간 신호를 받을 때·`새 답변 확인`으로 다시 조회 |
-| `/consultations/received`, `/consultations/received/{id}` | 받은 상담 목록과 상세. 첫 답변은 답변 칸으로 보내고 완료 화면을 거침. 그 뒤에는 상세에서 메시지를 주고받음. 내 계정 화면의 `받은 상담`에서 들어감. 다시 조회하는 때는 보낸 상담과 같음 |
+주소별 화면과 이동은 [화면 흐름](screen-flow.md)의 상담 표에 있습니다. 보낸·받은 상담 화면은 들어올 때, 창으로 돌아올 때, 실시간 신호를 받을 때 다시 조회하고, 목록은 `목록 새로고침`으로도 다시 조회합니다.
 
 목록은 `lastMessageAt`이 최근인 상담부터 보여 주고, `unreadCount`가 있으면 이름 옆에 숫자로 표시합니다. 상대 메시지는 상세 화면이 보이는 동안에만 읽음 표시를 보냅니다.
 
-첨부 사진은 고른 커트 기록(또는 준비 내용에서 고른 사진)의 첫 사진 한 장을 기기 저장소에서 읽어 함께 보냅니다.
+첨부 사진은 기록에서 바로 보내면 그 커트 당일 사진 첫 장, 준비 내용에서 보내면 준비할 때 고른 사진 전부(최대 6장)를 기기 저장소에서 읽어 함께 보냅니다. 준비 내용의 좋았던 점·경과는 `attachment.summary`, 원하는 점·집에서 손질·질문은 `request`에 줄마다 적습니다. 보내기 전 화면에 무엇이 가는지 그대로 보여 줍니다.
+
+화면은 `viewerRole`이 주소와 다르면(받은 디자이너가 `/consultations/{id}`를 열거나, 보낸 회원이 `/consultations/received/{id}`를 열면) 맞는 주소로 바꿔 엽니다.
 
 ## 이번 범위에 넣지 않은 것
 
 - 메시지에 사진 첨부, 메시지 수정·삭제
-- 사진 여러 장, 경과 기록 여러 개 첨부
+- 7장 이상의 사진, 준비 없이 기록에서 바로 보낼 때 경과 사진 첨부
 - 100건이 넘는 상담 목록과 200개가 넘는 오래된 메시지의 페이지 나누기
 - 보낸 상담 취소·삭제, 상담 종료 상태
 

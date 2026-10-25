@@ -2,7 +2,6 @@
 
 이메일 회원가입·비밀번호 로그인과 Google OIDC/네이버 OAuth2는 같은 Spring 세션을 사용합니다. 개인 자료 연결은 [저장 계약](personal-storage.md)을 따릅니다.
 
-- 신규 소셜 신원은 provider+subject로 식별, 이메일 자동 병합 금지
 - 새 가입과 실제 제공자 동의·콜백은 별도 실환경 검증 필요
 
 ## API
@@ -30,7 +29,6 @@
 - HTTPS에서는 SALU_COOKIE_SECURE=true. 인증 성공 시 session ID 교체, 이전 CSRF 무효화
 - 현재 계정 상태는 보호 요청에서 DB 재확인
 - 로그인 조회는 단일 SELECT로 불필요한 쓰기 트랜잭션을 추가하지 않음
-- 다중 변경 Service의 트랜잭션 규칙은 development-contract 유지
 
 ### 입력과 로그인 제한
 
@@ -45,13 +43,13 @@
 
 - DB 장애: 로그인 503/AUTHENTICATION_UNAVAILABLE, 기존 세션 요청 503/DATABASE_UNAVAILABLE. 내부 DB 예외를 원인 없이 고정 예외로 바꿔 인증 필터 로그의 SQL·비밀 노출 차단
 - DB 장애에도 유효 CSRF 로그아웃 가능
-- 공개 health는 기존503/HealthResponse 계약 유지
+- 공개 health는 기존 503/HealthResponse 계약 유지
 
 ## 검증 기준
 
-- 검증 코드는 로컬에 보관, 운영 jar에는 테스트 API·테이블·보안 완화를 포함하지 않음
-- 테스트 전용 DB와 임시 계정 사용, 비밀번호·CSRF가 포함된 trace·영상·스크린샷 저장 금지
+- 공통 검증 규칙(로컬 전용 검증 코드·테스트 DB·증거에 비밀 값 금지)은 [개발 계약](development-contract.md)의 인증·저장·검증
 - 세션 ID 교체·이전 세션/CSRF 차단, 로그인 유지·로그아웃 후 401 확인
+- 소셜 로그인·계정 연결의 OAuth state/nonce·ACTIVE 상태·연결 만료 확인
 - 잘못된 입력·중복 parameter·긴 비밀번호·비활성 계정·인증 중 상태 변경 검사
 - 고정 실패 응답·해시 비노출, IP 제한·헤더 위조, DB 장애·복구 확인
 - 기존 코드의 role/memberId 신뢰·CSRF 예외·평문 로그를 이식하지 않음
@@ -72,5 +70,16 @@
 
 - CSRF_INVALID만 한 번 재조회·재전송
 - ACCESS_DENIED·네트워크 실패는 자동 재전송 금지
-- 제공자 로그인 전 기기 초안 저장을 기다림
-- 소셜 연결은 CSRF·현재 principal/storageContext·provider·만료·OAuth state 검증, 다른 회원 신원을 이동하지 않음
+
+## 소셜 로그인
+
+- Google OIDC와 네이버 OAuth2는 이메일 로그인과 같은 세션·ROLE_MEMBER·ACTIVE·CSRF·세션 교체 계약 사용
+- `/api/auth/oauth2/providers`는 client 설정이 완전한 제공자만 반환. client가 없으면 버튼을 숨기고 이메일 로그인만 씀
+- `/api/auth/oauth2/authorize/{provider}` → `/api/auth/oauth2/callback/{provider}` → 고정 `/auth/complete`. 실패는 고정 `/login?socialError=1`. 화면은 출발 전 기기 초안 저장 완료를 기다림
+- 신원은 provider+subject로 식별하고 이메일로 자동 병합하지 않음. 소셜 신규 회원의 이메일·비밀번호는 nullable
+- `/account`의 계정 연결은 CSRF·현재 principal/storageContext·제공자·5분 만료·OAuth state를 검증하고, 다른 회원의 소셜 신원을 옮기지 않음
+
+- 설정: `.env.example`의 SALU_GOOGLE/NAVER_CLIENT_ID·CLIENT_SECRET·PUBLIC_ORIGIN. 제공자 관리자 화면에 정확히 `{PUBLIC_ORIGIN}/api/auth/oauth2/callback/google` 또는 `/naver` 등록
+- 비밀 값·등록 정보는 Git으로 공유하지 않음
+- 실제 제공자 동의·콜백은 SALU client 설정 뒤 따로 검증. 테스트용 제공자 검증을 실제 Google·네이버 계정 검증으로 주장하지 않음
+- 기준 문서: [Spring OAuth2/OIDC 구성](https://docs.spring.io/spring-security/reference/servlet/oauth2/login/advanced.html), [Google 웹 서버 로그인](https://developers.google.com/identity/protocols/oauth2/web-server), [네이버 로그인 API](https://developers.naver.com/docs/login/api/api.md)

@@ -1,6 +1,6 @@
 # 알림·실시간 API 계약
 
-2026-10-20 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`·`V11__answer_notification.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/realtime.tsx`(실시간 연결)와 `frontend/src/notifications.tsx`(머리글 알림 버튼·`/notifications` 목록)가 따릅니다. 알림 문구와 눌렀을 때 갈 화면은 `notifications.tsx`의 `describe` 한 곳에서 정합니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
+2026-10-23 기준 구현된 계약입니다. 서버는 `backend`의 `notification`·`realtime` 패키지와 Flyway `V7__notifications.sql`·`V11__answer_notification.sql`·`V13__moderation_notifications.sql`이 이 문서를 따릅니다. 화면은 `frontend/src/realtime.tsx`(실시간 연결)와 `frontend/src/notifications.tsx`(머리글 알림 버튼·`/notifications` 목록)가 따릅니다. 알림 문구와 눌렀을 때 갈 화면은 `notifications.tsx`의 `describe` 한 곳에서 정합니다. 경로·필드·종류를 바꿀 때는 코드보다 이 문서를 먼저 고칩니다.
 
 ## 한눈에 보기
 
@@ -16,7 +16,7 @@
 
 - 모두 로그인이 필요합니다. `POST`에는 CSRF 헤더만 넣고 `X-SALU-Storage-Context`는 넣지 않습니다.
 - 응답에는 `Cache-Control: no-store`가 붙습니다. 시각은 UTC ISO 8601 문자열입니다.
-- 알림은 업무(상담 보내기, 메시지, 후기, 댓글)와 같은 transaction에서 저장합니다. 업무가 실패하면 알림도 남지 않습니다.
+- 알림은 업무(상담 보내기, 메시지, 후기, 댓글, 숨김, 제재)와 같은 transaction에서 저장합니다. 업무가 실패하면 알림도 남지 않습니다.
 - 서버는 알림의 종류와 대상 ID만 저장합니다. 화면에 보일 문구와 눌렀을 때 갈 화면은 화면 쪽 한 곳에서 `type`으로 정합니다. 서버 응답에 주소나 문장을 넣지 않습니다.
 
 ## 알림 한 건의 모양
@@ -39,32 +39,19 @@
 | `CONSULTATION_MESSAGE` | 상대 참여자 | 상담 ID | 보낸 사람 이름(상담 당시 이름) | 고객은 `/consultations/{id}`, 디자이너는 `/consultations/received/{id}` |
 | `REVIEW_RECEIVED` | 후기를 받은 디자이너 | 상담 ID | 후기를 쓴 고객 이름 | `/consultations/received/{id}` |
 | `COMMUNITY_COMMENT` | 글쓴이(자기 댓글은 제외) | 글 ID | 댓글 쓴 사람 이름 | `/community/{id}` |
+| `COMMUNITY_POST_HIDDEN` | 숨겨진 글의 글쓴이 | 글 ID | `null` | `/community/mine` |
+| `COMMUNITY_COMMENT_HIDDEN` | 숨겨진 댓글을 쓴 회원 | 그 댓글이 달린 글 ID | `null` | `/community/{id}` |
+| `COMMUNITY_SUSPENDED` | 제재받은 회원 | 제재 ID | `null` | `/community/mine`(이용 제한 안내) |
+
+숨김 알림은 보이던 글·댓글이 숨김으로 바뀔 때(관리자 숨기기, 신고 5건 자동 숨김)만 쌓입니다. 이미 숨겨진 것을 관리자가 확정해도 다시 쌓이지 않습니다.
 
 디자이너의 첫 메시지는 답변이라 `CONSULTATION_ANSWERED`로, 그 뒤의 메시지는 `CONSULTATION_MESSAGE`로 쌓입니다. 2026-10-20 전에 쌓인 답변 알림은 `CONSULTATION_MESSAGE`로 남아 있습니다.
 
 `CONSULTATION_MESSAGE`는 받는 사람이 그 상담의 고객인지 디자이너인지에 따라 갈 화면이 다릅니다. 화면은 상담 상세를 불러와 판단하거나, 보낸 상담 목록에 그 ID가 있는지로 정합니다.
 
-종류를 늘리려면 `NotificationService`의 상수와 `V11`의 CHECK 제약을 새 migration으로 함께 바꾸고, 이 표를 먼저 고칩니다.
+종류를 늘리려면 `NotificationService`의 상수와 `V13`의 CHECK 제약을 새 migration으로 함께 바꾸고, 이 표를 먼저 고칩니다.
 
-```ts
-export type NotificationType =
-  | 'CONSULTATION_REQUESTED'
-  | 'CONSULTATION_ANSWERED'
-  | 'CONSULTATION_MESSAGE'
-  | 'REVIEW_RECEIVED'
-  | 'COMMUNITY_COMMENT';
-
-export type Notification = {
-  id: number;
-  type: NotificationType;
-  targetId: string;
-  actorName: string | null;
-  createdAt: string;
-  read: boolean;
-};
-
-export type Inbox = { unreadCount: number; items: Notification[] };
-```
+TypeScript 타입은 `frontend/src/notifications.tsx`의 `NotificationType`·`Notification`입니다.
 
 ## 1. 최근 알림
 
@@ -88,6 +75,8 @@ export type Inbox = { unreadCount: number; items: Notification[] };
 - `POST /api/my/notifications/read-all` → `204`.
 
 알림을 읽어도 상담 메시지의 읽음 위치는 바뀌지 않습니다. 상담 화면에서는 [상담 API](consultation-api.md)의 읽음 표시를 따로 부릅니다.
+
+알림 목록을 거치지 않고 상담·글 상세를 열어도 배지가 남지 않게, 화면은 상세가 보이는 동안 그 대상 ID의 안 읽은 알림을 위 API로 하나씩 읽음으로 바꿉니다. 보낸 상담 상세는 `CONSULTATION_ANSWERED`·`CONSULTATION_MESSAGE`, 받은 상담 상세는 `CONSULTATION_REQUESTED`·`CONSULTATION_MESSAGE`·`REVIEW_RECEIVED`, 글 상세는 `COMMUNITY_COMMENT`·`COMMUNITY_COMMENT_HIDDEN`이 대상입니다. 글 상세와 받은 상담의 후기처럼 실시간 신호로 저절로 바뀌지 않는 내용은 화면이 그 대상을 다시 받은 뒤에 읽음으로 바꿔, 보지 못한 변경이 읽음으로 넘어가지 않게 합니다. 메뉴를 옮겨 숨겨진 화면에서는 바꾸지 않습니다.
 
 ## 4. 실시간 신호
 

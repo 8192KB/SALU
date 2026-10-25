@@ -67,7 +67,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | 위치 | 용도 |
 |---|---|
 | `resources/application.yml` | 서버 설정(DB·세션·업로드 크기) |
-| `resources/db/migration/V1~V10` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담, V6 회원 역할, V7 알림, V8 상담 메시지, V9 후기·찜·소속 이력, V10 커뮤니티. 적용한 파일은 고치지 않고 새 번호로 추가 |
+| `resources/db/migration/V1~V13` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담, V6 회원 역할, V7 알림, V8 상담 메시지, V9 후기·찜·소속 이력, V10 커뮤니티, V11 답변 알림, V12 상담 사진 여러 장, V13 숨김·제재 알림. 적용한 파일은 고치지 않고 새 번호로 추가 |
 | `resources/personal-backup-schema.json` | 백업 자료 형식. `frontend/scripts/generate-backup-schema.mjs`로 생성 |
 | `pom.xml`, `mvnw`, `Dockerfile` | 빌드·배포 이미지 |
 

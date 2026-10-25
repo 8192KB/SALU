@@ -33,6 +33,7 @@ public class CommunityController {
     }
     @GetMapping("/api/community/posts/{id}/comments") ResponseEntity<List<CommunityService.Comment>> comments(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id) { return ok(service.comments(member, id)); }
     @GetMapping("/api/my/community-posts") ResponseEntity<List<CommunityService.PostSummary>> mine(@AuthenticationPrincipal MemberPrincipal member) { return ok(service.mine(member)); }
+    @GetMapping("/api/my/community-status") ResponseEntity<CommunityService.Status> status(@AuthenticationPrincipal MemberPrincipal member) { return ok(service.status(member)); }
 
     @PostMapping(path="/api/community/posts", consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<CommunityService.Post> write(@AuthenticationPrincipal MemberPrincipal member, @RequestHeader(StorageContext.HEADER) String context,

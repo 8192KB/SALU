@@ -19,9 +19,10 @@ public class ConsultationController {
 
     @PostMapping(path="/api/consultations", consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<ConsultationService.Consultation> send(@AuthenticationPrincipal MemberPrincipal member, @RequestHeader("X-SALU-Storage-Context") String context,
-            @RequestPart("consultation") ConsultationService.SendInput input, @RequestPart(value="photo", required=false) MultipartFile photo) throws IOException {
-        var upload = photo == null ? null : new ConsultationService.Upload(photo.getContentType(), readPhoto(photo));
-        var sent = service.send(member, context, input, upload);
+            @RequestPart("consultation") ConsultationService.SendInput input, @RequestPart(value="photo", required=false) List<MultipartFile> photos) throws IOException {
+        var uploads = new java.util.ArrayList<ConsultationService.Upload>();
+        if (photos != null) for (var photo : photos) uploads.add(new ConsultationService.Upload(photo.getContentType(), readPhoto(photo)));
+        var sent = service.send(member, context, input, uploads);
         return ResponseEntity.status(sent.created() ? 201 : 200).cacheControl(CacheControl.noStore()).body(sent.consultation());
     }
     private static byte[] readPhoto(MultipartFile photo) throws IOException {
@@ -31,8 +32,10 @@ public class ConsultationController {
     @GetMapping("/api/my/sent-consultations") ResponseEntity<List<ConsultationService.Consultation>> sent(@AuthenticationPrincipal MemberPrincipal member) { return ok(service.sent(member)); }
     @GetMapping("/api/my/received-consultations") ResponseEntity<List<ConsultationService.Consultation>> received(@AuthenticationPrincipal MemberPrincipal member) { return ok(service.received(member)); }
     @GetMapping("/api/consultations/{id}") ResponseEntity<ConsultationService.Consultation> get(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id) { return ok(service.get(member, id)); }
-    @GetMapping("/api/consultations/{id}/photo") ResponseEntity<byte[]> photo(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id) {
-        var photo = service.photo(member, id);
+    // 예전 주소는 첫 사진
+    @GetMapping("/api/consultations/{id}/photo") ResponseEntity<byte[]> firstPhoto(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id) { return photo(member, id, 0); }
+    @GetMapping("/api/consultations/{id}/photos/{position}") ResponseEntity<byte[]> photo(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id, @PathVariable int position) {
+        var photo = service.photo(member, id, position);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.parseMediaType(photo.contentType())).header("X-Content-Type-Options","nosniff").body(photo.bytes());
     }
     @GetMapping("/api/consultations/{id}/messages") ResponseEntity<List<ConsultationService.Message>> messages(@AuthenticationPrincipal MemberPrincipal member, @PathVariable String id, @RequestParam(required=false) Long after) { return ok(service.messages(member, id, after)); }

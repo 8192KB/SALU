@@ -5,6 +5,7 @@ import java.util.Set;
 import kr.salu.auth.MemberPrincipal;
 import kr.salu.common.Inputs;
 import kr.salu.common.error.ApiException;
+import kr.salu.notification.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,8 +21,8 @@ public class CommunityAdminService {
     public record Report(String reason, String detail, String status, String createdAt) {}
     public record PostReview(CommunityService.Post post, long authorId, List<Report> reports) {}
     public record Sanction(long id, long memberId, String reason, String endsAt, String createdAt, String liftedAt, boolean active) {}
-    private final CommunityAdminMapper mapper; private final CommunityMapper posts;
-    public CommunityAdminService(CommunityAdminMapper mapper, CommunityMapper posts) { this.mapper=mapper; this.posts=posts; }
+    private final CommunityAdminMapper mapper; private final CommunityMapper posts; private final NotificationService notifications;
+    public CommunityAdminService(CommunityAdminMapper mapper, CommunityMapper posts, NotificationService notifications) { this.mapper=mapper; this.posts=posts; this.notifications=notifications; }
 
     private static List<String> reasons(String value) { return value == null ? List.of() : List.of(value.split(",")); }
 
@@ -41,24 +42,29 @@ public class CommunityAdminService {
         return new PostReview(CommunityService.detail(row, 0), row.authorId(), mapper.postReports(id).stream().map(CommunityAdminService::report).toList());
     }
 
-    // HIDE는 숨기고 신고를 받아들임, KEEP은 다시 보이게 하고 신고를 기각함. 작성자가 지운 글은 신고만 정리함
+    // HIDE는 숨기고 신고를 받아들임, KEEP은 다시 보이게 하고 앞서 받아들인 신고까지 기각함. 작성자가 지운 글은 신고만 정리함
+    // 보이던 것을 숨길 때만 작성자에게 알림. 신고가 쌓여 이미 숨겨진 것을 확정할 때는 다시 알리지 않음
     @Transactional
     public void decidePost(MemberPrincipal admin, String id, Decision decision) {
-        String action = action(decision);
+        boolean hide = "HIDE".equals(action(decision));
         if (!Inputs.uuid(id)) throw ApiException.notFound();
         var post = posts.lockPost(id);
         if (post == null) throw ApiException.notFound();
-        if (!"DELETED".equals(post.status()) && mapper.setPostStatus(id, "HIDE".equals(action) ? "HIDDEN" : "VISIBLE") != 1) throw ApiException.conflict();
-        mapper.closePostReports(id, "HIDE".equals(action) ? "ACCEPTED" : "DISMISSED", admin.id());
+        if (!"DELETED".equals(post.status()) && mapper.setPostStatus(id, hide ? "HIDDEN" : "VISIBLE") != 1) throw ApiException.conflict();
+        mapper.closePostReports(id, hide ? "ACCEPTED" : "DISMISSED", admin.id());
+        if (!hide) mapper.dismissAcceptedPostReports(id, admin.id());
+        if (hide && "VISIBLE".equals(post.status())) notifications.create(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, id, null);
     }
 
     @Transactional
     public void decideComment(MemberPrincipal admin, long id, Decision decision) {
-        String action = action(decision);
+        boolean hide = "HIDE".equals(action(decision));
         var comment = posts.lockComment(id);
         if (comment == null) throw ApiException.notFound();
-        if (!"DELETED".equals(comment.status()) && mapper.setCommentStatus(id, "HIDE".equals(action) ? "HIDDEN" : "VISIBLE") != 1) throw ApiException.conflict();
-        mapper.closeCommentReports(id, "HIDE".equals(action) ? "ACCEPTED" : "DISMISSED", admin.id());
+        if (!"DELETED".equals(comment.status()) && mapper.setCommentStatus(id, hide ? "HIDDEN" : "VISIBLE") != 1) throw ApiException.conflict();
+        mapper.closeCommentReports(id, hide ? "ACCEPTED" : "DISMISSED", admin.id());
+        if (!hide) mapper.dismissAcceptedCommentReports(id, admin.id());
+        if (hide && "VISIBLE".equals(comment.status())) notifications.create(comment.authorId(), NotificationService.COMMUNITY_COMMENT_HIDDEN, comment.postId(), null);
     }
 
     @Transactional(readOnly=true)
@@ -80,7 +86,9 @@ public class CommunityAdminService {
         if (mapper.memberExists(member) != 1) throw ApiException.notFound();
         if (member == admin.id()) throw ApiException.invalidRequest();
         if (mapper.insertSanction(member, reason, input.days(), admin.id()) != 1) throw ApiException.conflict();
-        return sanction(mapper.sanction(mapper.lastId()));
+        long id = mapper.lastId();
+        notifications.create(member, NotificationService.COMMUNITY_SUSPENDED, Long.toString(id), null);
+        return sanction(mapper.sanction(id));
     }
 
     @Transactional

@@ -7,7 +7,7 @@ import org.apache.ibatis.annotations.*;
 @Mapper
 public interface NotificationMapper {
     record Row(long id, String type, String targetId, String actorName, Instant createdAt, Instant readAt) {}
-    @Insert("INSERT INTO notifications(member_id,type,target_id,actor_name) VALUES(#{member},#{type},#{target},#{actor})") int insert(long member, String type, String target, String actor);
+    @Insert("INSERT INTO notifications(member_id,type,target_id,actor_name) VALUES(#{member},#{type},#{target},#{actor,jdbcType=VARCHAR})") int insert(long member, String type, String target, String actor);
     @Select("SELECT LAST_INSERT_ID()") long lastId();
     @Select("SELECT id,type,target_id,actor_name,created_at,read_at FROM notifications WHERE member_id=#{member} ORDER BY id DESC LIMIT 50") List<Row> recent(long member);
     @Select("SELECT COUNT(*) FROM notifications WHERE member_id=#{member} AND read_at IS NULL") int unread(long member);

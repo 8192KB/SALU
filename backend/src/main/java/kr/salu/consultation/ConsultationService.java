@@ -3,6 +3,8 @@ package kr.salu.consultation;
 import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import kr.salu.auth.MemberPrincipal;
@@ -19,7 +21,8 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class ConsultationService {
-    public record AttachmentInput(String cutDate, String service, String summary) {}
+    public static final int MAX_PHOTOS = 6;
+    public record AttachmentInput(String cutDate, String service, String summary, List<String> photoLabels) {}
     public record SendInput(String requestKey, String designerId, String request, AttachmentInput attachment) {}
     public record MessageInput(String clientKey, String content) {}
     public record ReadInput(Long messageId) {}
@@ -27,10 +30,11 @@ public class ConsultationService {
     public record Sent(boolean created, Consultation consultation) {}
     public record Posted(boolean created, Message message) {}
     public record Consultation(String id, String status, DesignerView designer, CustomerView customer, Attachment attachment,
-        String request, String sentAt, Reply reply, boolean canReply, String lastMessageAt, int unreadCount, String reviewId, boolean canReview) {}
+        String request, String sentAt, Reply reply, boolean canReply, String lastMessageAt, int unreadCount, String reviewId, boolean canReview, String viewerRole) {}
     public record DesignerView(String id, String name, String salonName) {}
     public record CustomerView(String displayName) {}
-    public record Attachment(String cutDate, String service, String summary, String photoUrl) {}
+    public record PhotoView(String url, String label) {}
+    public record Attachment(String cutDate, String service, String summary, String photoUrl, List<PhotoView> photos) {}
     public record Reply(String content, String repliedAt) {}
     public record Message(long id, String sender, String content, String sentAt, boolean mine) {}
     public record PhotoFile(String contentType, byte[] bytes) {}
@@ -41,24 +45,28 @@ public class ConsultationService {
     public ConsultationService(ConsultationMapper mapper, BackupCrypto crypto, ObjectMapper json, NotificationService notifications, RealtimePublisher realtime) {
         this.mapper=mapper; this.crypto=crypto; this.json=json; this.notifications=notifications; this.realtime=realtime;
     }
-    private static String aad(String id) { return "salu:v1:consultation:" + id + ":photo"; }
+    // 첫 사진은 V12 전에 저장한 사진과 같은 값을 써서 예전 사진도 그대로 풀림
+    private static String aad(String id, int position) { return "salu:v1:consultation:" + id + ":photo" + (position == 0 ? "" : ":" + position); }
 
     @Transactional(rollbackFor=Exception.class)
-    public Sent send(MemberPrincipal principal, String context, SendInput input, Upload photo) {
+    public Sent send(MemberPrincipal principal, String context, SendInput input, List<Upload> uploads) {
         StorageContext.check(principal, context);
         if (input == null || input.attachment() == null || !Inputs.uuid(input.requestKey()) || !Inputs.uuid(input.designerId())) throw ApiException.invalidRequest();
         String request = Inputs.text(input.request(), 2000), service = Inputs.text(input.attachment().service(), 60), summary = Inputs.text(input.attachment().summary(), 2000);
         LocalDate cutDate;
         try { cutDate = LocalDate.parse(input.attachment().cutDate()); } catch (RuntimeException e) { throw ApiException.invalidRequest(); }
         if (cutDate.isAfter(LocalDate.now(SEOUL))) throw ApiException.invalidRequest();
-        if (photo != null) {
+        List<Upload> photos = uploads == null ? List.of() : uploads;
+        if (photos.size() > MAX_PHOTOS) throw ApiException.invalidRequest();
+        List<String> labels = labels(input.attachment().photoLabels(), photos.size());
+        for (var photo : photos) {
             if (photo.bytes().length > PhotoCheck.MAX_BYTES) throw ApiException.tooLarge();
             if (!PhotoCheck.readable(photo.contentType(), photo.bytes())) throw ApiException.unsupportedMedia();
         }
         // 같은 회원의 보내기를 차례로 처리해 같은 requestKey가 두 건으로 저장되지 않게 함
         String customerName = mapper.lockMember(principal.id());
         if (customerName == null) throw ApiException.notFound();
-        byte[] hash = hash(input.designerId(), cutDate, service, summary, request, photo);
+        byte[] hash = hash(input.designerId(), cutDate, service, summary, request, photos, labels);
         var existing = mapper.byRequestKey(principal.id(), input.requestKey());
         if (existing != null) {
             if (!MessageDigest.isEqual(existing.contentHash(), hash)) throw ApiException.conflict();
@@ -69,17 +77,34 @@ public class ConsultationService {
         if (designer.memberId() == principal.id()) throw ApiException.invalidRequest();
         String id = UUID.randomUUID().toString();
         if (mapper.insert(id, principal.id(), designer, input.requestKey(), hash, customerName, cutDate, service, summary, request) != 1) throw ApiException.conflict();
-        if (photo != null && mapper.insertPhoto(id, photo.contentType(), photo.bytes().length, crypto.encrypt(photo.bytes(), aad(id))) != 1) throw ApiException.conflict();
+        for (int i = 0; i < photos.size(); i++) {
+            var photo = photos.get(i);
+            if (mapper.insertPhoto(id, i, labels.get(i), photo.contentType(), photo.bytes().length, crypto.encrypt(photo.bytes(), aad(id, i))) != 1) throw ApiException.conflict();
+        }
         notifications.create(designer.memberId(), NotificationService.CONSULTATION_REQUESTED, id, customerName);
         realtime.send(designer.memberId(), RealtimePublisher.CONSULTATION, id);
         return new Sent(true, view(mapper.get(id, principal.id()), principal.id()));
     }
 
-    private byte[] hash(String designerId, LocalDate cutDate, String service, String summary, String request, Upload photo) {
+    // 사진 이름은 없으면 모두 '사진'. 있으면 사진 수와 같아야 하고 줄바꿈을 넣을 수 없음(목록 조회에서 줄바꿈으로 나눔)
+    private static List<String> labels(List<String> input, int count) {
+        if (input == null) return Collections.nCopies(count, "사진");
+        if (input.size() != count) throw ApiException.invalidRequest();
+        var labels = new ArrayList<String>(count);
+        for (String value : input) {
+            String label = Inputs.text(value, 30);
+            if (label.chars().anyMatch(Character::isISOControl)) throw ApiException.invalidRequest();
+            labels.add(label);
+        }
+        return labels;
+    }
+
+    private byte[] hash(String designerId, LocalDate cutDate, String service, String summary, String request, List<Upload> photos, List<String> labels) {
         try {
             var digest = MessageDigest.getInstance("SHA-256");
-            digest.update(json.writeValueAsBytes(List.of(designerId, cutDate.toString(), service, summary, request, photo == null ? "" : photo.contentType())));
-            if (photo != null) digest.update(photo.bytes());
+            digest.update(json.writeValueAsBytes(List.of(designerId, cutDate.toString(), service, summary, request,
+                photos.stream().map(Upload::contentType).toList(), labels)));
+            for (var photo : photos) digest.update(photo.bytes());
             return digest.digest();
         } catch (java.security.NoSuchAlgorithmException e) { throw new IllegalStateException(); }
     }
@@ -88,11 +113,12 @@ public class ConsultationService {
     @Transactional(readOnly=true) public List<Consultation> received(MemberPrincipal principal) { return mapper.received(principal.id()).stream().map(row -> view(row, principal.id())).toList(); }
     @Transactional(readOnly=true) public Consultation get(MemberPrincipal principal, String id) { return view(participant(principal, id), principal.id()); }
 
-    @Transactional(readOnly=true) public PhotoFile photo(MemberPrincipal principal, String id) {
+    @Transactional(readOnly=true) public PhotoFile photo(MemberPrincipal principal, String id, int position) {
         participant(principal, id);
-        var photo = mapper.photo(id);
+        if (position < 0 || position >= MAX_PHOTOS) throw ApiException.notFound();
+        var photo = mapper.photo(id, position);
         if (photo == null) throw ApiException.notFound();
-        return new PhotoFile(photo.contentType(), crypto.decrypt(photo.keyId(), photo.nonce(), photo.ciphertext(), aad(id)));
+        return new PhotoFile(photo.contentType(), crypto.decrypt(photo.keyId(), photo.nonce(), photo.ciphertext(), aad(id, position)));
     }
 
     // 이전 화면과 맞추려고 남긴 첫 답변 API. 디자이너의 첫 메시지와 같음
@@ -169,18 +195,27 @@ public class ConsultationService {
     private static Message message(ConsultationMapper.Message m, long viewer) {
         return new Message(m.id(), m.senderRole(), m.content(), Inputs.time(m.sentAt()), m.senderId() == viewer);
     }
+    private static List<PhotoView> photos(ConsultationMapper.Row row) {
+        if (row.photoLabels() == null || row.photoLabels().isEmpty()) return List.of();
+        String[] labels = row.photoLabels().split("\n", -1);
+        var photos = new ArrayList<PhotoView>(labels.length);
+        for (int i = 0; i < labels.length; i++) photos.add(new PhotoView("/api/consultations/" + row.id() + "/photos/" + i, labels[i]));
+        return photos;
+    }
     private static Consultation view(ConsultationMapper.Row row, long viewer) {
         boolean answered = "ANSWERED".equals(row.status());
         boolean customer = row.customerId() == viewer;
+        var photos = photos(row);
         return new Consultation(row.id(), row.status(),
             new DesignerView(row.designerId(), row.designerName(), row.salonName()),
             new CustomerView(row.customerName()),
-            new Attachment(row.cutDate().toString(), row.service(), row.summary(), row.hasPhoto() ? "/api/consultations/" + row.id() + "/photo" : null),
+            new Attachment(row.cutDate().toString(), row.service(), row.summary(), photos.isEmpty() ? null : photos.get(0).url(), photos),
             row.requestText(), Inputs.time(row.sentAt()),
             answered ? new Reply(row.replyText(), Inputs.time(row.repliedAt())) : null,
             !answered && row.designerMemberId() == viewer,
             Inputs.time(row.lastMessageAt() == null ? row.sentAt() : row.lastMessageAt()),
             row.unreadCount(), row.reviewId(),
-            customer && answered && row.reviewId() == null);
+            customer && answered && row.reviewId() == null,
+            customer ? "CUSTOMER" : "DESIGNER");
     }
 }

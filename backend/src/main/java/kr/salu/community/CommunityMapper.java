@@ -9,7 +9,8 @@ import org.apache.ibatis.annotations.*;
 public interface CommunityMapper {
     record PostRow(String id, long authorId, String authorName, byte[] contentHash, String category, String title, String content,
         LocalDate cutDate, String service, String summary, String status, Instant createdAt, Instant updatedAt,
-        int photoCount, int commentCount, int reactionCount, boolean reacted) {}
+        int photoCount, int commentCount, int reactionCount, boolean reacted, int openReports) {}
+    record ActiveSanction(java.time.Instant endsAt, String reason) {}
     record Locked(String id, long authorId, String status) {}
     record CommentRow(long id, String postId, long authorId, String authorName, String clientKey, String content, String status, Instant createdAt) {}
     record Photo(String contentType, byte[] data) {}
@@ -18,12 +19,15 @@ public interface CommunityMapper {
         + "(SELECT COUNT(*) FROM community_post_photos f WHERE f.post_id=p.id) AS photo_count,"
         + "(SELECT COUNT(*) FROM community_comments c WHERE c.post_id=p.id AND c.status='VISIBLE') AS comment_count,"
         + "(SELECT COUNT(*) FROM community_reactions r WHERE r.post_id=p.id) AS reaction_count,"
-        + "EXISTS(SELECT 1 FROM community_reactions r WHERE r.post_id=p.id AND r.member_id=#{viewer}) AS reacted "
+        + "EXISTS(SELECT 1 FROM community_reactions r WHERE r.post_id=p.id AND r.member_id=#{viewer}) AS reacted,"
+        + "(SELECT COUNT(*) FROM community_post_reports o WHERE o.post_id=p.id AND o.status='OPEN') AS open_reports "
         + "FROM community_posts p ";
     String COMMENT = "SELECT id,post_id,author_id,author_name,client_key,content,status,created_at FROM community_comments ";
 
     @Select("SELECT display_name FROM members WHERE id=#{member} AND status='ACTIVE' FOR UPDATE") String lockMember(long member);
     @Select("SELECT COUNT(*) FROM member_sanctions WHERE member_id=#{member} AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at>CURRENT_TIMESTAMP(6))") int activeSanctions(long member);
+    // 가장 늦게 끝나는 제재. 기간 없음(NULL)을 가장 늦은 것으로 봄
+    @Select("SELECT ends_at,reason FROM member_sanctions WHERE member_id=#{member} AND lifted_at IS NULL AND (ends_at IS NULL OR ends_at>CURRENT_TIMESTAMP(6)) ORDER BY ends_at IS NULL DESC,ends_at DESC,id DESC LIMIT 1") ActiveSanction activeSanction(long member);
 
     @Select("<script>" + POST + "WHERE p.status='VISIBLE'"
         + "<if test='category != null'> AND p.category=#{category}</if>"
@@ -43,7 +47,7 @@ public interface CommunityMapper {
     @Update("UPDATE community_posts SET title=#{title},content=#{content} WHERE id=#{id} AND author_id=#{author} AND status='VISIBLE'") int updatePost(String id, long author, String title, String content);
     @Update("UPDATE community_posts SET status='DELETED' WHERE id=#{id} AND author_id=#{author} AND status<>'DELETED'") int deletePost(String id, long author);
 
-    @Select(COMMENT + "WHERE post_id=#{post} AND status='VISIBLE' ORDER BY id LIMIT 300") List<CommentRow> comments(String post);
+    @Select(COMMENT + "WHERE post_id=#{post} AND (status='VISIBLE' OR (status='HIDDEN' AND author_id=#{viewer})) ORDER BY id LIMIT 300") List<CommentRow> comments(String post, long viewer);
     @Select(COMMENT + "WHERE post_id=#{post} AND author_id=#{author} AND client_key=#{key}") CommentRow commentByKey(String post, long author, String key);
     @Select(COMMENT + "WHERE id=#{id}") CommentRow comment(long id);
     @Select(COMMENT + "WHERE id=#{id} FOR UPDATE") CommentRow lockComment(long id);

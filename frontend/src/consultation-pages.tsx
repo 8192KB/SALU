@@ -19,6 +19,7 @@ import {
   PhotoPlaceholder,
   PhotoThumbnail,
   focusFirstError,
+  Loading,
 } from './components';
 import { Field, PhotoList, PhotoButton } from './fields';
 import { MaterialChoice } from './material-choice';
@@ -32,7 +33,8 @@ import { cutTitle, daysAfter, displayDate } from './prototype/dates';
 import {
   completeUrl,
   reviewUrl,
-  draftFromPreview,
+  editDraft,
+  isEditDraft,
   latestMaterials,
   materialSource,
   materialUrl,
@@ -42,6 +44,7 @@ import {
   previewUrl,
   requestUrl,
   selectedCount,
+  visibleCaption,
 } from './prototype/request-flow';
 
 const ConsultationDesignerProfile = lazy(() =>
@@ -111,7 +114,9 @@ function SelectedMaterials({
           summary={
             <span className="reference-context">
               <span>지난 커트 · {displayDate(cut.cutDate)}</span>
-              <span className="reference-count">자료 {selectedCount(draft)}개 보기</span>
+              <span className="reference-count">
+                {selectedCount(draft) ? `자료 ${selectedCount(draft)}개 보기` : '고른 자료 없음'}
+              </span>
             </span>
           }
         >
@@ -207,7 +212,7 @@ function SelectedMaterials({
                 <figcaption>
                   <strong>{photoOrigin(photo, cut.cutDate)}</strong>
                   <span>{displayDate(photo.date)}</span>
-                  <p>{photo.caption}</p>
+                  {visibleCaption(photo.caption) && <p>{visibleCaption(photo.caption)}</p>}
                 </figcaption>
               </figure>
             ))}
@@ -292,7 +297,7 @@ export function DesignerList() {
     </Link>
   );
   return (
-    <>
+    <div className="designer-list-screen">
       <PageHeading
         title="디자이너 찾기"
         back={
@@ -361,7 +366,7 @@ export function DesignerList() {
       {mode !== 'example' && (
         <>
           {directory.loading && !directory.designers.length && (
-            <p role="status">디자이너를 불러오고 있어요.</p>
+            <Loading>디자이너를 불러오고 있어요.</Loading>
           )}
           {directory.error && (
             <div className="panel">
@@ -380,12 +385,18 @@ export function DesignerList() {
               </Link>
             </section>
           )}
-          <Link className="button" to="/account/designer">
-            내 디자이너 프로필 등록·관리
-          </Link>
+          {/* 상담할 디자이너를 고르는 중에는 디자이너용 길을 끼워 넣지 않음 */}
+          {!record && !previewId && (
+            <p className="designer-manage">
+              디자이너로 활동하나요?{' '}
+              <Link className="text-link" to="/account/designer">
+                내 디자이너 프로필 등록·관리 <Icon name="arrow" size={16} />
+              </Link>
+            </p>
+          )}
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -401,7 +412,7 @@ export function DesignerDetail() {
   const designer = directory.designers.find((value) => value.id === id);
   // 목록을 다시 받는 동안에도 이미 받은 프로필은 그대로 보여 줌
   if (mode !== 'example' && directory.loading && !designer)
-    return <p role="status">프로필을 불러오고 있어요.</p>;
+    return <Loading>프로필을 불러오고 있어요.</Loading>;
   if (mode !== 'example' && directory.error && !designer)
     return (
       <section className="panel">
@@ -419,20 +430,22 @@ export function DesignerDetail() {
     return <Missing title="프로필 또는 선택한 기록을 찾을 수 없어요" />;
   // 예시와 실제 공간이 같은 상담 동선을 씀. 실제 공간은 로그인한 회원의 서버 상담으로 보냄
   return (
-    <Suspense fallback={<p role="status">프로필을 불러오고 있어요.</p>}>
+    <Suspense fallback={<Loading>프로필을 불러오고 있어요.</Loading>}>
       {/* 상담은 주소로 고른 커트만 첨부함. 개인 커트 준비 초안의 커트로 대신 채우지 않음 */}
       <ConsultationDesignerProfile designer={designer} record={record} preview={sourcePreview} />
     </Suspense>
   );
 }
 
-// 저장한 준비와 같은 초안을 뒤로 가기로 다시 열면 그 준비 내용으로 보냄. 고쳐 저장해 같은 준비가 늘지 않게 함
+// 저장한 준비와 같은 초안을 뒤로 가기로 다시 열면 그 준비 내용으로 보냄. 고쳐 저장해 같은 준비가 늘지 않게 함.
+// 준비를 고치는 초안은 저장해도 같은 준비를 바꾸므로 그대로 엶
 function useSavedDraftRedirect(draft: RequestDraft | null | undefined, active: boolean) {
   const { state } = usePrototype();
   const navigate = useNavigate();
-  const saved = draft
-    ? state.previews.find((value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft))
-    : undefined;
+  const saved =
+    draft && !isEditDraft(state, draft)
+      ? state.previews.find((value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft))
+      : undefined;
   useEffect(() => {
     if (active && saved) navigate(previewUrl(saved), { replace: true });
   }, [active, saved, navigate]);
@@ -470,7 +483,8 @@ export function MaterialsPage() {
     ? explicitDraft
     : requestDraft?.designerId === designerId &&
         requestDraft?.cutId === cutId &&
-        // 이미 준비 내용으로 저장한 초안은 새 준비로 이어 쓰지 않음(resumeRequestDraft와 같은 기준)
+        // 이미 준비 내용으로 저장한 초안과 준비를 고치는 초안은 새 준비로 이어 쓰지 않음(resumeRequestDraft와 같은 기준)
+        !(requestDraft && isEditDraft(state, requestDraft)) &&
         !state.previews.some(
           (preview) => JSON.stringify(preview.sourceDraft) === JSON.stringify(requestDraft),
         )
@@ -560,7 +574,7 @@ export function MaterialsPage() {
     );
   if ((draftId && !explicitDraft) || (designerId && !designer) || (!record && !source))
     return <Missing title="기록 또는 작성 중인 요청을 찾을 수 없어요" />;
-  if (!draft || !source) return <p role="status">자료 확인 중</p>;
+  if (!draft || !source) return <Loading>자료를 확인하고 있어요.</Loading>;
   const cut = source.cut;
   const progress = [...source.progress].sort((a, b) => a.observedOn.localeCompare(b.observedOn));
   const photos = source.photos;
@@ -584,7 +598,9 @@ export function MaterialsPage() {
     <>
       <PageHeading
         back={
-          pickedDrafts.has(draft.id) ? (
+          isEditDraft(state, draft) ? (
+            <BackLink to={previewUrl(draft)}>준비 내용으로</BackLink>
+          ) : pickedDrafts.has(draft.id) ? (
             <BackLink
               to={designer ? `/requests/materials?designer=${designer.id}` : '/requests/materials'}
               trail={false}
@@ -667,7 +683,9 @@ export function MaterialsPage() {
                 key={photo.id}
                 name={`사진 ${index + 1} 선택`}
                 title={photoOrigin(photo, cut.cutDate)}
-                summary={`${displayDate(photo.date)} · ${photo.caption}`}
+                summary={[displayDate(photo.date), visibleCaption(photo.caption)]
+                  .filter(Boolean)
+                  .join(' · ')}
                 checked={draft.photoIds.includes(photo.id)}
                 onChange={() => toggle('photoIds', photo.id)}
                 image={<PhotoButton photo={photo} cutDate={cut.cutDate} />}
@@ -854,7 +872,11 @@ export function RequestPage() {
           </BackLink>
         }
         title="이번 커트에서 원하는 점을 적어 주세요"
-        description="그대로 둘 부분과 바꿀 부분, 궁금한 점을 적어 주세요."
+        description={
+          isEditDraft(state, draft)
+            ? '저장한 준비를 고치고 있어요. 저장하면 이 준비가 고친 내용으로 바뀌어요.'
+            : '그대로 둘 부분과 바꿀 부분, 궁금한 점을 적어 주세요.'
+        }
       />
       <Steps current={1} />
       <div className="two-column request-layout">
@@ -930,7 +952,7 @@ export function RequestPage() {
                   maxLength={2000}
                   value={item.content}
                   onChange={(event) => updateRequest(item.id, { content: event.target.value })}
-                  placeholder="옆머리 아래는 조금 짧게, 위쪽 길이는 남기고 싶어요"
+                  placeholder="예: 옆머리 아래는 조금 짧게, 위쪽 길이는 남기고 싶어요"
                 />
               </Field>
             </section>
@@ -973,7 +995,7 @@ export function RequestPage() {
                   maxLength={2000}
                   value={draft.homeStyling}
                   onChange={(event) => update({ homeStyling: event.target.value })}
-                  placeholder="드라이만 하고 있어요"
+                  placeholder="예: 드라이만 하고 있어요"
                 />
               </Field>
               <Field label="추가 질문" hint="선택 · 고른 기록에 없는 내용만 추가">
@@ -1010,7 +1032,7 @@ export function RequestPage() {
 
 export function PreviewPage() {
   const { id } = useParams();
-  const { state, setRequestDraft } = usePrototype();
+  const { state, requestDrafts, setRequestDraft } = usePrototype();
   const navigate = useNavigate();
   const directory = useDirectory(state);
   const { state: consultations } = useConsultations();
@@ -1116,7 +1138,7 @@ export function PreviewPage() {
         </section>
         <aside className="sidebar">
           <section className="panel sticky-summary">
-            <h2>{preview.designer ? '보여 줄 내용 확인' : '다음 커트 준비 완료'}</h2>
+            <h2>{preview.designer ? '보여 줄 내용 확인' : '다음에 할 일'}</h2>
             <p className="muted">고르지 않은 기록과 사진은 포함하지 않았어요.</p>
             {sent.length > 0 && (
               <p className="working-notice" role="status">
@@ -1134,37 +1156,33 @@ export function PreviewPage() {
                 디자이너 선택하기 <Icon name="arrow" />
               </Link>
             )}
-            {target && (
+            {/* 주 버튼 하나 아래에 보조 길을 같은 모양의 글자 링크로 모음. 목록으로는 위의 뒤로 링크가 맡음 */}
+            <div className="preview-secondary-actions">
+              {target && (
+                <Link className="text-link" to={`/designers?${designerQuery}`}>
+                  다른 디자이너 선택
+                </Link>
+              )}
+              {/* 고치다 만 초안이 있으면 이어 씀. 원하는 점 적기부터 열고 자료는 그 화면에서 다시 고름 */}
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => {
+                  const draft = requestDrafts[preview.id] ?? editDraft(preview);
+                  setRequestDraft(draft);
+                  navigate(requestUrl(draft));
+                }}
+              >
+                준비 고치기
+              </button>
               <Link
                 className="text-link"
-                style={{ marginTop: 12 }}
-                to={`/designers?${designerQuery}`}
+                to={`/records/${preview.cut.id}?preview=${encodeURIComponent(preview.id)}`}
               >
-                다른 디자이너 선택
+                원본 기록 보기
               </Link>
-            )}
-            <button
-              className="button full"
-              style={{ marginTop: 12 }}
-              onClick={() => {
-                const draft = draftFromPreview(preview);
-                setRequestDraft(draft);
-                navigate(requestUrl(draft));
-              }}
-            >
-              내용 수정
-            </button>
-            <Link
-              className="button full"
-              style={{ marginTop: 12 }}
-              to={`/records/${preview.cut.id}?preview=${encodeURIComponent(preview.id)}`}
-            >
-              원본 기록 보기
-            </Link>
-            <Link className="text-link" style={{ marginTop: 16 }} to="/requests">
-              준비 목록으로
-            </Link>
-            <p className="form-note">정리한 내용은 커트 준비 목록에서 다시 볼 수 있어요.</p>
+            </div>
+            {sent.length > 0 && <p className="form-note">고쳐도 이미 보낸 상담은 바뀌지 않아요.</p>}
           </section>
         </aside>
       </div>
@@ -1257,6 +1275,7 @@ export function ReviewPage() {
   const draft =
     draftId && Object.hasOwn(requestDrafts, draftId) ? requestDrafts[draftId] : undefined;
   if (!draft) return <Missing title="작성 중인 요청을 찾을 수 없어요" />;
+  const editing = isEditDraft(state, draft);
   let prepared: ReturnType<typeof prepareRequest> | undefined;
   let validationError = '';
   try {
@@ -1271,6 +1290,11 @@ export function ReviewPage() {
     setBusy(true);
     setError('');
     try {
+      if (editing) {
+        const preview = await repository.updatePreview(draft.id, draft);
+        navigate(completeUrl(preview), { replace: true });
+        return;
+      }
       const existing = state.previews.find(
         (value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft),
       );
@@ -1293,7 +1317,7 @@ export function ReviewPage() {
             요청 작성으로
           </BackLink>
         }
-        title="저장할 내용을 확인해 주세요"
+        title={editing ? '고친 내용을 확인해 주세요' : '저장할 내용을 확인해 주세요'}
       />
       <Steps current={2} />
       <Alert message={error || validationError} />
@@ -1319,7 +1343,7 @@ export function ReviewPage() {
             </>
           ) : (
             <>
-              준비 저장하기 <Icon name="check" />
+              {editing ? '고친 내용 저장' : '준비 저장하기'} <Icon name="check" />
             </>
           )}
         </button>
@@ -1335,7 +1359,10 @@ export function CompletePage() {
   if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
   return (
     <Completion
-      title="커트 준비를 마쳤어요"
+      // 고친 준비는 고치는 초안의 ID가 준비 ID와 같음
+      title={
+        preview.sourceDraft.id === preview.id ? '커트 준비를 고쳤어요' : '커트 준비를 마쳤어요'
+      }
       primary="준비한 내용 보기"
       to={previewUrl(preview)}
       secondary="준비 목록으로"

@@ -173,6 +173,13 @@ export function DateField({
             );
           })}
         </div>
+        {/* 흐린 날은 고를 수 없음. 왜 막혔는지 알 수 있게 고를 수 있는 기간을 알림 */}
+        {(min || max) && (
+          <p className="form-note calendar-range">
+            {min ? `${displayDate(min)}부터 ` : ''}
+            {max ? (max === today() ? '오늘까지' : `${displayDate(max)}까지`) : ''} 고를 수 있어요.
+          </p>
+        )}
         <div className="dialog-actions">
           <button type="button" className="button" onClick={close}>
             취소

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Alert } from './components';
+import { Alert, Loading } from './components';
 import { useActivePage } from './main-navigation';
 import { ApiFailure } from './auth/api';
 import type { SessionMember } from './auth/api';
@@ -132,7 +132,7 @@ export function ConsultationConversation({
         </button>
       </section>
     ) : (
-      <p role="status">메시지를 불러오고 있어요.</p>
+      <Loading>메시지를 불러오고 있어요.</Loading>
     );
   const shown = answerAt
     ? messages.filter((message) => message.sender !== 'DESIGNER' || message.sentAt !== answerAt)

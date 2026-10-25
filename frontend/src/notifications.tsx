@@ -1,13 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from './auth/context';
 import { directoryRequest } from './auth/api';
 import type { SessionMember } from './auth/api';
 import { listSentConsultations } from './consultation-api';
-import { Alert, BackLink, Icon, PageHeading } from './components';
+import { Alert, BackLink, Icon, PageHeading, Loading } from './components';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import { useLoginPath } from './auth/pages';
 import { sentTime } from './prototype/dates';
 import { useLiveRefresh, useLocalSignal } from './realtime';
+import { useActivePage } from './main-navigation';
 import type { RealtimeEvent } from './realtime';
 
 // 알림·실시간 API 계약(docs/notification-api.md)의 응답 모양
@@ -16,7 +17,20 @@ export type NotificationType =
   | 'CONSULTATION_ANSWERED'
   | 'CONSULTATION_MESSAGE'
   | 'REVIEW_RECEIVED'
-  | 'COMMUNITY_COMMENT';
+  | 'COMMUNITY_COMMENT'
+  | 'COMMUNITY_POST_HIDDEN'
+  | 'COMMUNITY_COMMENT_HIDDEN'
+  | 'COMMUNITY_SUSPENDED';
+const TYPES: NotificationType[] = [
+  'CONSULTATION_REQUESTED',
+  'CONSULTATION_ANSWERED',
+  'CONSULTATION_MESSAGE',
+  'REVIEW_RECEIVED',
+  'COMMUNITY_COMMENT',
+  'COMMUNITY_POST_HIDDEN',
+  'COMMUNITY_COMMENT_HIDDEN',
+  'COMMUNITY_SUSPENDED',
+];
 export type Notification = {
   id: number;
   type: NotificationType;
@@ -66,6 +80,15 @@ function describe(item: Notification, sent: Set<string> | null) {
         text: `${actor}님이 내 글에 댓글을 남겼어요`,
         to: `/community/${path(item.targetId)}`,
       };
+    case 'COMMUNITY_POST_HIDDEN':
+      return { text: '내 글이 숨겨져 다른 사람에게 보이지 않아요', to: '/community/mine' };
+    case 'COMMUNITY_COMMENT_HIDDEN':
+      return {
+        text: '내 댓글이 숨겨져 다른 사람에게 보이지 않아요',
+        to: `/community/${path(item.targetId)}`,
+      };
+    case 'COMMUNITY_SUSPENDED':
+      return { text: '커뮤니티 글·댓글 쓰기가 제한됐어요', to: '/community/mine' };
   }
 }
 
@@ -74,13 +97,7 @@ function isNotification(value: unknown): value is Notification {
   const item = value as Record<string, unknown>;
   return (
     Number.isSafeInteger(item.id) &&
-    [
-      'CONSULTATION_REQUESTED',
-      'CONSULTATION_ANSWERED',
-      'CONSULTATION_MESSAGE',
-      'REVIEW_RECEIVED',
-      'COMMUNITY_COMMENT',
-    ].includes(item.type as string) &&
+    TYPES.includes(item.type as NotificationType) &&
     typeof item.targetId === 'string' &&
     (item.actorName === null || typeof item.actorName === 'string') &&
     typeof item.createdAt === 'string' &&
@@ -102,6 +119,43 @@ async function fetchUnreadCount() {
 function useMember(): SessionMember | null {
   const { state } = useAuth();
   return state.status === 'authenticated' ? state.member : null;
+}
+
+// 상담·글 상세를 보고 있으면 그 대상의 안 읽은 알림을 읽음으로 바꿈. 알림 목록을 거치지 않고 열어도
+// 배지가 남지 않게 함. 메뉴를 옮겨 숨겨진 화면에서는 바꾸지 않음
+export function useReadNotifications(
+  targetId: string | undefined,
+  types: NotificationType[],
+  // 실시간 신호로 저절로 바뀌지 않는 화면은 새 알림의 내용을 먼저 다시 받아 보여 준 뒤 읽음으로 바꿈
+  refresh?: () => Promise<unknown>,
+) {
+  const member = useMember();
+  const example = useWorkspace() === 'example';
+  const active = useActivePage();
+  const signal = useLocalSignal();
+  const kinds = types.join(',');
+  const latest = useRef(refresh);
+  useEffect(() => {
+    latest.current = refresh;
+  });
+  const read = useCallback(async () => {
+    if (!active || !targetId || document.visibilityState === 'hidden') return;
+    try {
+      const inbox = await fetchInbox();
+      const unread = inbox.items.filter(
+        (item) => !item.read && item.targetId === targetId && kinds.split(',').includes(item.type),
+      );
+      if (!unread.length) return;
+      await latest.current?.();
+      await Promise.all(
+        unread.map((item) => directoryRequest(`/api/my/notifications/${item.id}/read`, 'POST')),
+      );
+      signal({ type: 'NOTIFICATION', id: targetId });
+    } catch {
+      /* 읽음으로 못 바꾸면 알림 목록에서 그대로 보이므로 화면을 막지 않음 */
+    }
+  }, [active, targetId, kinds, signal]);
+  useLiveRefresh(member && !example && targetId ? read : undefined, notificationEvent);
 }
 
 // 머리글의 알림 버튼. 로그인한 실제 공간에서만 보이고, 새 알림 신호가 오면 안 읽은 수를 다시 받음
@@ -224,7 +278,7 @@ export function NotificationList() {
               <p>로그인하면 새 상담과 메시지를 알림으로 받을 수 있어요.</p>
             </>
           ) : state.status === 'checking' ? (
-            <p role="status">로그인 상태를 확인하고 있어요.</p>
+            <Loading>로그인 상태를 확인하고 있어요.</Loading>
           ) : (
             <>
               <h2>로그인이 필요해요</h2>
@@ -242,7 +296,7 @@ export function NotificationList() {
       {heading}
       <Alert message={error} />
       {!inbox ? (
-        !error && <p role="status">알림을 불러오고 있어요.</p>
+        !error && <Loading>알림을 불러오고 있어요.</Loading>
       ) : inbox.items.length ? (
         <ul className="notification-list">
           {inbox.items.map((item) => {

@@ -1,8 +1,11 @@
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Icon, PageHeading } from './components';
 import { Link } from './workspace';
 import { useAuth } from './auth/context';
+import { directoryRequest } from './auth/api';
 import { useLoginPath } from './auth/pages';
+import { useOnReactivate } from './realtime';
 
 function Item({ to, title, note }: { to: string; title: string; note?: string }) {
   return (
@@ -31,7 +34,23 @@ export function MorePage() {
   const { state } = useAuth();
   const loginPath = useLoginPath();
   const member = state.status === 'authenticated';
+  const memberId = state.status === 'authenticated' ? state.member.id : null;
   const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
+  // 받은 상담은 디자이너 프로필이 있는 회원에게만 보여 줌. 확인하지 못하면(null) 숨기지 않음
+  const [designer, setDesigner] = useState<boolean | null>(null);
+  const checkDesigner = useCallback(() => {
+    if (memberId === null) return;
+    return directoryRequest<{ id: string }>('/api/my/designer-profile').then(
+      (profile) => setDesigner(Boolean(profile)),
+      () => setDesigner(null),
+    );
+  }, [memberId]);
+  useEffect(() => {
+    setDesigner(null);
+    void checkDesigner();
+  }, [checkDesigner]);
+  // 프로필을 등록하고 돌아오면 받은 상담이 바로 보이게 다시 확인함
+  useOnReactivate(checkDesigner);
   return (
     <div className="more-screen">
       <PageHeading title="더보기" />
@@ -44,15 +63,13 @@ export function MorePage() {
         </section>
       )}
       <Group title="커뮤니티">
-        <Item to="/community" title="커뮤니티" note="커트 사례와 고민 질문" />
+        <Item to="/community" title="전체 글" note="커트 사례와 고민 질문" />
         {member && <Item to="/community/mine" title="내 글" />}
       </Group>
       <Group title="디자이너">
         <Item to="/designers" title="디자이너 찾기" />
         {member && <Item to="/designers?favorites=1" title="찜한 디자이너" />}
-        {member && (
-          <Item to="/consultations/received" title="받은 상담" note="디자이너 프로필이 있을 때" />
-        )}
+        {member && designer !== false && <Item to="/consultations/received" title="받은 상담" />}
         {member && <Item to="/account/designer" title="내 디자이너 프로필" />}
       </Group>
       {admin && (

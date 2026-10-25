@@ -11,6 +11,7 @@ import { listReceivedConsultations } from '../consultation-api';
 import { flushPersonalStores, readGuestRecords } from '../prototype/personal-store';
 import type { GuestRecords, PersonalStore } from '../prototype/personal-store';
 import { cutTitle } from '../prototype/dates';
+import { useFeedback } from '../feedback';
 
 // 로그인 뒤 돌아갈 앱 안 주소. 외부 주소와 계정 화면은 받지 않음
 export function safeReturnPath(value: string | null) {
@@ -75,7 +76,7 @@ export function AccountControls() {
         }}
       >
         <Alert message={storageError} />
-        <p>계정 기록은 이 화면에서 숨겨집니다. 다시 로그인하면 이어서 사용할 수 있어요.</p>
+        <p>계정 기록은 이 화면에서 숨겨져요. 다시 로그인하면 이어서 사용할 수 있어요.</p>
         {unsent > 0 && (
           <p>
             서버에 아직 올리지 못한 기록 {unsent}건이 있어요. 이 기기에서 다시 로그인해야 서버에
@@ -181,8 +182,27 @@ function takeReturnPath() {
   }
 }
 function completePath(next: string | null) {
-  return next ? `/auth/complete?next=${encodeURIComponent(next)}` : '/auth/complete';
+  return withNext('/auth/complete', next);
 }
+// 로그인·회원가입 사이를 오가도 처음 보던 화면으로 돌아갈 수 있게 next를 넘겨 줌
+function withNext(path: string, next: string | null) {
+  return next ? `${path}?next=${encodeURIComponent(next)}` : path;
+}
+// 뒤로 링크는 돌아갈 화면 이름으로 부름(DESIGN.md). 모르는 주소는 이전 화면
+const RETURN_LABELS: [RegExp, string][] = [
+  [/^\/community/, '커뮤니티로'],
+  [/^\/designers/, '디자이너 찾기로'],
+  [/^\/consultations/, '상담으로'],
+  [/^\/requests/, '커트 준비로'],
+  [/^\/records/, '내 기록으로'],
+  [/^\/more/, '더보기로'],
+  [/^\/account/, '내 계정으로'],
+  [/^\/backup/, '기록 저장·백업으로'],
+  [/^\/notifications/, '알림으로'],
+  [/^\/admin/, '신고 처리로'],
+];
+const returnLabel = (next: string | null) =>
+  next ? (RETURN_LABELS.find(([path]) => path.test(next))?.[1] ?? '이전 화면으로') : '홈으로';
 
 export function LoginPage() {
   const { state, pending, checking, login, refresh } = useAuth();
@@ -221,7 +241,7 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <PageHeading
-        back={<BackLink to={next ?? '/records'}>{next ? '이전 화면으로' : '내 기록으로'}</BackLink>}
+        back={<BackLink to={next ?? '/'}>{returnLabel(next)}</BackLink>}
         title="로그인"
         description="로그인하면 기록이 계정에도 자동으로 저장돼요."
       />
@@ -249,7 +269,7 @@ export function LoginPage() {
             {state.member.displayName}님 · {state.member.email}
           </p>
           <Link className="button primary" to={next ?? '/'} replace>
-            {next ? '이전 화면으로' : '홈으로'}
+            {returnLabel(next)}
           </Link>
         </section>
       ) : (
@@ -310,7 +330,7 @@ export function LoginPage() {
       )}
       {state.status !== 'prototype' && state.status !== 'authenticated' && (
         <p className="auth-switch">
-          아직 계정이 없나요? <Link to="/signup">회원가입</Link>
+          아직 계정이 없나요? <Link to={withNext('/signup', next)}>회원가입</Link>
         </p>
       )}
     </div>
@@ -320,6 +340,8 @@ export function LoginPage() {
 export function SignupPage() {
   const { state, pending, checking, login } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = safeReturnPath(params.get('next'));
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
@@ -330,11 +352,12 @@ export function SignupPage() {
   const mismatch = confirmChecked && confirm !== password ? '비밀번호가 서로 달라요.' : '';
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState('');
   return (
     <div className="login-page">
       <PageHeading
-        back={<BackLink to="/login">로그인으로</BackLink>}
+        back={<BackLink to={withNext('/login', next)}>로그인으로</BackLink>}
         title="회원가입"
         description="SALU에서 사용할 계정을 만들어요."
       />
@@ -352,9 +375,9 @@ export function SignupPage() {
       ) : created ? (
         <section className="panel">
           <h2>회원가입을 마쳤어요</h2>
-          <p>로그인해서 기록을 이어서 남겨보세요.</p>
+          <p>로그인해서 기록을 이어서 남겨 보세요.</p>
           <Alert message={error} />
-          <Link className="button primary full" to="/login">
+          <Link className="button primary full" to={withNext('/login', next)}>
             로그인
           </Link>
         </section>
@@ -365,6 +388,7 @@ export function SignupPage() {
             event.preventDefault();
             if (busy || pending || checking) return;
             setError('');
+            setDuplicate(false);
             if (password.length < 12) {
               setError('비밀번호를 12자 이상 입력해 주세요.');
               return;
@@ -379,28 +403,41 @@ export function SignupPage() {
               return;
             }
             setBusy(true);
+            // 가입 뒤 자동 로그인하는 동안은 입력 화면을 그대로 두어 '로그인하세요' 카드가 잠깐 보이지 않게 함.
+            // 가입은 됐는데 로그인만 실패했을 때만 완료 카드와 로그인 버튼을 보여 줌
+            let joined = false;
             try {
               await flushPersonalStores();
               await signup(email.trim(), displayName.trim(), password);
-              setCreated(true);
+              joined = true;
               await login(email.trim(), password);
-              navigate(completePath(null), { replace: true });
+              navigate(completePath(next), { replace: true });
             } catch (failure) {
+              if (joined) setCreated(true);
+              setDuplicate(failure instanceof ApiFailure && failure.status === 409);
               setError(
                 failure instanceof Error
                   ? failure.message
                   : '회원가입을 완료하지 못했어요. 다시 시도해 주세요.',
               );
             } finally {
-              setPassword('');
-              setConfirm('');
-              setConfirmChecked(false);
+              // 가입한 뒤에는 비밀번호를 지움. 입력 확인 실패는 다시 적지 않게 그대로 둠
+              if (joined) {
+                setPassword('');
+                setConfirm('');
+                setConfirmChecked(false);
+              }
               setBusy(false);
             }
           }}
         >
           {!error && <SessionNotice />}
           <Alert message={error} />
+          {duplicate && (
+            <Link className="button full" to={withNext('/login', next)}>
+              이 이메일로 로그인
+            </Link>
+          )}
           <Field label="이름">
             <input
               name="displayName"
@@ -461,9 +498,9 @@ export function SignupPage() {
       )}
       {!created && state.status !== 'prototype' && state.status !== 'authenticated' && (
         <>
-          <SocialButtons />
+          <SocialButtons returnTo={next} />
           <p className="auth-switch">
-            이미 계정이 있나요? <Link to="/login">로그인</Link>
+            이미 계정이 있나요? <Link to={withNext('/login', next)}>로그인</Link>
           </p>
         </>
       )}
@@ -667,7 +704,7 @@ export function AccountPage() {
         </p>
       )}
       <section className="panel">
-        <p>{state.member.email ?? '소셜 로그인 계정'}</p>
+        <p className="account-email">{state.member.email ?? '소셜 로그인 계정'}</p>
         <Link className="button primary full" to="/backup">
           기록 저장·백업
         </Link>
@@ -678,7 +715,7 @@ export function AccountPage() {
           <Link className="button full" to="/consultations/received">
             받은 상담
             {designer.waiting > 0 && (
-              <span className="account-designer-count">답변 전 {designer.waiting}건</span>
+              <span className="account-designer-count">답변 대기 {designer.waiting}건</span>
             )}
           </Link>
           <Link className="text-link" to="/account/designer">
@@ -719,6 +756,7 @@ function GuestMoveQuestion({
   next: string;
 }) {
   const navigate = useNavigate();
+  const notify = useFeedback();
   const heading = useRef<HTMLHeadingElement>(null);
   const [moving, setMoving] = useState(false);
   const [leaving, setLeaving] = useState(false);
@@ -734,6 +772,8 @@ function GuestMoveQuestion({
       : (next.match(/[A-Za-z0-9_-]{8,}/g) ?? []).some((id) => guest.ids.has(id))
         ? '/records'
         : next;
+    // 화면이 바로 바뀌므로 옮겼는지 짧게 알려 줌
+    notify(moved ? `${label}을 계정으로 옮겼어요` : '기록을 이 기기에 그대로 뒀어요');
     navigate(path, { replace: true });
   };
   const label = guestRecordsLabel(guest);

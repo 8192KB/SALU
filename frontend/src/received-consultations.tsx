@@ -1,8 +1,17 @@
 import { useCallback, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useParams } from 'react-router';
+import { Navigate, useParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
-import { Alert, Avatar, BackLink, Missing, PageHeading } from './components';
+import {
+  Alert,
+  Avatar,
+  BackLink,
+  LoadFailure,
+  loadProblem,
+  PageHeading,
+  Loading,
+} from './components';
+import type { LoadProblem } from './components';
 import { Completion } from './completion';
 import { useAuth } from './auth/context';
 import { ApiFailure, directoryRequest } from './auth/api';
@@ -14,6 +23,7 @@ import { ConsultationConversation } from './consultation-conversation';
 import { ReceivedReview } from './consultation-review';
 import { sentTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
+import { useReadNotifications } from './notifications';
 
 // 디자이너가 받은 상담. 로그인한 실제 회원 화면이며 예시 체험과 섞지 않음
 function useMember() {
@@ -25,7 +35,7 @@ function Status({ item }: { item: Consultation }) {
   const waiting = item.status !== 'ANSWERED';
   return (
     <span className={waiting ? 'consultation-status filled' : 'consultation-status'}>
-      {waiting ? '답변 전' : '답변 완료'}
+      {waiting ? '답변 대기' : '답변 완료'}
     </span>
   );
 }
@@ -85,7 +95,7 @@ export function ReceivedList() {
             </button>
           </section>
         ) : !items ? (
-          <p role="status">받은 상담을 불러오고 있어요.</p>
+          <Loading>받은 상담을 불러오고 있어요.</Loading>
         ) : items.length ? (
           <div className="consultation-history">
             {byLatest(items).map((item) => (
@@ -101,7 +111,7 @@ export function ReceivedList() {
                   <Status item={item} />
                 </div>
                 <p>{item.request}</p>
-                <AttachmentCard attachment={threadFrom(item).attachment} />
+                <AttachmentCard attachment={threadFrom(item).attachment} compact />
                 <time dateTime={item.sentAt}>{sentTime(item.sentAt)}</time>
               </Link>
             ))}
@@ -129,7 +139,7 @@ export function ReceivedList() {
             disabled={loading}
             onClick={() => void load()}
           >
-            {loading ? '확인 중' : '새 상담 확인'}
+            {loading ? '불러오는 중' : '목록 새로고침'}
           </button>
         </div>
       )}
@@ -145,7 +155,7 @@ export function ReceivedDetail() {
   const navigate = useNavigate();
   const signal = useLocalSignal();
   const [item, setItem] = useState<Consultation | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState<LoadProblem | null>(null);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
   // 다른 탭에서 먼저 답변해 이 탭의 답변 입력칸이 사라질 때 대신 보여 줄 안내
@@ -156,13 +166,20 @@ export function ReceivedDetail() {
     if (!member) return;
     try {
       setItem(await getConsultation(member, id));
-      setLoadError('');
+      setLoadError(null);
     } catch (failure) {
-      setLoadError(failure instanceof Error ? failure.message : '상담을 불러오지 못했어요.');
+      // 이미 받은 상담을 보여 주는 중이면 화면을 지우지 않고 다음 새로고침을 기다림
+      setLoadError(loadProblem(failure, '상담을 불러오지 못했어요.'));
     }
   }, [member, id]);
   // 답변을 쓰는 동안 창으로 돌아와도 입력은 그대로 두고 상담만 다시 받음
   useLiveRefresh(member && !example ? load : undefined, consultationEvent(id));
+  // 후기는 상담 실시간 신호 없이 알림만 오므로 상담을 다시 받아 후기를 보여 준 뒤 읽음으로 바꿈
+  useReadNotifications(
+    item?.viewerRole === 'DESIGNER' ? id : undefined,
+    ['CONSULTATION_REQUESTED', 'CONSULTATION_MESSAGE', 'REVIEW_RECEIVED'],
+    load,
+  );
   if (example) return <ExampleNotice />;
   const heading = (
     <PageHeading
@@ -179,10 +196,13 @@ export function ReceivedDetail() {
     );
   if (!item)
     return loadError ? (
-      <Missing title="상담을 찾을 수 없어요" message={loadError} />
+      <LoadFailure problem={loadError} title="상담을 찾을 수 없어요" onRetry={() => void load()} />
     ) : (
-      <p role="status">상담을 불러오고 있어요.</p>
+      <Loading>상담을 불러오고 있어요.</Loading>
     );
+  // 보낸 사람이 받은 상담 주소를 열면 보낸 상담 화면으로 바꿈
+  if (item.viewerRole === 'CUSTOMER')
+    return <Navigate to={`/consultations/${encodeURIComponent(id)}`} replace />;
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (lock.current || !member) return;

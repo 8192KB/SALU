@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useParams, useSearchParams } from 'react-router';
+import { Navigate, useParams, useSearchParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import { usePrototype } from './prototype/context';
 import { useDirectory } from './directory';
@@ -9,10 +9,14 @@ import {
   Avatar,
   BackLink,
   Icon,
+  LoadFailure,
+  loadProblem,
   Missing,
   PageHeading,
   PhotoPlaceholder,
+  Loading,
 } from './components';
+import type { LoadProblem } from './components';
 import { Completion } from './completion';
 import { useConsultations } from './consultation-store';
 import type {
@@ -22,15 +26,18 @@ import type {
 } from './consultation-store';
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
-import { cutTitle, sentTime } from './prototype/dates';
-import { previewUrl } from './prototype/request-flow';
+import { cutTitle, daysAfter, sentTime } from './prototype/dates';
+import { photoOrigin, previewUrl } from './prototype/request-flow';
+import { MAX_CONSULTATION_PHOTOS } from './consultation-api';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
 import { listReceivedConsultations } from './consultation-api';
 import { consultationEvent, useLiveRefresh } from './realtime';
 import { ConsultationConversation } from './consultation-conversation';
 import { ConsultationReviewPanel, DesignerReviewList } from './consultation-review';
+import { useReadNotifications } from './notifications';
 import { AffiliationHistory, FavoriteButton } from './designer-parts';
+import { useFavorites } from './designer-favorites';
 
 // 준비 내용은 고른 디자이너 누구에게나 보낼 수 있고, 기록만 고를 때는 그 커트를 해 준 디자이너에게만 보냄
 function attachmentFor(
@@ -42,14 +49,19 @@ function attachmentFor(
   const cut = state.cuts.find((value) => value.id === cutId);
   if (!cut) return;
   if (preview?.cut.id === cutId) {
-    const photo = preview.photos[0];
+    // 준비할 때 고른 사진·좋았던 점·경과를 모두 보냄. 사진은 서버 한도(6장)까지
     return {
       cutId,
       designerId,
       cutDate: preview.cut.cutDate,
       service: preview.cut.service,
-      summary: preview.goodNote || preview.progress.at(-1)?.discomfort || '커트한 날의 기록',
-      photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
+      summary: previewSummary(preview),
+      photos: preview.photos.slice(0, MAX_CONSULTATION_PHOTOS).map((photo) => ({
+        id: photo.id,
+        url: photo.url,
+        caption: photo.caption,
+        label: photoOrigin(photo, preview.cut.cutDate),
+      })),
     };
   }
   if (cut.designerProfileId !== designerId) return;
@@ -63,34 +75,85 @@ function attachmentFor(
     cutDate: cut.cutDate,
     service: cut.service,
     summary: cut.goodNote || latest?.discomfort || '커트한 날의 기록',
-    photo: photo ? { id: photo.id, url: photo.url, caption: photo.caption } : undefined,
+    photos: photo
+      ? [{ id: photo.id, url: photo.url, caption: photo.caption, label: '커트 당일' }]
+      : [],
   };
 }
-// 준비 내용의 부위·방향을 문장 앞에 붙여 디자이너가 어느 부위 이야기인지 알 수 있게 함
+// 준비 내용의 좋았던 점·경과를 한 줄씩. 디자이너가 어느 날 어느 부위 이야기인지 알 수 있게 함
+function previewSummary(preview: RequestPreview) {
+  const lines = [
+    ...(preview.goodNote ? [`좋았던 점: ${preview.goodNote}`] : []),
+    ...preview.progress.map((entry) => {
+      const areas = entry.areas.map((area) => AREAS[area]).join('·');
+      const notes = [
+        entry.discomfort && `불편한 점 ${entry.discomfort}`,
+        entry.styling && `손질 ${entry.styling}`,
+        entry.question && `질문 ${entry.question}`,
+      ].filter(Boolean);
+      return `경과 D+${daysAfter(preview.cut.cutDate, entry.observedOn)}${areas ? ` · ${areas}` : ''}: ${notes.join(' / ') || '사진만 남김'}`;
+    }),
+  ];
+  return (lines.join('\n') || '커트한 날의 기록').slice(0, 2000);
+}
+// 준비 내용의 원하는 점·집에서 손질·질문을 한 줄씩. 부위와 방향을 앞에 붙임
 function requestFromPreview(preview: RequestPreview) {
   return [
-    ...preview.requests.map(
-      (value) => `${AREAS[value.area]} · ${INTENTS[value.intent]}: ${value.content}`,
-    ),
-    ...(preview.additionalQuestion ? [`질문: ${preview.additionalQuestion}`] : []),
+    ...preview.requests
+      .filter((value) => value.content.trim())
+      .map((value) => `${AREAS[value.area]}(${INTENTS[value.intent]}): ${value.content.trim()}`),
+    ...(preview.homeStyling.trim() ? [`집에서 손질: ${preview.homeStyling.trim()}`] : []),
+    ...(preview.additionalQuestion.trim() ? [`질문: ${preview.additionalQuestion.trim()}`] : []),
   ]
     .join('\n')
     .slice(0, 2000);
 }
-export function AttachmentCard({ attachment }: { attachment: ConsultationAttachment }) {
+// 사진이 한 장 이하면 옆에, 여러 장이면 글 아래에 어느 때 사진인지와 함께 나란히 보여 줌
+export function AttachmentCard({
+  attachment,
+  dropped = 0,
+  compact = false,
+}: {
+  attachment: ConsultationAttachment;
+  dropped?: number;
+  // 목록 카드는 첫 사진과 장수만 보여 줌
+  compact?: boolean;
+}) {
+  const title = cutTitle(attachment.cutDate, attachment.service);
+  const several = !compact && attachment.photos.length > 1;
   return (
-    <div className="consultation-attachment">
-      {attachment.photo ? (
-        <img
-          src={attachment.photo.url}
-          alt={`${cutTitle(attachment.cutDate, attachment.service)} 사진`}
-        />
-      ) : (
-        <PhotoPlaceholder />
-      )}
+    <div className={`consultation-attachment${several ? ' several' : ''}`}>
+      {!several &&
+        (attachment.photos[0] ? (
+          <img src={attachment.photos[0].url} alt={`${title} ${attachment.photos[0].label} 사진`} />
+        ) : (
+          <PhotoPlaceholder />
+        ))}
       <div>
-        <strong>{cutTitle(attachment.cutDate, attachment.service)}</strong>
-        <p>{attachment.summary}</p>
+        <strong>{title}</strong>
+        <p className="consultation-attachment-summary">{attachment.summary}</p>
+        {compact && attachment.photos.length > 1 && (
+          <span className="consultation-attachment-count">사진 {attachment.photos.length}장</span>
+        )}
+        {several && (
+          <ul
+            className="consultation-attachment-photos"
+            aria-label={`첨부 사진 ${attachment.photos.length}장`}
+          >
+            {attachment.photos.map((photo) => (
+              <li key={photo.id}>
+                <img src={photo.url} alt={`${title} ${photo.label} 사진`} />
+                <span>{photo.label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {dropped > 0 && (
+          <p className="consultation-attachment-note">
+            사진은 {MAX_CONSULTATION_PHOTOS}장까지 보낼 수 있어 앞의 {MAX_CONSULTATION_PHOTOS}장만
+            보내요. 나머지 {dropped}장은 보내지 않아요.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -102,11 +165,11 @@ export function useConsultationAccess() {
   const loginPath = useLoginPath();
   const example = useWorkspace() === 'example';
   if (example || state.status === 'authenticated') return null;
-  if (state.status === 'checking') return <p role="status">로그인 상태를 확인하고 있어요.</p>;
+  if (state.status === 'checking') return <Loading>로그인 상태를 확인하고 있어요.</Loading>;
   const copy = {
     prototype: ['서버 없이 화면만 확인하는 중이에요', '상담 흐름은 예시 체험에서 볼 수 있어요.'],
     unavailable: ['서버에 연결할 수 없어요', '연결이 돌아오면 상담을 이어서 볼 수 있어요.'],
-    guest: ['로그인이 필요해요', '로그인 후 디자이너에게 상담을 요청하고 답변을 볼 수 있어요.'],
+    guest: ['로그인이 필요해요', '로그인하면 보낸 상담과 받은 상담을 이어서 볼 수 있어요.'],
   }[state.status];
   return (
     <section className="consultation-soft-panel">
@@ -149,10 +212,15 @@ export function ConsultationDesignerProfile({
   })}`;
   // 담당자가 비어 있는 기록만 이 디자이너로 연결하게 함. 다른 담당자가 있는 기록은 바꾸지 않음
   const canLink = Boolean(recordCut && !recordCut.designerProfileId);
-  const editRecordUrl = recordCut ? `/records/${encodeURIComponent(recordCut.id)}/edit` : '';
+  // 연결할 디자이너를 미리 골라 둔 채 기록 수정을 엶
+  const editRecordUrl = recordCut
+    ? `/records/${encodeURIComponent(recordCut.id)}/edit?${new URLSearchParams({ designer: designer.id })}`
+    : '';
   const salon = designer.affiliations.find((value) => value.current)?.salonName;
   const fromRecord = useSearchParams()[0].get('from') === 'record';
   const mode = useWorkspace();
+  const favorites = useFavorites();
+  const own = mode !== 'example' && favorites?.ownId === designer.id;
   return (
     <div className="consultation-screen consultation-profile">
       <PageHeading
@@ -204,7 +272,15 @@ export function ConsultationDesignerProfile({
         </section>
       )}
       <div className="consultation-action">
-        {cuts.length ? (
+        {own ? (
+          // 내 프로필에는 나에게 상담을 보내는 길 대신 프로필 관리로 보냄
+          <>
+            <p className="muted">고객에게 보이는 내 프로필이에요.</p>
+            <Link className="button primary full" to="/account/designer">
+              내 프로필 고치기 <Icon name="arrow" />
+            </Link>
+          </>
+        ) : cuts.length ? (
           <>
             <Link className="button primary full" to={`/consultations/new?${query}`}>
               상담 요청
@@ -379,7 +455,10 @@ function ConsultationForm({
             aria-labelledby="consultation-prepared-heading"
           >
             <h2 id="consultation-prepared-heading">함께 보낼 기록</h2>
-            <AttachmentCard attachment={prepared} />
+            <AttachmentCard
+              attachment={prepared}
+              dropped={Math.max(0, (preview?.photos.length ?? 0) - MAX_CONSULTATION_PHOTOS)}
+            />
           </section>
         ) : (
           <fieldset className="consultation-choices" disabled={busy}>
@@ -440,29 +519,32 @@ function ConsultationForm({
 function useThread(id: string) {
   const { state, repository } = useConsultations();
   const thread = state.threads.find((value) => value.id === id);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<LoadProblem | null>(null);
   const load = repository?.load;
-  useLiveRefresh(
-    load &&
-      (() =>
-        load(id).then(
-          () => setError(''),
-          (failure: unknown) =>
-            setError(failure instanceof Error ? failure.message : '상담을 불러오지 못했어요.'),
-        )),
-    consultationEvent(id),
+  const reload = useCallback(
+    () =>
+      load?.(id).then(
+        () => setError(null),
+        (failure: unknown) => setError(loadProblem(failure, '상담을 불러오지 못했어요.')),
+      ),
+    [load, id],
   );
-  return { thread, error, server: Boolean(load) };
+  useLiveRefresh(load && reload, consultationEvent(id));
+  return { thread, error, server: Boolean(load), reload };
 }
 
 export function ConsultationComplete() {
   const { id = '' } = useParams();
-  const { thread, error, server } = useThread(id);
+  const { thread, error, server, reload } = useThread(id);
   if (!thread)
     return server && !error ? (
-      <p role="status">상담 요청을 불러오고 있어요.</p>
+      <Loading>상담 요청을 불러오고 있어요.</Loading>
     ) : (
-      <Missing title="보낸 상담 요청을 찾을 수 없어요" />
+      <LoadFailure
+        problem={error ?? { kind: 'missing', message: '' }}
+        title="보낸 상담 요청을 찾을 수 없어요"
+        onRetry={() => void reload()}
+      />
     );
   const { attachment } = thread;
   // 기록 저장 완료와 같은 완료 화면을 써서 체크·문구·버튼 배치를 통일
@@ -478,9 +560,9 @@ export function ConsultationComplete() {
       >
         <div className="completed-summary">
           <div className="prepared-cut-photo">
-            {attachment.photo ? (
+            {attachment.photos[0] ? (
               <img
-                src={attachment.photo.url}
+                src={attachment.photos[0].url}
                 alt={`${cutTitle(attachment.cutDate, attachment.service)} 사진`}
               />
             ) : (
@@ -489,8 +571,12 @@ export function ConsultationComplete() {
           </div>
           <div>
             <strong>{cutTitle(attachment.cutDate, attachment.service)}</strong>
-            <p>{attachment.summary}</p>
-            <span>첨부한 커트 기록</span>
+            <p>{attachment.summary.split('\n')[0]}</p>
+            <span>
+              {attachment.photos.length > 1
+                ? `첨부한 커트 기록 · 사진 ${attachment.photos.length}장`
+                : '첨부한 커트 기록'}
+            </span>
           </div>
         </div>
       </Completion>
@@ -550,13 +636,13 @@ export function ConsultationList() {
           to="/consultations/received"
         >
           <strong>받은 상담 {received.total}건</strong>
-          <span>{received.waiting ? `답변 전 ${received.waiting}건` : '모두 답변했어요'}</span>
+          <span>{received.waiting ? `답변 대기 ${received.waiting}건` : '모두 답변했어요'}</span>
         </Link>
       )}
       {access ? (
         access
       ) : loading ? (
-        <p role="status">상담 내역을 불러오고 있어요.</p>
+        <Loading>상담 내역을 불러오고 있어요.</Loading>
       ) : state.threads.length ? (
         <div className="consultation-history">
           {byLatest(state.threads).map((thread) => (
@@ -572,7 +658,7 @@ export function ConsultationList() {
                 <ConsultationStatus answered={thread.status === 'ANSWERED'} />
               </div>
               <p>{thread.request}</p>
-              <AttachmentCard attachment={thread.attachment} />
+              <AttachmentCard attachment={thread.attachment} compact />
               <time dateTime={thread.sentAt}>{sentTime(thread.sentAt)}</time>
             </Link>
           ))}
@@ -604,13 +690,8 @@ export function ConsultationList() {
             disabled={state.loading}
             onClick={() => void repository.refresh?.()}
           >
-            {state.loading ? '확인 중' : '새 답변 확인'}
+            {state.loading ? '불러오는 중' : '목록 새로고침'}
           </button>
-          {mode !== 'example' && !received?.total && (
-            <Link className="text-link" to="/consultations/received">
-              받은 상담(디자이너)
-            </Link>
-          )}
         </div>
       )}
     </div>
@@ -658,8 +739,12 @@ export function ConsultationDetail() {
   const access = useConsultationAccess();
   const { state } = useAuth();
   const member = state.status === 'authenticated' ? state.member : null;
-  const { thread, error, server } = useThread(id);
-  const { repository } = useConsultations();
+  const { thread, error, server, reload } = useThread(id);
+  const { repository, state: consultations } = useConsultations();
+  useReadNotifications(thread ? id : undefined, ['CONSULTATION_ANSWERED', 'CONSULTATION_MESSAGE']);
+  // 받은 디자이너가 보낸 상담 주소를 열면 이름·버튼이 뒤바뀌지 않게 받은 상담 화면으로 바꿈
+  if (consultations.received?.[id])
+    return <Navigate to={`/consultations/received/${encodeURIComponent(id)}`} replace />;
   if (access)
     return (
       <div className="consultation-screen">
@@ -669,9 +754,13 @@ export function ConsultationDetail() {
     );
   if (!thread)
     return server && !error ? (
-      <p role="status">상담 내역을 불러오고 있어요.</p>
+      <Loading>상담 내역을 불러오고 있어요.</Loading>
     ) : (
-      <Missing title="상담 내역을 찾을 수 없어요" message={error || undefined} />
+      <LoadFailure
+        problem={error ?? { kind: 'missing', message: '' }}
+        title="상담 내역을 찾을 수 없어요"
+        onRetry={() => void reload()}
+      />
     );
   return (
     <div className="consultation-screen">

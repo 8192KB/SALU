@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
+import { useAuth } from './auth/context';
 import {
   Alert,
   BackLink,
@@ -129,14 +130,17 @@ export function RecordList() {
             <p>위의 새 기록 버튼으로 날짜와 좋았던 점부터 남겨 보세요.</p>
           </div>
         )}
-        <Link className="journal-next text-link" to="/requests">
-          커트 준비 목록 보기 <Icon name="arrow" size={16} />
-        </Link>
-        {mode !== 'example' && (
-          <Link className="journal-next text-link" to="/backup">
-            기록 저장·백업
+        {/* 두 링크가 한 줄에 붙어 하나로 읽히지 않게 따로 줄을 나눔 */}
+        <div className="journal-links">
+          <Link className="journal-next text-link" to="/requests">
+            커트 준비 목록 보기 <Icon name="arrow" size={16} />
           </Link>
-        )}
+          {mode !== 'example' && (
+            <Link className="journal-next text-link" to="/backup">
+              기록 저장·백업 <Icon name="arrow" size={16} />
+            </Link>
+          )}
+        </div>
       </section>
       <aside className="sidebar journal-guide">
         <section className="panel">
@@ -165,11 +169,22 @@ export function RecordList() {
   );
 }
 
+// 메뉴를 옮겼다 돌아오거나 새로고침해도 저장 전 내용은 남아 있음. 저장된 것으로 오해하지 않게 알림
+function ResumedNotice() {
+  return (
+    <p className="working-notice resumed-notice" role="status">
+      저장하지 않은 내용을 이어서 보여 줘요. 처음부터 쓰려면 맨 아래 ‘작성 내용 지우기’를 눌러
+      주세요.
+    </p>
+  );
+}
+
 export function CutForm() {
   const { id } = useParams();
-  const { state, repository, cutDraft, setCutDraft } = usePrototype();
+  const { state, repository, cutDraft, setCutDraft, cutEdits } = usePrototype();
   const original = state.cuts.find((cut) => cut.id === id);
   const edit = useCutEditDraft(original);
+  const [resumed] = useState(() => (id ? Boolean(cutEdits[id]) : !isBlankCutDraft(cutDraft)));
   // 전날 저장하고 비운 초안을 열면 커트 날짜를 오늘로 다시 채움. 화면을 연 뒤 고른 날짜는 그대로 둠
   const [staleDate] = useState(
     () => !id && isBlankCutDraft(cutDraft) && cutDraft.cutDate !== today(),
@@ -189,7 +204,15 @@ export function CutForm() {
           setCutDraft((previous) => ({ ...previous, ...input })),
         clear: () => setCutDraft(newCutDraft()),
       };
-  return <CutFormBody key={id ?? 'new'} {...form} editingId={id} repository={repository} />;
+  return (
+    <CutFormBody
+      key={id ?? 'new'}
+      {...form}
+      editingId={id}
+      repository={repository}
+      resumed={resumed}
+    />
+  );
 }
 function CutFormBody({
   draft,
@@ -197,9 +220,11 @@ function CutFormBody({
   clear,
   editingId,
   repository,
+  resumed,
 }: ReturnType<typeof useCutEditDraft> & {
   editingId?: string;
   repository: ReturnType<typeof usePrototype>['repository'];
+  resumed: boolean;
 }) {
   const { state } = usePrototype();
   const directory = useDirectory(state);
@@ -211,6 +236,26 @@ function CutFormBody({
   const [photosBusy, setPhotosBusy] = useState(false);
   const [manualDesigner, setManualDesigner] = useState(false);
   const navigate = useNavigate();
+  // 디자이너 상세의 '담당자로 연결'에서 오면 그 디자이너를 담당자로 골라 둠. 저장해야 연결됨
+  const [search] = useSearchParams();
+  const connectId = editingId ? search.get('designer') : null;
+  const connectDesigner = connectId
+    ? directory.designers.find((value) => value.id === connectId)
+    : undefined;
+  const connected = useRef(false);
+  useEffect(() => {
+    if (connected.current || !connectDesigner || draft.designerProfileId) return;
+    connected.current = true;
+    update({
+      designerProfileId: connectDesigner.id,
+      designerName: connectDesigner.name,
+      salonName:
+        draft.salonName ||
+        connectDesigner.affiliations.find((value) => value.current)?.salonName ||
+        '',
+      salonId: draft.salonName ? draft.salonId : connectDesigner.salonId,
+    });
+  }, [connectDesigner]);
   const previousDesigners = Array.from(
     [...state.cuts]
       .sort((a, b) => b.cutDate.localeCompare(a.cutDate))
@@ -243,6 +288,12 @@ function CutFormBody({
       : previousDesigner
         ? `previous/${previousDesigner.id}`
         : '';
+  const designerSelect = Boolean(
+    previousDesigners.length > 0 ||
+    directory.designers.length > 0 ||
+    draft.designerProfileId ||
+    mode !== 'example',
+  );
   const returnUrl = editingId ? `/records/${editingId}` : '/records';
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -280,6 +331,7 @@ function CutFormBody({
         title={editingId ? '커트 기록 수정' : '커트 기록 남기기'}
         description="커트한 날짜와 마음에 든 부분을 남겨 보세요."
       />
+      {resumed && <ResumedNotice />}
       <Dialog
         open={discardOpen}
         title="작성한 내용을 지울까요?"
@@ -332,7 +384,7 @@ function CutFormBody({
                   maxLength={60}
                   value={draft.service}
                   onChange={(event) => update({ service: event.target.value })}
-                  placeholder="커트"
+                  placeholder="예: 커트"
                   aria-invalid={!!errors.service}
                 />
               </Field>
@@ -350,16 +402,19 @@ function CutFormBody({
                 maxLength={2000}
                 value={draft.goodNote}
                 onChange={(event) => update({ goodNote: event.target.value })}
-                placeholder="앞머리 길이가 마음에 들어요"
+                placeholder="예: 앞머리 길이가 마음에 들어요"
               />
             </Field>
             {editingId ? (
-              <PhotoList
-                photos={state.photos.filter(
-                  (photo) => photo.cutId === editingId && !photo.progressId,
-                )}
-                cutDate={draft.cutDate}
-              />
+              <>
+                <PhotoList
+                  photos={state.photos.filter(
+                    (photo) => photo.cutId === editingId && !photo.progressId,
+                  )}
+                  cutDate={draft.cutDate}
+                />
+                <p className="form-note">저장한 사진은 수정 화면에서 바꾸거나 뺄 수 없어요.</p>
+              </>
             ) : (
               <PhotoPicker
                 photos={draft.photos}
@@ -370,19 +425,25 @@ function CutFormBody({
           </section>
           <AnimatedDetails
             className="optional-fields"
-            defaultOpen={Boolean(draft.salonName || draft.designerName || draft.price)}
+            defaultOpen={Boolean(connectId || draft.salonName || draft.designerName || draft.price)}
             summary={
               <span className="optional-summary">
-                <span>선택 정보 · 미용실, 담당자, 가격</span>
+                <span>미용실, 담당자, 가격</span>
                 <small>
                   {draft.salonName || draft.designerName || draft.price ? '작성됨' : '선택'}
                 </small>
               </span>
             }
           >
+            {connectDesigner && draft.designerProfileId === connectDesigner.id && (
+              <p className="form-note connect-note" role="status">
+                {connectDesigner.name} 디자이너를 담당자로 골라 두었어요. 수정 저장을 누르면 이
+                기록에 연결돼요.
+              </p>
+            )}
             <div className="field-grid">
               {mode !== 'example' && (
-                <Field label="등록된 미용실 선택" hint="선택">
+                <Field label="미용실" hint="선택">
                   <select
                     value={draft.salonId ?? ''}
                     onChange={(event) => {
@@ -410,21 +471,21 @@ function CutFormBody({
                   </select>
                 </Field>
               )}
-              <Field label="미용실">
-                <input
-                  maxLength={100}
-                  value={draft.salonName}
-                  onChange={(event) =>
-                    update({ salonName: event.target.value, salonId: undefined })
-                  }
-                  placeholder="매장 이름"
-                />
-              </Field>
-              {(previousDesigners.length > 0 ||
-                directory.designers.length > 0 ||
-                draft.designerProfileId ||
-                mode !== 'example') && (
-                <Field label="담당자 선택" hint="선택" error={errors.designerProfileId}>
+              {/* 목록에서 고르면 이름 칸을 숨겨 같은 내용을 두 번 적는 칸이 보이지 않게 함 */}
+              {(mode === 'example' || !draft.salonId) && (
+                <Field label={mode === 'example' ? '미용실' : '미용실 이름'}>
+                  <input
+                    maxLength={100}
+                    value={draft.salonName}
+                    onChange={(event) =>
+                      update({ salonName: event.target.value, salonId: undefined })
+                    }
+                    placeholder="예: 하늘헤어 강남점"
+                  />
+                </Field>
+              )}
+              {designerSelect && (
+                <Field label="담당자" hint="선택" error={errors.designerProfileId}>
                   <select
                     value={designerChoice}
                     onChange={(event) => {
@@ -487,15 +548,16 @@ function CutFormBody({
                   </select>
                 </Field>
               )}
-              <Field label="담당자">
-                <input
-                  maxLength={100}
-                  value={draft.designerName}
-                  readOnly={!!draft.designerProfileId}
-                  onChange={(event) => update({ designerName: event.target.value })}
-                  placeholder="디자이너 이름"
-                />
-              </Field>
+              {!draft.designerProfileId && (
+                <Field label={designerSelect ? '담당자 이름' : '담당자'}>
+                  <input
+                    maxLength={100}
+                    value={draft.designerName}
+                    onChange={(event) => update({ designerName: event.target.value })}
+                    placeholder="예: 김지우"
+                  />
+                </Field>
+              )}
               <Field label="가격" hint="원" error={errors.price}>
                 <input
                   type="number"
@@ -503,7 +565,7 @@ function CutFormBody({
                   step="1000"
                   value={draft.price}
                   onChange={(event) => update({ price: event.target.value })}
-                  placeholder="25000"
+                  placeholder="예: 25000"
                   aria-invalid={!!errors.price}
                 />
               </Field>
@@ -523,9 +585,6 @@ function CutFormBody({
                     </button>
                   </div>
                 )}
-                <Link className="text-link" to="/account/designer">
-                  매장·내 디자이너 프로필 등록
-                </Link>
               </>
             )}
           </AnimatedDetails>
@@ -626,6 +685,7 @@ export function RecordDetail() {
   const directory = useDirectory(state);
   const navigate = useNavigate();
   const mode = useWorkspace();
+  const signedIn = useAuth().state.status === 'authenticated';
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
     (value) => value.id === search.get('preview') && value.cut.id === id,
@@ -678,6 +738,12 @@ export function RecordDetail() {
                 {cut.designerName && <span>{cut.designerName} 디자이너</span>}
                 {cut.price !== undefined && <span>{cut.price.toLocaleString()}원</span>}
               </div>
+              {/* 같은 날 찍은 나머지 사진은 기록 카드 안에 작게 모아 둠 */}
+              <PhotoList
+                photos={photos.filter((photo) => !photo.progressId).slice(1)}
+                cutDate={cut.cutDate}
+                captions={false}
+              />
               <div className="record-edit-actions">
                 <Link className="text-link" to={`/records/${cut.id}/edit`}>
                   기록 수정 <Icon name="arrow" size={17} />
@@ -685,10 +751,6 @@ export function RecordDetail() {
               </div>
             </div>
           </article>
-          <PhotoList
-            photos={photos.filter((photo) => !photo.progressId).slice(1)}
-            cutDate={cut.cutDate}
-          />
           <div className="section-heading">
             <h2>커트 이후의 변화</h2>
             <div className="section-heading-actions">
@@ -782,7 +844,8 @@ export function RecordDetail() {
               </Link>
             </section>
           )}
-          {mode !== 'example' && (
+          {/* 글은 로그인해야 올릴 수 있어 로그인한 실제 공간에서만 권함 */}
+          {mode !== 'example' && signedIn && (
             <section className="panel record-community">
               <h3>커뮤니티에 공유</h3>
               <p className="muted">
@@ -816,6 +879,10 @@ export function ProgressForm() {
   const fresh = useProgressDraft(id);
   const original = state.progress.find((entry) => entry.id === progressId && entry.cutId === id);
   const edit = useProgressEditDraft(original);
+  const { progressDrafts, progressEdits } = usePrototype();
+  const [resumed] = useState(() =>
+    Boolean(progressId ? progressEdits[progressId] : progressDrafts[id]),
+  );
   if (!cut || (progressId && !original)) return <Missing />;
   return (
     <ProgressFormBody
@@ -823,6 +890,7 @@ export function ProgressForm() {
       cut={cut}
       {...(progressId ? edit : fresh)}
       editingId={progressId}
+      resumed={resumed}
     />
   );
 }
@@ -832,7 +900,8 @@ function ProgressFormBody({
   update,
   clear,
   editingId,
-}: { cut: CutRecord; editingId?: string } & ReturnType<typeof useProgressDraft>) {
+  resumed,
+}: { cut: CutRecord; editingId?: string; resumed: boolean } & ReturnType<typeof useProgressDraft>) {
   const { repository, state } = usePrototype();
   const navigate = useNavigate();
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -880,6 +949,7 @@ function ProgressFormBody({
         title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />
+      {resumed && <ResumedNotice />}
       <Dialog
         open={discardOpen}
         title="작성한 내용을 지울까요?"
@@ -947,15 +1017,18 @@ function ProgressFormBody({
                 maxLength={2000}
                 value={draft.discomfort}
                 onChange={(event) => update({ discomfort: event.target.value })}
-                placeholder="옆머리가 금방 떠요"
+                placeholder="예: 옆머리가 금방 떠요"
                 aria-invalid={!!errors.discomfort}
               />
             </Field>
             {editingId ? (
-              <PhotoList
-                photos={state.photos.filter((photo) => photo.progressId === editingId)}
-                cutDate={cut.cutDate}
-              />
+              <>
+                <PhotoList
+                  photos={state.photos.filter((photo) => photo.progressId === editingId)}
+                  cutDate={cut.cutDate}
+                />
+                <p className="form-note">저장한 사진은 수정 화면에서 바꾸거나 뺄 수 없어요.</p>
+              </>
             ) : (
               <PhotoPicker
                 photos={draft.photos}
@@ -967,7 +1040,12 @@ function ProgressFormBody({
           </section>
           <AnimatedDetails
             className="optional-fields record-optional"
-            summary="추가 정보 · 손질 방법, 물어볼 점 (선택)"
+            summary={
+              <span className="optional-summary">
+                <span>손질 방법, 물어볼 점</span>
+                <small>{draft.styling || draft.question ? '작성됨' : '선택'}</small>
+              </span>
+            }
             defaultOpen={Boolean(draft.styling || draft.question)}
           >
             <Field label="평소 손질">
@@ -975,7 +1053,7 @@ function ProgressFormBody({
                 maxLength={2000}
                 value={draft.styling}
                 onChange={(event) => update({ styling: event.target.value })}
-                placeholder="드라이만 하고 있어요"
+                placeholder="예: 드라이만 하고 있어요"
               />
             </Field>
             <Field label="물어볼 점">

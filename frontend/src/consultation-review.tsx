@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { useParams } from 'react-router';
-import { Alert, BackLink, Missing, PageHeading } from './components';
+import { useLocation, useParams } from 'react-router';
+import { ApiFailure } from './auth/api';
+import {
+  Alert,
+  BackLink,
+  ErrorState,
+  FieldFeedback,
+  LoadFailure,
+  loadProblem,
+  Missing,
+  PageHeading,
+  Loading,
+} from './components';
+import type { LoadProblem } from './components';
 import { Completion } from './completion';
 import { Dialog } from './dialog';
+import { useFeedback } from './feedback';
 import { Link, useNavigate } from './workspace';
 import { useAuth } from './auth/context';
 import type { SessionMember } from './auth/api';
@@ -60,6 +73,7 @@ export function ConsultationReviewPanel({
 }) {
   const member = useMember();
   const signal = useLocalSignal();
+  const notify = useFeedback();
   const [review, setReview] = useState<DesignerReview | null>(null);
   const [error, setError] = useState('');
   const [confirm, setConfirm] = useState(false);
@@ -107,6 +121,7 @@ export function ConsultationReviewPanel({
     setConfirm(false);
     setDeletedId(reviewId);
     setReview(null);
+    notify('후기를 지웠어요');
     // 지우기는 이미 끝났으므로 상담을 다시 받지 못해도 오류로 보이지 않음
     void Promise.resolve(onChange()).catch(() => {});
     signal({ type: 'CONSULTATION', id });
@@ -119,7 +134,7 @@ export function ConsultationReviewPanel({
           {review ? (
             <ReviewBody review={review} />
           ) : (
-            !error && <p role="status">후기를 불러오고 있어요.</p>
+            !error && <Loading>후기를 불러오고 있어요.</Loading>
           )}
           <Alert message={error} />
           {review && (
@@ -235,7 +250,7 @@ export function DesignerReviewList({ designerId }: { designerId: string }) {
           </button>
         </>
       ) : !reviews ? (
-        <p role="status">후기를 불러오고 있어요.</p>
+        <Loading>후기를 불러오고 있어요.</Loading>
       ) : reviews.items.length ? (
         reviews.items.map((review) => (
           <article key={review.id} className="review-item">
@@ -264,49 +279,72 @@ export function ReviewWrite() {
   const signal = useLocalSignal();
   const [consultation, setConsultation] = useState<Consultation | null>(null);
   const [existing, setExisting] = useState<DesignerReview | null>(null);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState<LoadProblem | null>(null);
   const [rating, setRating] = useState(0);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const [fieldError, setFieldError] = useState<'rating' | 'content' | null>(null);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
-  useEffect(() => {
-    if (!member) return;
-    let current = true;
-    (async () => {
-      try {
-        const value = await getConsultation(member, id);
-        const review = value.reviewId ? await fetchConsultationReview(member, id) : null;
-        if (!current) return;
-        setConsultation(value);
+  const memberRef = useRef(member);
+  memberRef.current = member;
+  // 마지막으로 입력칸에 채운 후기 ID. 메뉴를 오가며 보관된 화면이 다시 보일 때 후기가 지워졌거나
+  // 새로 생겼으면 입력칸을 바꾸고, 같은 후기면 쓰던 내용을 그대로 둠
+  const applied = useRef<string | null | undefined>(undefined);
+  const load = useCallback(async () => {
+    const account = memberRef.current;
+    if (!account) return;
+    try {
+      const value = await getConsultation(account, id);
+      const review = value.reviewId ? await fetchConsultationReview(account, id) : null;
+      setConsultation(value);
+      setLoadError(null);
+      if (applied.current !== value.reviewId) {
+        applied.current = value.reviewId;
         setExisting(review);
-        if (review) {
-          setRating(review.rating);
-          setContent(review.content);
-        }
-      } catch (failure) {
-        if (current)
-          setLoadError(failure instanceof Error ? failure.message : '상담을 불러오지 못했어요.');
+        setRating(review?.rating ?? 0);
+        setContent(review?.content ?? '');
+        setError('');
+        setFieldError(null);
       }
-    })();
-    return () => {
-      current = false;
-    };
-    // 로그인 확인 때마다 회원 객체가 새로 만들어지므로 계정 ID로만 다시 불러와 쓰던 내용을 덮지 않음
+    } catch (failure) {
+      setLoadError(loadProblem(failure, '상담을 불러오지 못했어요.'));
+    }
+    // 로그인 확인 때마다 회원 객체가 새로 만들어지므로 계정 ID로만 다시 만듦
   }, [member?.id, id]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  useOnReactivate(load);
   const back = <BackLink to={`/consultations/${id}`}>보낸 상담</BackLink>;
+  if (state.status === 'checking') return <Loading>로그인 상태를 확인하고 있어요.</Loading>;
   if (state.status !== 'authenticated')
     return (
       <div className="consultation-screen">
         <PageHeading title="후기 남기기" back={back} />
-        <Missing title="로그인이 필요해요" message="로그인 후 후기를 남길 수 있어요." />
+        <ErrorState kind="login" message="로그인하면 받은 상담에 후기를 남길 수 있어요." />
       </div>
     );
   if (!consultation)
     return loadError ? (
-      <Missing title="상담을 찾을 수 없어요" message={loadError} />
+      <LoadFailure problem={loadError} title="상담을 찾을 수 없어요" onRetry={() => void load()} />
     ) : (
-      <p role="status">상담을 불러오고 있어요.</p>
+      <Loading>상담을 불러오고 있어요.</Loading>
+    );
+  // 후기는 상담을 보낸 회원만 남김. 받은 디자이너가 주소로 열면 고치기 화면을 보여 주지 않음
+  if (consultation.viewerRole === 'DESIGNER')
+    return (
+      <div className="consultation-screen">
+        <PageHeading
+          title="후기 남기기"
+          back={<BackLink to={`/consultations/received/${id}`}>받은 상담</BackLink>}
+        />
+        <ErrorState
+          kind="denied"
+          title="상담을 보낸 회원만 후기를 남길 수 있어요"
+          message="받은 상담에서 고객이 남긴 후기를 볼 수 있어요."
+        />
+      </div>
     );
   if (!existing && !consultation.canReview)
     return (
@@ -319,21 +357,32 @@ export function ReviewWrite() {
     event.preventDefault();
     if (lock.current || !member) return;
     const text = content.trim();
+    // 입력 확인 문구는 해당 칸 바로 아래에 보여 줌. 저장 실패는 버튼 위 상자에 보여 줌
     if (!rating || !text) {
-      setError(!rating ? '별점을 골라 주세요.' : '후기를 적어 주세요.');
+      setFieldError(!rating ? 'rating' : 'content');
       return;
     }
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      await saveReview(member, id, { rating, content: text }, Boolean(existing));
+      const saved = await saveReview(member, id, { rating, content: text }, Boolean(existing));
+      // 저장한 후기를 기준으로 삼아, 나중에 지워지면 다시 들어올 때 지운 내용 없이 빈 칸으로 시작함
+      applied.current = saved.id;
+      setExisting(saved);
       signal({ type: 'CONSULTATION', id });
       navigate(`/consultations/${id}/review/complete`, {
         replace: true,
-        state: { celebrate: true },
+        state: { celebrate: true, edited: Boolean(existing) },
       });
     } catch (failure) {
+      // 다른 탭에서 지운 후기를 고치려 했으면 쓰던 내용은 두고 새 후기로 남기게 바꿈
+      if (existing && failure instanceof ApiFailure && failure.status === 404) {
+        applied.current = null;
+        setExisting(null);
+        setError('이 후기는 이미 지워졌어요. 한 번 더 누르면 새 후기로 남겨요.');
+        return;
+      }
       setError(failure instanceof Error ? failure.message : '후기를 저장하지 못했어요.');
     } finally {
       lock.current = false;
@@ -349,7 +398,11 @@ export function ReviewWrite() {
         back={back}
       />
       <form onSubmit={submit} noValidate>
-        <fieldset className="review-rating" disabled={busy}>
+        <fieldset
+          className="review-rating"
+          disabled={busy}
+          aria-describedby={fieldError === 'rating' ? 'review-rating-error' : undefined}
+        >
           <legend>별점</legend>
           {RATINGS.map((value) => (
             <label key={value} className={value <= rating ? 'on' : ''}>
@@ -361,13 +414,21 @@ export function ReviewWrite() {
                 onChange={() => {
                   setRating(value);
                   setError('');
+                  setFieldError(null);
                 }}
               />
-              <span aria-hidden="true">★</span>
+              {/* 고르지 않은 별은 빈 별로 그려 몇 개를 골랐는지 한눈에 보이게 함 */}
+              <span aria-hidden="true">{value <= rating ? '★' : '☆'}</span>
               <span className="sr-only">{value}점</span>
             </label>
           ))}
+          <span className="review-rating-value" aria-hidden="true">
+            {rating ? `${rating}점` : '골라 주세요'}
+          </span>
         </fieldset>
+        {fieldError === 'rating' && (
+          <FieldFeedback id="review-rating-error" message="별점을 골라 주세요." />
+        )}
         <label className="consultation-request-field">
           <span>후기</span>
           <textarea
@@ -376,13 +437,21 @@ export function ReviewWrite() {
             placeholder="예: 손질 방법을 사진과 함께 자세히 알려 주셔서 좋았어요."
             value={content}
             disabled={busy}
+            aria-invalid={fieldError === 'content' || undefined}
+            aria-describedby={fieldError === 'content' ? 'review-content-error' : undefined}
             onChange={(event) => {
               setContent(event.target.value);
               setError('');
+              setFieldError(null);
             }}
           />
         </label>
-        <Alert message={error} />
+        {fieldError === 'content' && (
+          <FieldFeedback id="review-content-error" message="후기를 적어 주세요." />
+        )}
+        <div className="review-form-error">
+          <Alert message={error} />
+        </div>
         <div className="consultation-action">
           <p className="consultation-privacy">
             후기는 {name} 디자이너 프로필에 내 이름과 함께 보여요.
@@ -399,6 +468,7 @@ export function ReviewWrite() {
 export function ReviewComplete() {
   const { id = '' } = useParams();
   const member = useMember();
+  const edited = Boolean((useLocation().state as { edited?: boolean } | null)?.edited);
   const [designerId, setDesignerId] = useState('');
   useEffect(() => {
     if (!member) return;
@@ -410,7 +480,7 @@ export function ReviewComplete() {
   return (
     <div className="consultation-sent">
       <Completion
-        title="후기를 남겼어요"
+        title={edited ? '후기를 고쳤어요' : '후기를 남겼어요'}
         description="디자이너 프로필의 상담 후기에서 볼 수 있어요."
         primary="보낸 상담 보기"
         to={`/consultations/${id}`}

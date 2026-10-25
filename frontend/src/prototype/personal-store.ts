@@ -1,20 +1,37 @@
 import { newId } from './ids';
 import { openDB } from 'idb';
 import { createMemoryRepository, InputError, isBlankCutDraft } from './memory-repository';
-import type { PrototypeRepository } from './types';
+import type { CutDraft, PrototypeRepository, PrototypeState } from './types';
+import { settleRequestDrafts } from './request-flow';
 import {
   appendBundle,
+  canonical,
   copyBundle,
   emptyBundle,
   emptyDrafts,
   mapPhotos,
+  matchRecords,
   photoIds,
   repairBundle,
   serialize,
   validateBundle,
+  withoutRecords,
+  withoutSameDrafts,
 } from './storage-model';
 import type { Asset, Bundle, Drafts } from './storage-model';
 import { exportZip, importZip, checkImage, MAX_PIXELS } from './zip-backup';
+
+// 사진 ID → 파일 내용의 SHA-256(hex). 파일이 없는 사진은 빠짐
+async function hashPhotos(ids: Iterable<string>, blob: (id: string) => Blob | undefined) {
+  const result = new Map<string, string>();
+  for (const id of ids) {
+    const value = blob(id);
+    if (!value) continue;
+    const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', await value.arrayBuffer()));
+    result.set(id, Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(''));
+  }
+  return result;
+}
 
 export type SyncItem = {
   revision: number;
@@ -224,7 +241,7 @@ export class PersonalStore {
   private channel: BroadcastChannel | null = null;
   private disposalTimer?: ReturnType<typeof setTimeout>;
   private engine;
-  private committingDrafts?: (drafts: Drafts) => Drafts;
+  private committingDrafts?: (drafts: Drafts, state: PrototypeState) => Drafts;
   repository: PrototypeRepository;
   onChange?: () => void;
   constructor(public scope: string) {
@@ -234,11 +251,15 @@ export class PersonalStore {
         await this.commit({
           ...this.view.bundle,
           state: { ...state, designers: [] },
-          drafts: this.committingDrafts?.(this.view.bundle.drafts) ?? this.view.bundle.drafts,
+          drafts:
+            this.committingDrafts?.(this.view.bundle.drafts, state) ?? this.view.bundle.drafts,
         });
       },
     });
-    const operation = <T>(task: () => Promise<T>, drafts?: (previous: Drafts) => Drafts) =>
+    const operation = <T>(
+      task: () => Promise<T>,
+      drafts?: (previous: Drafts, state: PrototypeState) => Drafts,
+    ) =>
       this.enqueue(async () => {
         this.committingDrafts = drafts;
         try {
@@ -286,6 +307,30 @@ export class PersonalStore {
           }),
         ),
       createPreview: (v) => operation(() => this.engine.createPreview(v)),
+      // 준비와 초안 정리를 한 번에 저장함. 정리하지 않으면 고치기 전 준비를 가리키는 초안이 검증을 통과하지 못함
+      updatePreview: (id, v) =>
+        operation(
+          () => this.engine.updatePreview(id, v),
+          (d, state) => {
+            const requests = settleRequestDrafts(
+              d.requests,
+              this.view.bundle.state.previews,
+              state.previews,
+            );
+            if (requests === d.requests) return d;
+            return {
+              ...d,
+              requests,
+              steps: Object.fromEntries(
+                Object.entries(d.steps).filter(([key]) => Object.hasOwn(requests, key)),
+              ),
+              currentRequestId:
+                d.currentRequestId && Object.hasOwn(requests, d.currentRequestId)
+                  ? d.currentRequestId
+                  : null,
+            };
+          },
+        ),
       createPreviewForDesigner: (id, d) =>
         operation(() => this.engine.createPreviewForDesigner(id, d)),
       preparePhotos: async (files, count) => {
@@ -611,15 +656,56 @@ export class PersonalStore {
     await this.flush().catch(() => {});
     return exportZip(this.view.bundle, this.assets);
   }
+  // 이 기기에 이미 있는 같은 기록을 찾음. 사진은 파일 내용의 SHA-256으로 비교함
+  private async planBackup(imported: Awaited<ReturnType<typeof importZip>>) {
+    const target = this.view.bundle;
+    const added = new Map(imported.assets.map((a) => [a.id, a.blob]));
+    const targetHash = await hashPhotos(photoIds(target), (id) => this.assets.get(id));
+    const addedHash = await hashPhotos(photoIds(imported.bundle), (id) => added.get(id));
+    const { matched, known } = matchRecords(
+      target,
+      (id) => targetHash.get(id),
+      imported.bundle,
+      (id) => addedHash.get(id),
+    );
+    return { target, matched, known, targetHash, addedHash };
+  }
   async readBackup(file: File) {
-    return importZip(file);
+    const imported = await importZip(file);
+    const { matched } = await this.planBackup(imported);
+    const rest = withoutRecords(imported.bundle, matched);
+    return {
+      ...imported,
+      // 창에 보여 줄 수. 불러올 때 이 기기의 기록으로 다시 셈
+      same: matched.size,
+      newRecords: rest.state.cuts.length,
+      newPhotos: photoIds(rest).length,
+    };
   }
   async importBackup(file: File | Awaited<ReturnType<typeof importZip>>) {
     const imported = file instanceof File ? await importZip(file) : file;
     return this.enqueue(async () => {
-      const copied = copyBundle(imported.bundle);
-      imported.assets.forEach((a) => this.assets.set(copied.ids.get(a.id)!, a.blob));
-      await this.commit(appendBundle(this.view.bundle, copied.bundle));
+      const { target, matched, known, targetHash, addedHash } = await this.planBackup(imported);
+      // 이미 있는 같은 기록은 빼고 복사함. 그 기록을 가리키던 초안은 known으로 이 기기의 기록에 붙음
+      const copied = copyBundle(withoutRecords(imported.bundle, matched), known);
+      const hashOf = new Map(
+        [...copied.ids].map(([from, to]) => [to, addedHash.get(from)] as const),
+      );
+      const cutDraftKey = (draft: CutDraft, hash: (id: string) => string | undefined) =>
+        canonical({ ...draft, photos: draft.photos.map((p) => [hash(p.id) ?? p.id, p.caption]) });
+      const added = withoutSameDrafts(
+        target,
+        copied.bundle,
+        (a, b) =>
+          cutDraftKey(a, (id) => targetHash.get(id)) === cutDraftKey(b, (id) => hashOf.get(id)),
+      );
+      const kept = new Set(photoIds(added));
+      imported.assets.forEach((a) => {
+        const id = copied.ids.get(a.id);
+        if (id && !known.has(a.id) && kept.has(id)) this.assets.set(id, a.blob);
+      });
+      await this.commit(appendBundle(target, added));
+      return { added: added.state.cuts.length, same: matched.size };
     });
   }
   // 화면에서 바로 다시 보내기. CloudSync가 연결돼 있을 때만 동작함

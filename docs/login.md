@@ -9,9 +9,12 @@
 | 경로 | 동작 |
 |---|---|
 | GET /api/csrf | 세션 masked token/headerName, no-store |
-| POST /api/auth/signup | JSON email/displayName/password + CSRF; 201 가입 완료, 이후 기존 로그인 경로 사용; 중복 409; 실제 가입 검증은 별도 수행 |
+| POST /api/auth/email-check | JSON email + CSRF; 200 `{available}`(가입한 이메일이면 false), 형식 오류 400. 가입 화면의 중복 확인 버튼용 |
+| POST /api/auth/signup | JSON email/displayName/password(8자 이상) + CSRF; 201 가입 완료, 이후 기존 로그인 경로 사용; 중복 409; 실제 가입 검증은 별도 수행 |
 | POST /api/auth/login | application/x-www-form-urlencoded email/password + CSRF header, 200은 id/email(nullable)/displayName/storageContext/role만, 실패 401/LOGIN_FAILED |
-| GET /api/auth/me | 로그인 회원 id/email(nullable)/displayName/storageContext/role, 비로그인 401 |
+| GET /api/auth/me | 로그인 회원 id/email(nullable)/displayName/storageContext/role, 비로그인 401. displayName은 DB의 현재 이름 |
+| PATCH /api/auth/me | JSON displayName(앞뒤 공백 제거 1~50자) + CSRF; 200 바뀐 회원 정보(GET과 같은 형식) |
+| POST /api/auth/password | JSON currentPassword/newPassword(8자 이상) + CSRF; 204, 세션 ID 교체. 현재 비밀번호가 틀리면 400 `CURRENT_PASSWORD_INVALID`, 비밀번호가 없는 소셜 가입 계정은 409 `PASSWORD_NOT_SET`. 다른 기기의 세션은 끊지 않음 |
 | POST /api/auth/logout | CSRF 필수, 세션 무효화·SALU_SESSION 삭제, 204; GET으로 로그아웃하지 않음 |
 
 ## 인증 처리
@@ -19,7 +22,7 @@
 - React는 각 변경 요청 전에 CSRF 조회, 쿠키 자동 전송
 - 성공 후 화면 전환을 토큰 재조회 때문에 지연시키지 않으며 다음 변경 요청 전에 새 토큰 조회
 - 비밀번호는 전송 후 입력에서 제거, localStorage·로그 저장 없음
-- 회원가입은 비밀번호 확인 칸이 같아야 요청. 다르면 요청 없이 확인 칸에 알림
+- 회원가입·비밀번호 변경은 비밀번호 확인 칸이 같아야 요청. 입력하는 동안 확인 칸에 일치 여부를 보여 줌
 - 토큰 재조회가 일시 실패해도 이미 성공한 로그인/로그아웃을 실패로 바꾸지 않으며 다음 요청 전에 다시 조회
 
 ### 세션
@@ -33,7 +36,7 @@
 ### 입력과 로그인 제한
 
 - 로그인 query string 거부(비밀번호 URL 전송 금지), 중복 파라미터·이메일·BCrypt 72바이트 제한 검사
-- IP당 30회/60초 후 429, 요청 X-Forwarded-For를 신뢰하지 않음
+- 로그인·가입·이메일 확인·비밀번호 변경은 경로마다 IP당 30회/60초 후 429, 요청 X-Forwarded-For를 신뢰하지 않음
 - 단일 개발 서버 범위의 방어이며 배포 전 프록시·분산 방어는 추가 검증 필요
 - 요청 role/memberId는 권한 부여에 사용하지 않음
 - 회원 역할은 `members.role`의 `USER`·`ADMIN`. 관리자 지정은 DB에서만 하고 `/api/admin/**`은 SecurityConfig에서 ADMIN만 허용. 응답의 `role`은 화면 표시용이며, DB 역할이 세션과 달라지면 다음 요청에서 세션을 끊고 401

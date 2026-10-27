@@ -13,11 +13,13 @@ import tools.jackson.databind.ObjectMapper;
 
 public final class LoginGuard extends OncePerRequestFilter {
     private record Window(long started, int count) {}
+    // 경로마다 따로 세며, 비밀번호를 받는 로그인만 폼 형식을 이 필터에서 검사함
+    private static final java.util.Set<String> LIMITED = java.util.Set.of("/api/auth/login", "/api/auth/signup", "/api/auth/email-check", "/api/auth/password");
     private final Map<String, Window> windows = new HashMap<>();
     private final ObjectMapper json;
     public LoginGuard(ObjectMapper json) { this.json = json; }
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !("POST".equals(request.getMethod()) && java.util.Set.of("/api/auth/login", "/api/auth/signup").contains(request.getServletPath()));
+        return !("POST".equals(request.getMethod()) && LIMITED.contains(request.getServletPath()));
     }
     private synchronized boolean allow(String address) {
         long now = System.nanoTime();
@@ -29,12 +31,13 @@ public final class LoginGuard extends OncePerRequestFilter {
         return true;
     }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
-        boolean signup = "/api/auth/signup".equals(request.getServletPath());
-        if (!allow(request.getServletPath() + ":" + request.getRemoteAddr())) {
+        String path = request.getServletPath();
+        if (!allow(path + ":" + request.getRemoteAddr())) {
             response.setHeader("Retry-After", "60");
-            AuthJson.error(response, json, 429, signup ? "SIGNUP_RATE_LIMITED" : "LOGIN_RATE_LIMITED", "계정 요청이 많습니다. 잠시 후 다시 시도하세요."); return;
+            String code = switch (path) { case "/api/auth/login" -> "LOGIN_RATE_LIMITED"; case "/api/auth/signup" -> "SIGNUP_RATE_LIMITED"; default -> "ACCOUNT_RATE_LIMITED"; };
+            AuthJson.error(response, json, 429, code, "계정 요청이 많습니다. 잠시 후 다시 시도하세요."); return;
         }
-        if (signup) {
+        if (!"/api/auth/login".equals(path)) {
             if (request.getQueryString() != null) {
                 AuthJson.error(response, json, 400, "INVALID_REQUEST", "입력 형식을 확인하세요."); return;
             }

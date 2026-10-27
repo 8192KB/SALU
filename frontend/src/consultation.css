@@ -248,6 +248,10 @@
   text-decoration: none;
 }
 .consultation-history-card > p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 20px 0;
@@ -902,18 +906,46 @@
   padding: 0;
 }
 .community-comments li {
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--line);
 }
+/* 알림으로 들어온 새 댓글만 왼쪽 선으로 표시함 */
+.community-comments li.new {
+  padding-left: 12px;
+  border-left: 3px solid var(--teal);
+}
 .community-comments li p {
-  margin: 6px 0;
+  margin: 6px 0 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .community-comment-head {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   align-items: baseline;
+  /* 신고·지우기 자리를 오른쪽에 비워 둬서 이름·시각이 길어도 줄이 밀리지 않게 함 */
+  position: relative;
+  padding-right: 48px;
+}
+.community-comment-head .text-link {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-height: 0;
+  padding: 0;
+}
+.community-mine {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.community-new {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--teal);
 }
 .community-comment-head time {
   font-size: 13px;
@@ -921,6 +953,10 @@
 }
 .community-comment-form .button {
   margin-top: 10px;
+}
+.community-comment-form textarea {
+  min-height: 72px;
+  font-size: 15px;
 }
 .community-form input:not([type]) {
   width: 100%;

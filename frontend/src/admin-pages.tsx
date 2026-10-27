@@ -102,6 +102,7 @@ function DecisionButtons({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const kind = 'post' in target ? '글' : '댓글';
   async function run(action: Decision) {
     setBusy(true);
@@ -109,10 +110,12 @@ function DecisionButtons({
     try {
       await decide(target, action);
       setConfirming(false);
+      setRestoring(false);
       notify(decisionNotice(action, status, kind));
       await onDone();
     } catch (failure) {
       setConfirming(false);
+      setRestoring(false);
       setError(errorText(failure, '처리하지 못했어요. 화면을 새로고침한 뒤 다시 시도해 주세요.'));
     } finally {
       setBusy(false);
@@ -164,7 +167,7 @@ function DecisionButtons({
                 className="button"
                 disabled={busy}
                 aria-busy={busy}
-                onClick={() => void run('KEEP')}
+                onClick={() => (status === 'HIDDEN' ? setRestoring(true) : void run('KEEP'))}
               >
                 {status === 'HIDDEN' ? '다시 보이기' : '유지'}
               </button>
@@ -200,6 +203,32 @@ function DecisionButtons({
             onClick={() => void run('HIDE')}
           >
             {busy ? '처리하는 중' : status === 'HIDDEN' ? '숨김 확정' : '숨기기'}
+          </button>
+        </div>
+      </Dialog>
+      <Dialog
+        open={restoring}
+        title={`이 ${kind}을 다시 보이게 할까요?`}
+        onClose={() => !busy && setRestoring(false)}
+      >
+        <p>다시 모두에게 보이고 신고는 기각으로 정리해요. 작성자에게 알림은 가지 않아요.</p>
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={() => setRestoring(false)}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => void run('KEEP')}
+          >
+            {busy ? '처리하는 중' : '다시 보이기'}
           </button>
         </div>
       </Dialog>
@@ -298,7 +327,7 @@ export function AdminReports() {
       <div className="community-screen">
         <PageHeading
           title="신고 처리"
-          description="처리 전 신고가 있는 글과 댓글이에요. 신고가 5건 쌓이면 확인 전까지 자동으로 숨겨져요."
+          description="신고가 5건 쌓인 글은 확인할 때까지 숨겨져요."
           back={back}
         />
         {error && data && <Alert message={error.message} />}
@@ -511,7 +540,7 @@ export function AdminMember() {
       <div className="community-screen">
         <PageHeading
           title={title}
-          description="제재 중에는 커뮤니티 글과 댓글을 쓸 수 없어요. 해제해도 기록은 남아요."
+          description="제재 중인 회원은 글과 댓글을 쓸 수 없어요."
           back={back}
         />
         <Alert message={error} />

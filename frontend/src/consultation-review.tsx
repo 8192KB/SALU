@@ -152,7 +152,11 @@ export function ConsultationReviewPanel({
             title="후기를 지울까요?"
             onClose={() => !busy && setConfirm(false)}
           >
-            <p>지운 후기는 되돌릴 수 없어요. 지운 뒤에 다시 남길 수 있어요.</p>
+            <p>
+              지운 후기는 되돌릴 수 없어요.
+              <br />
+              지운 뒤에 다시 남길 수 있어요.
+            </p>
             <Alert message={error} />
             <div className="dialog-actions">
               <button
@@ -481,7 +485,7 @@ export function ReviewComplete() {
     <div className="consultation-sent">
       <Completion
         title={edited ? '후기를 고쳤어요' : '후기를 남겼어요'}
-        description="디자이너 프로필의 상담 후기에서 볼 수 있어요."
+        description="디자이너 프로필에 보여요."
         primary="보낸 상담 보기"
         to={`/consultations/${id}`}
         secondary="디자이너 프로필 보기"

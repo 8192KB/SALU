@@ -22,6 +22,8 @@ type AuthContextValue = {
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<boolean>;
+  // 이름을 바꾼 뒤 서버가 돌려준 회원 정보로 화면을 바꿈
+  updateMember: (member: SessionMember) => void;
 };
 const AuthContext = createContext<AuthContextValue | null>(null);
 const prototypeOnly = import.meta.env.VITE_SALU_AUTH_MODE === 'prototype';
@@ -190,6 +192,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refresh,
         login,
         logout,
+        updateMember: (member) => {
+          if (shownMember.current?.id === member.id) confirm(member);
+        },
       }}
     >
       {children}

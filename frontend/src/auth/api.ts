@@ -18,12 +18,14 @@ export class ApiFailure extends Error {
 }
 
 const messages: Record<string, string> = {
-  LOGIN_FAILED: '이메일 또는 비밀번호를 확인해 주세요.',
+  LOGIN_FAILED: '이메일 또는 비밀번호가 맞지 않아요.',
   CSRF_INVALID: '요청 확인 정보가 만료됐어요. 다시 시도해 주세요.',
   ACCESS_DENIED: '이 기능을 사용할 권한이 없어요.',
   AUTHENTICATION_REQUIRED: '로그인이 끝났어요. 다시 로그인해 주세요.',
   AUTHENTICATION_UNAVAILABLE: '로그인 서버를 사용할 수 없어요. 잠시 후 다시 시도해 주세요.',
   DATABASE_UNAVAILABLE: '계정 정보를 확인할 수 없어요. 잠시 후 다시 시도해 주세요.',
+  CURRENT_PASSWORD_INVALID: '현재 비밀번호가 맞지 않아요.',
+  PASSWORD_NOT_SET: '소셜 로그인으로 가입한 계정은 비밀번호가 없어요.',
 };
 
 async function request(path: string, options: RequestInit = {}): Promise<Response> {
@@ -168,6 +170,37 @@ export async function signup(email: string, displayName: string, password: strin
       throw new ApiFailure(400, error.code, '이메일·이름과 비밀번호를 다시 확인해 주세요.');
     throw error;
   }
+}
+
+// 가입 전에 이메일을 쓸 수 있는지 확인함. 형식이 틀리면 서버가 400으로 거절함
+export async function emailAvailable(email: string): Promise<boolean> {
+  try {
+    const response = await post('/api/auth/email-check', JSON.stringify({ email }));
+    return (await readObject(response)).available === true;
+  } catch (error) {
+    if (error instanceof ApiFailure && error.status === 400)
+      throw new ApiFailure(400, error.code, '이메일 주소를 다시 확인해 주세요.');
+    throw error;
+  }
+}
+
+export async function renameMember(displayName: string): Promise<SessionMember> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await request('/api/auth/me', {
+      method: 'PATCH',
+      headers: { ...(await csrfHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ displayName }),
+    });
+    if (response.ok) return readMember(response);
+    const error = await failure(response);
+    if (attempt === 0 && error.status === 403 && error.code === 'CSRF_INVALID') continue;
+    throw error;
+  }
+  throw new ApiFailure(403, 'CSRF_INVALID', messages.CSRF_INVALID);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await post('/api/auth/password', JSON.stringify({ currentPassword, newPassword }));
 }
 
 export async function backupRequest(

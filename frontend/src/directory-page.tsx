@@ -18,7 +18,7 @@ function directoryError(error: unknown, fallback: string, conflict: string) {
   if (error.status === 401) return '로그인이 끝났어요. 다시 로그인한 뒤 저장해 주세요.';
   if (error.status === 409) return conflict;
   if (error.status === 400)
-    return '입력을 확인해 주세요. 전문 분야는 쉼표로 나눠 10개까지, 항목마다 40자까지 쓸 수 있어요.';
+    return '입력을 확인해 주세요. 전문 분야는 10개까지, 하나에 40자까지 쓸 수 있어요.';
   return error.message;
 }
 
@@ -34,10 +34,22 @@ export function DirectoryEditor() {
   const [form, setForm] = useState({
     name: '',
     introduction: '',
-    specialties: '',
+    specialties: [] as string[],
     salonId: '',
     visibility: 'PUBLIC',
   });
+  const [specialty, setSpecialty] = useState('');
+  const [specialtyError, setSpecialtyError] = useState('');
+  const addSpecialty = () => {
+    const value = specialty.trim();
+    if (!value) return;
+    if (value.length > 40) return setSpecialtyError('하나에 40자까지 쓸 수 있어요.');
+    if (form.specialties.length >= 10) return setSpecialtyError('10개까지 넣을 수 있어요.');
+    setSpecialtyError('');
+    setSpecialty('');
+    if (!form.specialties.includes(value))
+      setForm({ ...form, specialties: [...form.specialties, value] });
+  };
   const [salon, setSalon] = useState({ name: '', region: '', branch: '' });
   const [error, setError] = useState('');
   const [salonError, setSalonError] = useState('');
@@ -63,7 +75,10 @@ export function DirectoryEditor() {
         setForm({
           name: own.name,
           introduction: own.introduction,
-          specialties: own.specialties,
+          specialties: own.specialties
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
           salonId: own.salonId ?? '',
           visibility: own.visibility,
         });
@@ -87,15 +102,18 @@ export function DirectoryEditor() {
     event.preventDefault();
     const element = event.currentTarget;
     if (busy) return;
-    const specialties = form.specialties
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
+    // 칸에 적고 추가를 누르지 않은 분야도 함께 저장함
+    const pending = specialty.trim();
+    const specialties =
+      pending && !form.specialties.includes(pending)
+        ? [...form.specialties, pending]
+        : form.specialties;
     if (specialties.length > 10 || specialties.some((value) => value.length > 40)) {
-      setError('전문 분야는 쉼표로 나눠 10개까지, 항목마다 40자까지 쓸 수 있어요.');
+      setError('전문 분야는 10개까지, 하나에 40자까지 쓸 수 있어요.');
       focusFirstError(element);
       return;
     }
+    setSpecialty('');
     setBusy(true);
     setError('');
     try {
@@ -151,7 +169,7 @@ export function DirectoryEditor() {
         directoryError(
           error,
           '매장을 등록하지 못했어요.',
-          '이름·지역·지점이 같은 매장이 이미 있어요. 위의 소속 매장 목록에서 골라 주세요.',
+          '이름, 지역, 지점이 같은 매장이 이미 있어요. 위의 소속 매장 목록에서 골라 주세요.',
         ),
       );
       if (error instanceof ApiFailure && error.status === 401) void refresh();
@@ -176,12 +194,12 @@ export function DirectoryEditor() {
         title="프로필을 저장했어요"
         description={
           profile.visibility === 'PUBLIC'
-            ? '고객이 디자이너 찾기에서 볼 수 있어요.'
+            ? '디자이너 찾기에 보여요.'
             : '비공개라 디자이너 찾기에 보이지 않아요.'
         }
         primary={profile.visibility === 'PUBLIC' ? '프로필 보기' : '내 계정으로'}
         to={profile.visibility === 'PUBLIC' ? `/designers/${profile.id}` : '/account'}
-        secondary="디자이너 목록으로"
+        secondary={profile.visibility === 'PUBLIC' ? '디자이너 목록으로' : undefined}
         secondaryTo="/designers"
         after={
           <button className="text-link" type="button" onClick={() => setComplete(false)}>
@@ -202,11 +220,7 @@ export function DirectoryEditor() {
     );
   return (
     <div className="directory-editor">
-      <PageHeading
-        title="내 디자이너 프로필"
-        back={<BackLink to="/account">내 계정</BackLink>}
-        description="소개와 소속 매장을 직접 등록해 주세요."
-      />
+      <PageHeading title="내 디자이너 프로필" back={<BackLink to="/account">내 계정</BackLink>} />
       {!ready ? (
         <section className="panel">
           {loadingError ? (
@@ -224,9 +238,6 @@ export function DirectoryEditor() {
         <>
           <form className="panel directory-form" onSubmit={save}>
             <h2>디자이너 소개</h2>
-            <p className="form-note">
-              SALU는 디자이너 자격을 따로 확인하지 않아요. 소개는 직접 적은 그대로 보여요.
-            </p>
             <fieldset disabled={busy}>
               <Field label="활동 이름">
                 <input
@@ -245,13 +256,55 @@ export function DirectoryEditor() {
                   onChange={(event) => setForm({ ...form, introduction: event.target.value })}
                 />
               </Field>
-              <Field label="전문 분야" hint="쉼표로 구분 · 최대 10개">
-                <input
-                  maxLength={410}
-                  value={form.specialties}
-                  onChange={(event) => setForm({ ...form, specialties: event.target.value })}
-                />
-              </Field>
+              <div className="specialty-editor">
+                <div className="email-check">
+                  <Field label="전문 분야" hint="10개까지" error={specialtyError}>
+                    <input
+                      maxLength={40}
+                      placeholder="예: 숏컷"
+                      value={specialty}
+                      onChange={(event) => {
+                        setSpecialty(event.target.value);
+                        setSpecialtyError('');
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+                        event.preventDefault();
+                        addSpecialty();
+                      }}
+                    />
+                  </Field>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={!specialty.trim()}
+                    onClick={addSpecialty}
+                  >
+                    추가
+                  </button>
+                </div>
+                {form.specialties.length > 0 && (
+                  <ul className="specialty-list" aria-label="넣은 전문 분야">
+                    {form.specialties.map((value) => (
+                      <li key={value}>
+                        {value}
+                        <button
+                          type="button"
+                          aria-label={`${value} 빼기`}
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              specialties: form.specialties.filter((item) => item !== value),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
               <Field label="현재 소속 매장">
                 <select
                   value={form.salonId}
@@ -336,15 +389,36 @@ export function DirectoryEditor() {
                   찾는 매장이 목록에 없나요? 매장 등록
                 </button>
               )}
-              <Field label="공개 범위">
-                <select
-                  value={form.visibility}
-                  onChange={(event) => setForm({ ...form, visibility: event.target.value })}
-                >
-                  <option value="PUBLIC">공개 · 목록에서 볼 수 있어요</option>
-                  <option value="PRIVATE">비공개 · 나만 볼 수 있어요</option>
-                </select>
-              </Field>
+              <fieldset className="visibility-choice">
+                <legend>공개 범위</legend>
+                <div className="choice-pills">
+                  {(
+                    [
+                      ['PUBLIC', '공개'],
+                      ['PRIVATE', '비공개'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <label key={value}>
+                      <input
+                        type="radio"
+                        name="visibility"
+                        value={value}
+                        checked={form.visibility === value}
+                        onChange={() => setForm({ ...form, visibility: value })}
+                      />
+                      <span>
+                        {form.visibility === value && '✓ '}
+                        {label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="form-note">
+                  {form.visibility === 'PUBLIC'
+                    ? '디자이너 찾기에 보여요.'
+                    : '디자이너 찾기에 보이지 않아요.'}
+                </p>
+              </fieldset>
             </fieldset>
             {error && <Alert message={error} />}
             <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>

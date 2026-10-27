@@ -15,7 +15,6 @@ export function RequestList() {
     <>
       <PageHeading
         title="커트 준비"
-        description="지난 기록을 보고, 다음 커트에서 원하는 점을 정리해 보세요."
         action={
           // 아직 준비가 없으면 아래 빈 화면의 버튼 하나로만 시작하게 함
           state.cuts.length > 0 && (previews.length > 0 || drafts.length > 0) ? (
@@ -103,9 +102,7 @@ export function RequestList() {
           <section className="panel empty-request">
             <Icon name="chat" size={28} />
             <h3>다음 커트에서 어떻게 요청할까요?</h3>
-            <p className="muted">
-              내 기록을 보고 그대로 둘 부분과 바꿀 부분, 물어볼 점을 정리해 보세요.
-            </p>
+            <p className="muted">내 기록을 보고 유지할 부분과 바꿀 부분, 물어볼 점을 정리해요.</p>
             <Link
               className="button"
               to={state.cuts.length ? '/requests/materials' : '/records/new'}

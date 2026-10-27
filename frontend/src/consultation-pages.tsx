@@ -309,11 +309,7 @@ export function DesignerList() {
             <BackLink to={previous.to}>{previous.label}</BackLink>
           ) : undefined
         }
-        description={
-          sourcePreview
-            ? '준비한 내용으로 상담할 디자이너를 골라 주세요.'
-            : '소개와 상담 분야를 보고, 이야기를 나눌 디자이너를 골라 보세요.'
-        }
+        description={sourcePreview ? '준비한 내용을 보낼 디자이너를 골라 주세요.' : undefined}
       />
       {mode !== 'example' && favorites?.loaded && (
         <button
@@ -335,7 +331,7 @@ export function DesignerList() {
           ) : (
             <section className="empty-state">
               <h2>찜한 디자이너가 없어요</h2>
-              <p>디자이너 프로필에서 찜하면 이곳에 모여요.</p>
+              <p>디자이너 프로필에서 찜하면 여기에 모여요.</p>
             </section>
           )}
         </section>
@@ -379,7 +375,7 @@ export function DesignerList() {
           {!directory.loading && !directory.error && !directory.designers.length && (
             <section className="empty-state">
               <h2>등록된 디자이너가 없어요</h2>
-              <p>디자이너라면 소개를 등록해 보세요.</p>
+              <p>디자이너라면 소개를 등록하세요.</p>
               <Link className="button" to="/examples/designers">
                 디자이너 예시로 둘러보기
               </Link>
@@ -390,7 +386,7 @@ export function DesignerList() {
             <p className="designer-manage">
               디자이너로 활동하나요?{' '}
               <Link className="text-link" to="/account/designer">
-                내 디자이너 프로필 등록·관리 <Icon name="arrow" size={16} />
+                디자이너 프로필 만들기 <Icon name="arrow" size={16} />
               </Link>
             </p>
           )}
@@ -533,7 +529,6 @@ export function MaterialsPage() {
             )
           }
           title="참고할 지난 커트를 골라 주세요"
-          description="고른 커트의 기록을 바탕으로 원하는 점을 정리해요."
         />
         <Steps current={0} />
         {state.cuts.length ? (
@@ -614,7 +609,7 @@ export function MaterialsPage() {
           )
         }
         title={designer ? '상담에 참고할 자료 선택' : '참고 자료 선택'}
-        description="함께 담을 메모와 경과, 사진을 골라 주세요."
+        description="같이 보낼 내용을 골라 주세요."
       />
       <Steps current={0} />
       <div className="two-column materials-layout">
@@ -623,7 +618,7 @@ export function MaterialsPage() {
           {source.frozen && (
             <div className="source-note">
               <strong>준비할 때 담아 둔 자료</strong>
-              <p>기록을 수정해도 여기 담아 둔 내용은 그대로 남아요.</p>
+              <p>기록을 고쳐도 여기 담아 둔 내용은 바뀌지 않아요.</p>
               <button
                 type="button"
                 className="text-link"
@@ -772,7 +767,7 @@ export function MaterialsPage() {
               메모 {Number(draft.includeGoodNote)} · 경과 {draft.progressIds.length} · 사진{' '}
               {draft.photoIds.length}
             </p>
-            <p className="muted selection-scope">커트 날짜·시술·부위와 고른 자료만 담아요.</p>
+            <p className="muted selection-scope">커트 날짜, 시술, 부위와 고른 자료만 담아요.</p>
             {!designer && (
               <p className="muted selection-detail">자료를 고르지 않고 바로 적어도 돼요.</p>
             )}
@@ -822,14 +817,14 @@ export function RequestPage() {
     return (
       <Missing
         title="작성 중인 요청을 찾을 수 없어요"
-        message="준비할 기록과 초안을 찾을 수 없어요. 내 기록에서 다시 선택해 주세요."
+        message="준비할 기록과 작성 중인 내용을 찾을 수 없어요. 내 기록에서 다시 선택해 주세요."
       />
     );
   if (!draft || !source || (draft.designerId && (!designer || !selectedCount(draft))))
     return (
       <Missing
         title="먼저 요청에 사용할 기록을 선택해 주세요"
-        message="내 기록에서 다음 커트를 준비해 보세요."
+        message="내 기록에서 다음 커트를 준비하세요."
       />
     );
   const update = (input: Partial<RequestDraft>) => {
@@ -873,9 +868,7 @@ export function RequestPage() {
         }
         title="이번 커트에서 원하는 점을 적어 주세요"
         description={
-          isEditDraft(state, draft)
-            ? '저장한 준비를 고치고 있어요. 저장하면 이 준비가 고친 내용으로 바뀌어요.'
-            : '그대로 둘 부분과 바꿀 부분, 궁금한 점을 적어 주세요.'
+          isEditDraft(state, draft) ? '저장하면 원래 준비가 고친 내용으로 바뀌어요.' : undefined
         }
       />
       <Steps current={1} />
@@ -975,7 +968,7 @@ export function RequestPage() {
             defaultOpen={Boolean(draft.homeStyling.trim() || draft.additionalQuestion.trim())}
             summary={
               <span className="request-options-summary">
-                <span>손질 방법·추가 질문 더 적기</span>
+                <span>손질 방법과 추가 질문 더 적기</span>
                 <small>
                   {draft.homeStyling.trim() || draft.additionalQuestion.trim()
                     ? [
@@ -983,7 +976,7 @@ export function RequestPage() {
                         draft.additionalQuestion.trim() && '질문',
                       ]
                         .filter(Boolean)
-                        .join(' · ') + ' 작성됨'
+                        .join(', ') + ' 작성됨'
                     : '선택'}
                 </small>
               </span>
@@ -1056,11 +1049,6 @@ export function PreviewPage() {
       <PageHeading
         back={<BackLink to="/requests">준비 목록으로</BackLink>}
         title={preview.designer ? '디자이너에게 보여 줄 내용' : '다음 커트 준비 내용'}
-        description={
-          preview.designer
-            ? '디자이너에게 보여 줄 자료와 원하는 커트를 정리했어요.'
-            : '다음 커트에서 요청할 내용을 정리했어요.'
-        }
       />
       <div className="two-column">
         <section>
@@ -1142,7 +1130,7 @@ export function PreviewPage() {
             <p className="muted">고르지 않은 기록과 사진은 포함하지 않았어요.</p>
             {sent.length > 0 && (
               <p className="working-notice" role="status">
-                {sent.map((thread) => thread.designer.name).join('·')} 디자이너에게 보냈어요.{' '}
+                {sent.map((thread) => thread.designer.name).join(', ')} 디자이너에게 보냈어요.{' '}
                 <Link to={`/consultations/${sent.at(-1)!.id}`}>보낸 상담 보기</Link>
               </p>
             )}

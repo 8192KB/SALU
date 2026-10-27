@@ -45,10 +45,10 @@ function PersonalStorageNotice({
   const labels = {
     local: '기기에 저장됨',
     saving: '기기에 저장 중',
-    syncing: '서버 저장 중',
-    synced: '서버에도 저장됨',
+    syncing: '계정에 저장 중',
+    synced: '계정에 저장됨',
     conflict: '변경 확인 필요',
-    error: view.errorSource === 'cloud' ? '서버 저장 대기' : '기기 저장 확인 필요',
+    error: view.errorSource === 'cloud' ? '계정 저장 대기' : '기기 저장 확인 필요',
   };
   // 평소 저장 상태는 기록을 다루는 화면에서만 작게 보이고, 확인이 필요한 상태는 어느 화면에서나 보임
   const attention = Boolean(guest) || view.status === 'error' || view.status === 'conflict';
@@ -78,9 +78,9 @@ function PersonalStorageNotice({
         <div className="warning-notice">
           <Icon name="warning" size={18} />
           {onBackup ? (
-            <a href="#conflicts">변경 충돌 {view.conflicts}건 · 복구본 만들기</a>
+            <a href="#conflicts">변경 충돌 {view.conflicts}건 · 따로 보관하기</a>
           ) : (
-            <Link to="/backup#conflicts">변경 충돌 {view.conflicts}건 · 복구본 만들기</Link>
+            <Link to="/backup#conflicts">변경 충돌 {view.conflicts}건 · 따로 보관하기</Link>
           )}
         </div>
       )}
@@ -100,7 +100,7 @@ function restoreSummary({
   if (!newRecords && same)
     return `이 파일의 기록 ${same}건은 모두 이 기기에 이미 있어요. 불러와도 기록이 늘지 않아요.`;
   const adding = newRecords
-    ? `기록 ${newRecords}건${newPhotos ? `·사진 ${newPhotos}장` : ''}을 새로 추가해요.`
+    ? `기록 ${newRecords}건${newPhotos ? `과 사진 ${newPhotos}장` : ''}을 새로 추가해요.`
     : '작성 중이던 내용만 불러와요.';
   return same
     ? `${adding} 이미 있는 같은 기록 ${same}건은 건너뛰고, 기존 기록은 바뀌지 않아요.`
@@ -169,11 +169,7 @@ function PersonalBackupPage({
   };
   return (
     <div className="backup-page">
-      <PageHeading
-        back={<BackLink to="/records">내 기록으로</BackLink>}
-        title="기록 저장·백업"
-        description="사진과 작성 중인 내용까지 함께 보관해요."
-      />
+      <PageHeading back={<BackLink to="/records">내 기록으로</BackLink>} title="기록 백업" />
       <div className="backup-feedback" aria-live="polite">
         <Alert message={error} />
         {message && (
@@ -190,7 +186,7 @@ function PersonalBackupPage({
         {busy && (
           <p className="working-notice" role="status">
             <span className="button-spinner" aria-hidden="true" />
-            백업을 처리하고 있어요
+            백업하는 중이에요
           </p>
         )}
       </div>
@@ -199,10 +195,9 @@ function PersonalBackupPage({
         {storage.scope === 'guest' ? (
           <>
             <p>
-              로그인 전 기록은 이 브라우저에만 저장돼요. 브라우저 데이터를 지우면 기록이 사라질 수
-              있어요.
+              지금 기록은 이 브라우저에만 있어요. 브라우저 데이터를 지우면 사라질 수 있으니
+              로그인해서 계정에 옮겨 두세요.
             </p>
-            <p>로그인한 뒤 지금 남긴 기록과 사진을 계정으로 옮길 수 있어요.</p>
             <div className="backup-actions">
               <Link className="button primary" to="/login">
                 로그인
@@ -216,10 +211,7 @@ function PersonalBackupPage({
           </>
         ) : (
           <>
-            <p>
-              기기에 저장한 기록과 사진을 계정에도 자동으로 보관해요. 같은 계정으로 다른 기기에서도
-              이어서 사용할 수 있어요.
-            </p>
+            <p>다른 기기에서 로그인해도 기록과 사진이 보여요.</p>
             {view.errorSource === 'cloud' && (
               <>
                 <p>{view.error}</p>
@@ -234,10 +226,7 @@ function PersonalBackupPage({
       {guest && (
         <section className="panel" id="guest-records">
           <h2>로그인 전에 남긴 기록</h2>
-          <p>
-            이 기기에 로그인 전에 남긴 {guestRecordsLabel(guest)}이 있어요. 계정으로 옮기면 다른
-            기기에서도 볼 수 있어요.
-          </p>
+          <p>계정으로 옮기면 다른 기기에서도 볼 수 있어요.</p>
           <GuestRecordList guest={guest} />
           <button
             type="button"
@@ -270,8 +259,9 @@ function PersonalBackupPage({
       <section className="panel">
         <h2>파일 백업</h2>
         <p>
-          기록·경과·사진·커트 준비를 ZIP 파일로 받을 수 있어요. 복원하면 이 기기에 없는 기록만
-          추가하고, 기존 기록은 그대로 둬요.
+          기록과 사진을 ZIP 파일로 받아 둘 수 있어요.
+          <br />
+          복원해도 있던 기록은 지워지지 않아요.
         </p>
         <div className="backup-actions">
           <button
@@ -338,19 +328,19 @@ function PersonalBackupPage({
       {view.conflicts > 0 && (
         <section className="panel" id="conflicts">
           <h2>다른 기기의 변경과 충돌했어요</h2>
-          <p>이 기기의 내용은 새 복구본에 남기고, 원래 기록에는 서버의 최신 내용을 가져와요.</p>
+          <p>이 기기의 내용은 따로 보관하고, 원래 기록에는 계정의 최신 내용을 가져와요.</p>
           <button
             className="button primary"
             disabled={busy}
-            onClick={() => void act(() => storage.resolveConflicts(), '복구본을 만들었어요.', true)}
+            onClick={() => void act(() => storage.resolveConflicts(), '따로 보관했어요.', true)}
           >
-            복구본 만들기
+            따로 보관하기
           </button>
         </section>
       )}
       {view.bundle.drafts.recoveredCuts.length > 0 && (
         <section className="panel recovered-drafts">
-          <h2>복원한 작성 초안</h2>
+          <h2>복원한 작성 중인 내용</h2>
           {view.bundle.drafts.recoveredCuts.map((draft, i) => (
             <div className="backup-actions" key={i}>
               <button
@@ -377,10 +367,10 @@ function PersonalBackupPage({
           ))}
           <Dialog
             open={removeDraft !== null}
-            title="복원한 작성 초안을 지울까요?"
+            title="복원한 작성 중인 내용을 지울까요?"
             onClose={() => setRemoveDraft(null)}
           >
-            <p>지운 초안은 되돌릴 수 없어요. 저장한 기록은 그대로 있어요.</p>
+            <p>지운 내용은 되돌릴 수 없어요. 저장한 기록은 그대로 있어요.</p>
             <div className="dialog-actions">
               <button type="button" className="button" onClick={() => setRemoveDraft(null)}>
                 취소
@@ -397,7 +387,7 @@ function PersonalBackupPage({
                   }));
                 }}
               >
-                초안 지우기
+                지우기
               </button>
             </div>
           </Dialog>

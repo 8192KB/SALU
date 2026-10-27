@@ -101,7 +101,10 @@ export function AccountControls() {
       >
         <Alert message={storageError} />
         {!storageError && unsent > 0 && (
-          <p>기록 {unsent}건을 아직 계정에 저장하지 못했어요.<br />이 기기에서 다시 로그인하면 저장돼요.</p>
+          <p>
+            기록 {unsent}건을 아직 계정에 저장하지 못했어요.
+            <br />이 기기에서 다시 로그인하면 저장돼요.
+          </p>
         )}
         <div className="dialog-actions">
           <button

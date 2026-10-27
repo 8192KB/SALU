@@ -17,6 +17,10 @@ public class CommunityAdminController {
 
     @GetMapping("/api/admin/community/reports") ResponseEntity<CommunityAdminService.Reports> reports() { return ok(service.reports()); }
     @GetMapping("/api/admin/community/posts/{id}") ResponseEntity<CommunityAdminService.PostReview> post(@PathVariable String id) { return ok(service.post(id)); }
+    @GetMapping("/api/admin/community/posts/{id}/photos/{position}") ResponseEntity<byte[]> photo(@PathVariable String id, @PathVariable int position) {
+        var photo = service.photo(id, position);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).contentType(MediaType.parseMediaType(photo.contentType())).header("X-Content-Type-Options","nosniff").body(photo.bytes());
+    }
     @GetMapping("/api/admin/community/comments/{id}/reports") ResponseEntity<List<CommunityAdminService.Report>> commentReports(@PathVariable long id) { return ok(service.commentReports(id)); }
     @PostMapping(path="/api/admin/community/posts/{id}/decision", consumes=MediaType.APPLICATION_JSON_VALUE)
     ResponseEntity<Void> decidePost(@AuthenticationPrincipal MemberPrincipal admin, @PathVariable String id, @RequestBody CommunityAdminService.Decision decision) { service.decidePost(admin, id, decision); return done(); }

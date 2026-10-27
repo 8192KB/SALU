@@ -167,8 +167,8 @@ export function useConsultationAccess() {
   if (example || state.status === 'authenticated') return null;
   if (state.status === 'checking') return <Loading>로그인 상태를 확인하고 있어요.</Loading>;
   const copy = {
-    prototype: ['서버 없이 화면만 확인하는 중이에요', '상담 흐름은 예시 체험에서 볼 수 있어요.'],
-    unavailable: ['서버에 연결할 수 없어요', '연결이 돌아오면 상담을 이어서 볼 수 있어요.'],
+    prototype: ['예시 화면을 보는 중이에요', '상담 흐름은 예시 체험에서 볼 수 있어요.'],
+    unavailable: ['연결할 수 없어요', '연결이 돌아오면 상담을 이어서 볼 수 있어요.'],
     guest: ['로그인이 필요해요', '로그인하면 보낸 상담과 받은 상담을 이어서 볼 수 있어요.'],
   }[state.status];
   return (
@@ -433,7 +433,7 @@ function ConsultationForm({
         description={
           prepared
             ? `준비한 내용을 ${designer.name} 디자이너에게 보내요.`
-            : '상담에 사용할 커트 기록을 선택해 주세요.'
+            : '상담에 쓸 커트 기록을 골라 주세요.'
         }
         back={
           preview ? (
@@ -552,7 +552,7 @@ export function ConsultationComplete() {
     <div className="consultation-sent">
       <Completion
         title={`${thread.designer.name} 디자이너에게 전달했어요`}
-        description="답변이 오면 상담 내역에서 확인할 수 있어요."
+        description="답변이 오면 알림이 와요."
         primary="보낸 상담 보기"
         to={`/consultations/${thread.id}`}
         secondary="상담 내역으로"
@@ -667,7 +667,7 @@ export function ConsultationList() {
         !state.error && (
           <section className="consultation-soft-panel">
             <h2>아직 보낸 상담이 없어요</h2>
-            <p>지난 커트의 담당 디자이너에게 궁금한 점을 보내 보세요.</p>
+            <p>지난 커트의 담당 디자이너에게 궁금한 점을 보내세요.</p>
             <Link className="button" to="/records">
               지난 커트 보기
             </Link>
@@ -676,13 +676,13 @@ export function ConsultationList() {
       )}
       {!access && state.error && (
         <section className="consultation-soft-panel">
-          <Alert message={state.error} />
+          <Alert title="불러오지 못했어요" message={state.error} />
           <button type="button" className="button" onClick={() => void repository.refresh?.()}>
             다시 불러오기
           </button>
         </section>
       )}
-      {!access && repository.server && (
+      {!access && repository.server && !state.error && (
         <div className="consultation-list-actions">
           <button
             type="button"
@@ -715,7 +715,7 @@ export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
           <time dateTime={reply.repliedAt}>{sentTime(reply.repliedAt)}</time>
         </>
       ) : (
-        <p>디자이너의 답변이 오면 이곳에서 확인할 수 있어요.</p>
+        <p>디자이너의 답변이 오면 여기에 떠요.</p>
       )}
     </section>
   );
@@ -789,7 +789,7 @@ export function ConsultationDetail() {
           emptyMessage={
             thread.reply
               ? undefined
-              : '디자이너가 답변하면 화면 맨 위에 보여요. 그 전에도 더 알리고 싶은 내용을 보낼 수 있어요.'
+              : '디자이너가 답변하면 화면 맨 위에 보여요. 그 전에도 더 전할 내용을 보낼 수 있어요.'
           }
           answerAt={thread.reply?.repliedAt}
         />

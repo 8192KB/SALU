@@ -88,7 +88,7 @@ function describe(item: Notification, sent: Set<string> | null) {
         to: `/community/${path(item.targetId)}`,
       };
     case 'COMMUNITY_SUSPENDED':
-      return { text: '커뮤니티 글·댓글 쓰기가 제한됐어요', to: '/community/mine' };
+      return { text: '커뮤니티 글과 댓글 쓰기가 제한됐어요', to: '/community/mine' };
   }
 }
 
@@ -251,7 +251,10 @@ export function NotificationList() {
         () => signal({ type: 'NOTIFICATION', id: String(item.id) }),
         () => {},
       );
-    navigate(to);
+    navigate(
+      to,
+      item.type === 'COMMUNITY_COMMENT' ? { state: { newCommentsSince: item.createdAt } } : {},
+    );
   }
 
   const heading = (
@@ -327,7 +330,7 @@ export function NotificationList() {
       ) : (
         <section className="consultation-soft-panel">
           <h2>아직 알림이 없어요</h2>
-          <p>새 상담이나 메시지가 오면 이곳에서 알려 드려요.</p>
+          <p>새 상담이나 메시지가 오면 여기에 떠요.</p>
         </section>
       )}
     </div>

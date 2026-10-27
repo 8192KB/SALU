@@ -81,15 +81,11 @@ export function ReceivedList() {
   if (example) return <ExampleNotice />;
   return (
     <div className="consultation-screen">
-      <PageHeading
-        title="받은 상담"
-        description="고객이 보낸 요청과 첨부한 커트 기록을 보고 답변해 주세요."
-        back={<BackLink to="/consultations">상담 내역</BackLink>}
-      />
+      <PageHeading title="받은 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
       {access ??
         (error ? (
           <section className="consultation-soft-panel">
-            <Alert message={error} />
+            <Alert title="불러오지 못했어요" message={error} />
             <button type="button" className="button" onClick={() => void load()}>
               다시 불러오기
             </button>
@@ -120,7 +116,7 @@ export function ReceivedList() {
           <section className="consultation-soft-panel">
             <h2>아직 받은 상담이 없어요</h2>
             {hasProfile ? (
-              <p>고객이 상담을 보내면 이곳에 보여요.</p>
+              <p>고객이 상담을 보내면 여기에 떠요.</p>
             ) : (
               <>
                 <p>디자이너 프로필을 공개로 등록하면 고객이 상담을 보낼 수 있어요.</p>
@@ -131,7 +127,7 @@ export function ReceivedList() {
             )}
           </section>
         ))}
-      {!access && items && (
+      {!access && items && !error && (
         <div className="consultation-list-actions">
           <button
             type="button"
@@ -289,7 +285,9 @@ export function ReceivedDetail() {
           <Alert message={error} />
           <div className="consultation-action">
             <p className="consultation-privacy">
-              보낸 답변은 고칠 수 없어요. 답변한 뒤에는 이 화면에서 메시지를 더 주고받을 수 있어요.
+              보낸 답변은 고칠 수 없어요.
+              <br />
+              답변한 뒤에는 이 화면에서 메시지를 더 주고받을 수 있어요.
             </p>
             <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
               {busy ? '보내는 중' : '답변 보내기'}
@@ -307,7 +305,7 @@ export function ReceivedComplete() {
     <div className="consultation-sent">
       <Completion
         title="답변을 보냈어요"
-        description="고객이 상담 내역에서 답변을 확인할 수 있어요."
+        description="고객에게 답변 알림이 가요."
         primary="받은 상담 목록"
         to="/consultations/received"
         secondary="보낸 답변 보기"

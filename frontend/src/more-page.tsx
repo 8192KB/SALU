@@ -56,7 +56,11 @@ export function MorePage() {
       <PageHeading title="더보기" />
       {!member && (
         <section className="consultation-soft-panel">
-          <p>로그인하면 글쓰기, 찜, 알림을 쓸 수 있어요. 커뮤니티 글은 로그인 없이 볼 수 있어요.</p>
+          <p>
+            로그인하면 글쓰기, 찜, 알림을 쓸 수 있어요.
+            <br />
+            커뮤니티 글은 로그인 없이 볼 수 있어요.
+          </p>
           <Link className="button primary" to={loginPath}>
             로그인
           </Link>
@@ -74,14 +78,14 @@ export function MorePage() {
       </Group>
       {admin && (
         <Group title="관리자">
-          <Item to="/admin/reports" title="신고 처리" note="신고된 글·댓글과 회원 제재" />
+          <Item to="/admin/reports" title="신고 처리" note="신고된 글과 댓글, 회원 제재" />
         </Group>
       )}
       {member && (
         <Group title="계정">
           <Item to="/notifications" title="알림" />
           <Item to="/account" title="내 계정" />
-          <Item to="/backup" title="기록 저장·백업" />
+          <Item to="/backup" title="기록 백업" />
         </Group>
       )}
     </div>

@@ -39,7 +39,18 @@ public class CommunityAdminService {
         if (!Inputs.uuid(id)) throw ApiException.notFound();
         var row = posts.post(id, 0);
         if (row == null) throw ApiException.notFound();
-        return new PostReview(CommunityService.detail(row, 0), row.authorId(), mapper.postReports(id).stream().map(CommunityAdminService::report).toList());
+        return new PostReview(CommunityService.detail(row, 0, CommunityAdminService::photoUrl), row.authorId(), mapper.postReports(id).stream().map(CommunityAdminService::report).toList());
+    }
+
+    // 공개 사진 주소는 숨김·삭제된 글에 404라서 관리자는 자기 경로로 봄
+    static String photoUrl(String id, int position) { return "/api/admin/community/posts/" + id + "/photos/" + position; }
+
+    @Transactional(readOnly=true)
+    public CommunityService.PhotoFile photo(String id, int position) {
+        if (!Inputs.uuid(id) || position < 0 || position >= CommunityService.MAX_PHOTOS) throw ApiException.notFound();
+        var photo = posts.adminPhoto(id, position);
+        if (photo == null) throw ApiException.notFound();
+        return new CommunityService.PhotoFile(photo.contentType(), photo.data());
     }
 
     // HIDE는 숨기고 신고를 받아들임, KEEP은 다시 보이게 하고 앞서 받아들인 신고까지 기각함. 작성자가 지운 글은 신고만 정리함

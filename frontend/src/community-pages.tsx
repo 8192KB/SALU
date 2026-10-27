@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, RefObject } from 'react';
-import { Navigate, useParams, useSearchParams } from 'react-router';
+import { Navigate, useLocation, useParams, useSearchParams } from 'react-router';
 import {
   Alert,
   BackLink,
@@ -182,7 +182,6 @@ export function CommunityList() {
     <div className="community-screen">
       <PageHeading
         title="커뮤니티"
-        description="커트 사례와 고민을 나누고 다른 사람의 경험을 참고해 보세요."
         back={<BackLink to="/more">더보기</BackLink>}
         action={
           <Link className="button primary" to="/community/new">
@@ -396,6 +395,23 @@ function Comments({
   const [removing, setRemoving] = useState<CommunityComment | null>(null);
   // 응답을 못 받은 댓글을 같은 내용으로 다시 보낼 때 한 번만 저장되게 같은 키를 씀
   const pending = useRef<{ key: string; content: string } | null>(null);
+  // 댓글 알림으로 들어오면 알림 시각 뒤에 달린 남의 댓글을 새 댓글로 표시하고 첫 댓글로 스크롤함
+  const location = useLocation();
+  const since = Date.parse(
+    (location.state as { newCommentsSince?: string } | null)?.newCommentsSince ?? '',
+  );
+  const isNew = (comment: CommunityComment) =>
+    !comment.mine && Date.parse(comment.createdAt) >= since - 5000;
+  const scrolled = useRef(false);
+  useEffect(() => {
+    if (scrolled.current || Number.isNaN(since) || !comments) return;
+    scrolled.current = true;
+    const first = comments.find(isNew);
+    if (first)
+      document
+        .getElementById(`comment-${first.id}`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [comments]);
   const loadComments = useCallback(
     () =>
       listComments(post.id).then(setComments, (failure: unknown) =>
@@ -458,27 +474,37 @@ function Comments({
       {comments?.length ? (
         <ul>
           {comments.map((comment) => (
-            <li key={comment.id} className={comment.hidden ? 'hidden' : undefined}>
+            <li
+              key={comment.id}
+              id={`comment-${comment.id}`}
+              className={comment.hidden ? 'hidden' : isNew(comment) ? 'new' : undefined}
+            >
               <div className="community-comment-head">
                 <strong>{comment.author.displayName}</strong>
+                {comment.mine && <span className="community-mine">내 댓글</span>}
                 <time dateTime={comment.createdAt}>{sentTime(comment.createdAt)}</time>
+                {isNew(comment) && <span className="community-new">새 댓글</span>}
                 {comment.hidden && <span className="community-hidden">숨김 · 나에게만 보여요</span>}
+                {member &&
+                  (comment.mine ? (
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => setRemoving(comment)}
+                    >
+                      지우기
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => setReportTarget({ comment: comment.id })}
+                    >
+                      신고
+                    </button>
+                  ))}
               </div>
               <p>{comment.content}</p>
-              {member &&
-                (comment.mine ? (
-                  <button type="button" className="text-link" onClick={() => setRemoving(comment)}>
-                    지우기
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="text-link"
-                    onClick={() => setReportTarget({ comment: comment.id })}
-                  >
-                    신고
-                  </button>
-                ))}
             </li>
           ))}
         </ul>
@@ -1098,7 +1124,7 @@ export function CommunityComplete() {
     <div className="consultation-sent">
       <Completion
         title="글을 올렸어요"
-        description="커뮤니티에서 다른 사람이 볼 수 있어요. 댓글이 달리면 알림으로 알려 드려요."
+        description="댓글이 달리면 알림이 와요."
         primary="올린 글 보기"
         to={`/community/${id}`}
         secondary="커뮤니티로"

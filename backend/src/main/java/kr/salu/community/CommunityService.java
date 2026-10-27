@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.stream.IntStream;
 import kr.salu.auth.MemberPrincipal;
 import kr.salu.auth.StorageContext;
@@ -247,9 +248,11 @@ public class CommunityService {
         return new PostSummary(p.id(), p.category(), p.title(), excerpt(p.content()), new AuthorView(p.authorName()), cut(p),
             p.photoCount() > 0 ? photoUrl(p.id(), 0) : null, p.photoCount(), p.commentCount(), p.reactionCount(), p.status(), hiddenBy, Inputs.time(p.createdAt()));
     }
-    static Post detail(CommunityMapper.PostRow p, long viewer) {
+    static Post detail(CommunityMapper.PostRow p, long viewer) { return detail(p, viewer, CommunityService::photoUrl); }
+    // 관리자는 숨긴 글의 사진도 봐야 해서 사진 주소 만드는 방법을 바꿔 받음
+    static Post detail(CommunityMapper.PostRow p, long viewer, BiFunction<String, Integer, String> photoUrl) {
         return new Post(p.id(), p.category(), p.title(), p.content(), new AuthorView(p.authorName()), cut(p),
-            IntStream.range(0, p.photoCount()).mapToObj(i -> photoUrl(p.id(), i)).toList(),
+            IntStream.range(0, p.photoCount()).mapToObj(i -> photoUrl.apply(p.id(), i)).toList(),
             p.commentCount(), p.reactionCount(), p.reacted(), p.authorId() == viewer, p.status(), Inputs.time(p.createdAt()), Inputs.time(p.updatedAt()));
     }
     private static Comment comment(CommunityMapper.CommentRow c, long viewer) {

@@ -1,11 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Ref } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { Alert, BackLink, Icon, PageHeading } from '../components';
-import { Field } from '../fields';
+import { Alert, BackLink, FieldFeedback, Icon, PageHeading } from '../components';
+import { Field, PasswordInput } from '../fields';
 import { Dialog } from '../dialog';
 import { useAuth } from './context';
 import { usePrototype } from '../prototype/context';
-import { ApiFailure, backupRequest, directoryRequest, signup } from './api';
+import {
+  ApiFailure,
+  backupRequest,
+  changePassword,
+  directoryRequest,
+  emailAvailable,
+  renameMember,
+  signup,
+} from './api';
 import type { SessionMember } from './api';
 import { listReceivedConsultations } from '../consultation-api';
 import { flushPersonalStores, readGuestRecords } from '../prototype/personal-store';
@@ -30,14 +39,22 @@ export function AccountControls() {
   const navigate = useNavigate();
   const loginPath = useLoginPath();
   const [open, setOpen] = useState(false);
+  const [unsent, setUnsent] = useState(0);
   const [storageError, setStorageError] = useState('');
   const { storage } = usePrototype();
-  const unsent =
-    open && storage
-      ? Object.entries(storage.getItems()).filter(
-          ([id, item]) => id !== 'new-cut-draft' && (item.dirty || item.conflict),
-        ).length
-      : 0;
+  // 평소에는 바로 로그아웃함. 서버에 못 올린 기록이 있거나 기기 저장이 실패했을 때만 창으로 물음
+  const finish = async () => {
+    try {
+      await flushPersonalStores();
+    } catch {
+      setStorageError('기기에 저장하지 못했어요. 입력을 보관한 뒤 다시 시도해 주세요.');
+      setOpen(true);
+      return;
+    }
+    const success = await logout();
+    setOpen(false);
+    if (success) navigate('/');
+  };
   if (state.status === 'prototype') return <span className="member-label">나의 헤어 기록</span>;
   return (
     <div className="account-controls" role="group" aria-label="계정">
@@ -52,10 +69,17 @@ export function AccountControls() {
             disabled={pending}
             onClick={() => {
               setStorageError('');
-              setOpen(true);
+              const waiting = storage
+                ? Object.entries(storage.getItems()).filter(
+                    ([id, item]) => id !== 'new-cut-draft' && (item.dirty || item.conflict),
+                  ).length
+                : 0;
+              setUnsent(waiting);
+              if (waiting > 0) setOpen(true);
+              else void finish();
             }}
           >
-            로그아웃
+            {pending ? '로그아웃 중' : '로그아웃'}
           </button>
         </>
       ) : state.status === 'checking' ? (
@@ -70,17 +94,16 @@ export function AccountControls() {
       )}
       <Dialog
         open={open}
-        title="로그아웃할까요?"
+        title={storageError ? '로그아웃하지 못했어요' : '아직 올리지 못한 기록이 있어요'}
         onClose={() => {
           if (!pending) setOpen(false);
         }}
       >
         <Alert message={storageError} />
-        <p>계정 기록은 이 화면에서 숨겨져요. 다시 로그인하면 이어서 사용할 수 있어요.</p>
-        {unsent > 0 && (
+        {!storageError && unsent > 0 && (
           <p>
-            서버에 아직 올리지 못한 기록 {unsent}건이 있어요. 이 기기에서 다시 로그인해야 서버에
-            올라가고 다른 기기에서도 보여요.
+            기록 {unsent}건을 아직 계정에 저장하지 못했어요.
+            <br />이 기기에서 다시 로그인하면 저장돼요.
           </p>
         )}
         <div className="dialog-actions">
@@ -90,25 +113,15 @@ export function AccountControls() {
             disabled={pending}
             onClick={() => setOpen(false)}
           >
-            계속 사용
+            취소
           </button>
           <button
             type="button"
             className="button primary"
             disabled={pending}
-            onClick={async () => {
-              try {
-                await flushPersonalStores();
-              } catch {
-                setStorageError('기기에 저장하지 못했어요. 입력을 보관한 뒤 다시 시도해 주세요.');
-                return;
-              }
-              const success = await logout();
-              if (success) navigate('/');
-              setOpen(false);
-            }}
+            onClick={() => void finish()}
           >
-            {pending ? '로그아웃 중' : '로그아웃 확인'}
+            {pending ? '로그아웃 중' : '로그아웃'}
           </button>
         </div>
       </Dialog>
@@ -153,11 +166,7 @@ export function SessionNotice({ compact = false }: { compact?: boolean }) {
       >
         {checking ? '확인 중' : '로그인 상태 다시 확인'}
       </button>
-      {!compact && (
-        <p>
-          기기에 저장한 기록은 그대로 있어요. 로그인 상태를 확인하면 계정 저장도 이어서 진행해요.
-        </p>
-      )}
+      {!compact && <p>기기에 저장한 기록은 그대로 있어요.</p>}
     </div>
   );
 }
@@ -197,7 +206,7 @@ const RETURN_LABELS: [RegExp, string][] = [
   [/^\/records/, '내 기록으로'],
   [/^\/more/, '더보기로'],
   [/^\/account/, '내 계정으로'],
-  [/^\/backup/, '기록 저장·백업으로'],
+  [/^\/backup/, '기록 백업으로'],
   [/^\/notifications/, '알림으로'],
   [/^\/admin/, '신고 처리로'],
 ];
@@ -243,7 +252,6 @@ export function LoginPage() {
       <PageHeading
         back={<BackLink to={next ?? '/'}>{returnLabel(next)}</BackLink>}
         title="로그인"
-        description="로그인하면 기록이 계정에도 자동으로 저장돼요."
       />
       {state.status === 'prototype' ? (
         <section className="panel">
@@ -296,9 +304,8 @@ export function LoginPage() {
             />
           </Field>
           <Field label="비밀번호">
-            <input
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="current-password"
               required
               ref={passwordInput}
@@ -337,6 +344,48 @@ export function LoginPage() {
   );
 }
 
+// 확인 칸이 비었거나 아직 앞부분이 같으면 판단하지 않음. 다르면 바로 알려 가입 버튼을 누르기 전에 고치게 함
+function passwordMatch(password: string, confirm: string): 'same' | 'different' | null {
+  if (!confirm) return null;
+  if (confirm === password) return 'same';
+  return password.startsWith(confirm) ? null : 'different';
+}
+function PasswordConfirmField({
+  ref,
+  match,
+  value,
+  disabled,
+  onChange,
+}: {
+  ref?: Ref<HTMLInputElement>;
+  match: ReturnType<typeof passwordMatch>;
+  value: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <Field label="비밀번호 확인" error={match === 'different' ? '비밀번호가 서로 달라요.' : ''}>
+        <PasswordInput
+          name="passwordConfirm"
+          autoComplete="new-password"
+          maxLength={72}
+          required
+          ref={ref}
+          value={value}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </Field>
+      {match === 'same' && (
+        <p className="field-match" aria-live="polite">
+          <Icon name="check" size={16} /> 비밀번호가 같아요.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function SignupPage() {
   const { state, pending, checking, login } = useAuth();
   const navigate = useNavigate();
@@ -346,20 +395,23 @@ export function SignupPage() {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  // 제출한 뒤부터 불일치를 알림. 칸을 떠날 때 알리면 문구가 버튼을 밀어 첫 클릭이 빗나감
-  const [confirmChecked, setConfirmChecked] = useState(false);
   const confirmInput = useRef<HTMLInputElement>(null);
-  const mismatch = confirmChecked && confirm !== password ? '비밀번호가 서로 달라요.' : '';
+  const match = passwordMatch(password, confirm);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
   const [error, setError] = useState('');
+  // 중복 확인 결과는 확인한 그 이메일에만 맞으므로 이메일을 고치면 지움
+  const [checked, setChecked] = useState<{ email: string; available: boolean } | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const emailResult = checked?.email === email.trim().toLowerCase() ? checked : null;
+  const taken = duplicate || emailResult?.available === false;
   return (
     <div className="login-page">
       <PageHeading
         back={<BackLink to={withNext('/login', next)}>로그인으로</BackLink>}
         title="회원가입"
-        description="SALU에서 사용할 계정을 만들어요."
       />
       {state.status === 'prototype' || state.status === 'authenticated' ? (
         <section className="panel">
@@ -375,7 +427,6 @@ export function SignupPage() {
       ) : created ? (
         <section className="panel">
           <h2>회원가입을 마쳤어요</h2>
-          <p>로그인해서 기록을 이어서 남겨 보세요.</p>
           <Alert message={error} />
           <Link className="button primary full" to={withNext('/login', next)}>
             로그인
@@ -389,8 +440,8 @@ export function SignupPage() {
             if (busy || pending || checking) return;
             setError('');
             setDuplicate(false);
-            if (password.length < 12) {
-              setError('비밀번호를 12자 이상 입력해 주세요.');
+            if (password.length < 8) {
+              setError('비밀번호를 8자 이상 입력해 주세요.');
               return;
             }
             if (new TextEncoder().encode(password).length > 72) {
@@ -398,7 +449,6 @@ export function SignupPage() {
               return;
             }
             if (confirm !== password) {
-              setConfirmChecked(true);
               requestAnimationFrame(() => confirmInput.current?.focus());
               return;
             }
@@ -425,19 +475,13 @@ export function SignupPage() {
               if (joined) {
                 setPassword('');
                 setConfirm('');
-                setConfirmChecked(false);
               }
               setBusy(false);
             }
           }}
         >
           {!error && <SessionNotice />}
-          <Alert message={error} />
-          {duplicate && (
-            <Link className="button full" to={withNext('/login', next)}>
-              이 이메일로 로그인
-            </Link>
-          )}
+          <Alert message={duplicate ? '' : error} />
           <Field label="이름">
             <input
               name="displayName"
@@ -449,24 +493,67 @@ export function SignupPage() {
               onChange={(event) => setDisplayName(event.target.value)}
             />
           </Field>
-          <Field label="이메일">
-            <input
-              name="email"
-              type="email"
-              autoComplete="username"
-              maxLength={254}
-              required
-              value={email}
-              disabled={busy || pending}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </Field>
-          <Field label="비밀번호" hint="12자 이상">
-            <input
+          <div className="email-check">
+            <Field label="이메일">
+              <input
+                name="email"
+                type="email"
+                autoComplete="username"
+                maxLength={254}
+                required
+                value={email}
+                disabled={busy || pending}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setDuplicate(false);
+                  setEmailError('');
+                }}
+              />
+            </Field>
+            <button
+              type="button"
+              className="button"
+              disabled={busy || pending || checkingEmail || !email.trim()}
+              onClick={async () => {
+                const value = email.trim().toLowerCase();
+                setCheckingEmail(true);
+                setEmailError('');
+                try {
+                  setChecked({ email: value, available: await emailAvailable(value) });
+                } catch (failure) {
+                  setChecked(null);
+                  setEmailError(
+                    failure instanceof Error
+                      ? failure.message
+                      : '확인하지 못했어요. 다시 눌러 주세요.',
+                  );
+                } finally {
+                  setCheckingEmail(false);
+                }
+              }}
+            >
+              {checkingEmail ? '확인 중' : '중복 확인'}
+            </button>
+          </div>
+          <div aria-live="polite">
+            {taken ? (
+              <p className="email-taken">
+                이미 가입한 이메일이에요.{' '}
+                <Link to={withNext('/login', next)}>이 이메일로 로그인</Link>
+              </p>
+            ) : emailResult?.available ? (
+              <p className="email-result">
+                <Icon name="check" size={16} /> 사용할 수 있는 이메일이에요.
+              </p>
+            ) : (
+              emailError && <FieldFeedback message={emailError} />
+            )}
+          </div>
+          <Field label="비밀번호" hint="8자 이상">
+            <PasswordInput
               name="password"
-              type="password"
               autoComplete="new-password"
-              minLength={12}
+              minLength={8}
               maxLength={72}
               required
               value={password}
@@ -474,19 +561,13 @@ export function SignupPage() {
               onChange={(event) => setPassword(event.target.value)}
             />
           </Field>
-          <Field label="비밀번호 확인" error={mismatch}>
-            <input
-              name="passwordConfirm"
-              type="password"
-              autoComplete="new-password"
-              maxLength={72}
-              required
-              ref={confirmInput}
-              value={confirm}
-              disabled={busy || pending}
-              onChange={(event) => setConfirm(event.target.value)}
-            />
-          </Field>
+          <PasswordConfirmField
+            ref={confirmInput}
+            match={match}
+            value={confirm}
+            disabled={busy || pending}
+            onChange={setConfirm}
+          />
           <button
             type="submit"
             className="button primary full"
@@ -669,11 +750,7 @@ export function AccountPage() {
   if (state.status !== 'authenticated')
     return (
       <div className="login-page">
-        <PageHeading
-          back={<BackLink to="/">홈으로</BackLink>}
-          title="내 계정"
-          description="로그인하면 기록을 계정에도 보관할 수 있어요."
-        />
+        <PageHeading back={<BackLink to="/">홈으로</BackLink>} title="내 계정" />
         <SessionNotice />
         <section className="panel">
           <Link className="button primary full" to="/login">
@@ -685,28 +762,28 @@ export function AccountPage() {
             </Link>
           )}
           <Link className="text-link" to="/backup">
-            기록 저장·백업
+            기록 백업
           </Link>
         </section>
       </div>
     );
   return (
     <div className="login-page">
-      <PageHeading
-        back={<BackLink to="/">홈으로</BackLink>}
-        title="내 계정"
-        description={`${state.member.displayName}님의 계정`}
-      />
+      <PageHeading back={<BackLink to="/">홈으로</BackLink>} title="내 계정" />
       <SessionNotice />
       {linkedNotice && (
         <p className="working-notice" role="status">
           소셜 계정을 연결했어요.
         </p>
       )}
-      <section className="panel">
+      <section className="panel account-profile">
         <p className="account-email">{state.member.email ?? '소셜 로그인 계정'}</p>
+        <RenameForm member={state.member} />
+        {state.member.email && <PasswordForm />}
+      </section>
+      <section className="panel">
         <Link className="button primary full" to="/backup">
-          기록 저장·백업
+          기록 백업
         </Link>
       </section>
       {designer?.profile ? (
@@ -724,11 +801,182 @@ export function AccountPage() {
         </section>
       ) : (
         <Link className="button full" to="/account/designer">
-          내 디자이너 프로필 등록·관리
+          디자이너 프로필 만들기
         </Link>
       )}
       <SocialButtons link />
     </div>
+  );
+}
+function RenameForm({ member }: { member: SessionMember }) {
+  const { updateMember } = useAuth();
+  const notify = useFeedback();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(member.displayName);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!editing)
+    return (
+      <div className="account-row">
+        <span>
+          <span className="account-row-label">이름</span> {member.displayName}
+        </span>
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            setName(member.displayName);
+            setError('');
+            setEditing(true);
+          }}
+        >
+          이름 바꾸기
+        </button>
+      </div>
+    );
+  return (
+    <form
+      className="account-edit"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        const value = name.trim();
+        if (!value) {
+          setError('이름을 입력해 주세요.');
+          return;
+        }
+        if (value === member.displayName) {
+          setEditing(false);
+          return;
+        }
+        setBusy(true);
+        setError('');
+        try {
+          updateMember(await renameMember(value));
+          setEditing(false);
+          notify('이름을 바꿨어요');
+        } catch (failure) {
+          setError(failure instanceof Error ? failure.message : '이름을 바꾸지 못했어요.');
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Field label="이름" error={error}>
+        <input
+          name="displayName"
+          autoComplete="nickname"
+          maxLength={50}
+          required
+          autoFocus
+          value={name}
+          disabled={busy}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </Field>
+      <div className="account-edit-actions">
+        <button type="button" className="button" disabled={busy} onClick={() => setEditing(false)}>
+          취소
+        </button>
+        <button type="submit" className="button primary" disabled={busy}>
+          {busy ? '저장 중' : '저장'}
+        </button>
+      </div>
+    </form>
+  );
+}
+function PasswordForm() {
+  const notify = useFeedback();
+  const [editing, setEditing] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [currentError, setCurrentError] = useState('');
+  const match = passwordMatch(next, confirm);
+  const close = () => {
+    setCurrent('');
+    setNext('');
+    setConfirm('');
+    setError('');
+    setCurrentError('');
+    setEditing(false);
+  };
+  if (!editing)
+    return (
+      <button type="button" className="button full" onClick={() => setEditing(true)}>
+        비밀번호 바꾸기
+      </button>
+    );
+  return (
+    <form
+      className="account-edit"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setError('');
+        setCurrentError('');
+        if (next.length < 8) {
+          setError('새 비밀번호를 8자 이상 입력해 주세요.');
+          return;
+        }
+        if (new TextEncoder().encode(next).length > 72) {
+          setError('새 비밀번호가 너무 길어요. 글자 수를 줄여 주세요.');
+          return;
+        }
+        if (next !== confirm) return;
+        setBusy(true);
+        try {
+          await changePassword(current, next);
+          close();
+          notify('비밀번호를 바꿨어요');
+        } catch (failure) {
+          const message =
+            failure instanceof Error ? failure.message : '비밀번호를 바꾸지 못했어요.';
+          if (failure instanceof ApiFailure && failure.code === 'CURRENT_PASSWORD_INVALID')
+            setCurrentError(message);
+          else setError(message);
+        } finally {
+          setCurrent('');
+          setBusy(false);
+        }
+      }}
+    >
+      <h2>비밀번호 바꾸기</h2>
+      <Alert message={error} />
+      <Field label="현재 비밀번호" error={currentError}>
+        <PasswordInput
+          name="currentPassword"
+          autoComplete="current-password"
+          maxLength={72}
+          required
+          autoFocus
+          value={current}
+          disabled={busy}
+          onChange={(event) => setCurrent(event.target.value)}
+        />
+      </Field>
+      <Field label="새 비밀번호" hint="8자 이상">
+        <PasswordInput
+          name="newPassword"
+          autoComplete="new-password"
+          minLength={8}
+          maxLength={72}
+          required
+          value={next}
+          disabled={busy}
+          onChange={(event) => setNext(event.target.value)}
+        />
+      </Field>
+      <PasswordConfirmField match={match} value={confirm} disabled={busy} onChange={setConfirm} />
+      <div className="account-edit-actions">
+        <button type="button" className="button" disabled={busy} onClick={close}>
+          취소
+        </button>
+        <button type="submit" className="button primary" disabled={busy}>
+          {busy ? '바꾸는 중' : '비밀번호 바꾸기'}
+        </button>
+      </div>
+    </form>
   );
 }
 export const guestRecordsLabel = (guest: GuestRecords) =>
@@ -782,9 +1030,8 @@ function GuestMoveQuestion({
       <h1 tabIndex={-1} ref={heading}>
         이 기기의 {label}을 계정으로 옮길까요?
       </h1>
-      <p>로그인 전에 이 기기에 남긴 기록이에요. 옮기면 다른 기기에서도 볼 수 있어요.</p>
       <GuestRecordList guest={guest} />
-      <p>옮기지 않으면 이 기기에만 남아요. 나중에 내 계정의 기록 저장·백업에서 옮길 수 있어요.</p>
+      <p>옮기면 다른 기기에서도 볼 수 있어요. 나중에 기록 백업 화면에서 옮겨도 돼요.</p>
       <Alert message={error} />
       {moving && (
         <p className="working-notice" role="status">

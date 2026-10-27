@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react';
-import type { KeyboardEvent, ReactNode } from 'react';
+import type { ComponentProps, KeyboardEvent, ReactNode } from 'react';
 import { FieldFeedback } from './components';
 import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
@@ -43,6 +43,26 @@ export function Field({
       {control}
       {error && <FieldFeedback id={`${labelId}-error`} message={error} />}
     </label>
+  );
+}
+
+// 비밀번호 칸. Field가 넘기는 aria 속성은 input에 붙고, 옆 버튼으로 입력한 글자를 보여 줌
+export function PasswordInput({ ref, disabled, ...props }: ComponentProps<'input'>) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="password-input">
+      <input {...props} ref={ref} disabled={disabled} type={shown ? 'text' : 'password'} />
+      <button
+        type="button"
+        className="password-toggle"
+        aria-label={shown ? '비밀번호 숨기기' : '비밀번호 보기'}
+        aria-pressed={shown}
+        disabled={disabled}
+        onClick={() => setShown((value) => !value)}
+      >
+        <Icon name={shown ? 'eye-off' : 'eye'} />
+      </button>
+    </span>
   );
 }
 

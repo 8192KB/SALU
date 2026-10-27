@@ -21,6 +21,8 @@ public final class ApiException extends RuntimeException {
     public static ApiException unsupportedMedia() { return new ApiException(HttpStatus.UNSUPPORTED_MEDIA_TYPE); }
     public static ApiException storageContextChanged() { return new ApiException(HttpStatus.CONFLICT, "STORAGE_CONTEXT_CHANGED", "로그인 상태를 다시 확인하세요."); }
     public static ApiException communitySuspended() { return new ApiException(HttpStatus.FORBIDDEN, "COMMUNITY_SUSPENDED", "커뮤니티 이용이 제한된 상태입니다."); }
+    public static ApiException currentPasswordInvalid() { return new ApiException(HttpStatus.BAD_REQUEST, "CURRENT_PASSWORD_INVALID", "현재 비밀번호를 확인하세요."); }
+    public static ApiException passwordNotSet() { return new ApiException(HttpStatus.CONFLICT, "PASSWORD_NOT_SET", "비밀번호 없이 소셜 계정으로 가입한 계정입니다."); }
     public static ApiException unavailable() { return new ApiException(HttpStatus.SERVICE_UNAVAILABLE); }
     public String code() { return code; }
     public HttpStatus status() { return status; }

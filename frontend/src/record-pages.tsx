@@ -86,7 +86,6 @@ export function RecordList() {
       <section>
         <PageHeading
           title="나의 커트 기록"
-          description="커트한 날부터 달라진 모습까지."
           action={
             <Link className="button primary" to="/records/new">
               <Icon name="plus" />새 기록
@@ -127,7 +126,7 @@ export function RecordList() {
           <div className="record-empty">
             <Icon name="cut" size={28} />
             <h3>아직 남긴 커트 기록이 없어요</h3>
-            <p>위의 새 기록 버튼으로 날짜와 좋았던 점부터 남겨 보세요.</p>
+            <p>새 기록 버튼으로 날짜와 좋았던 점부터 남겨요.</p>
           </div>
         )}
         {/* 두 링크가 한 줄에 붙어 하나로 읽히지 않게 따로 줄을 나눔 */}
@@ -137,7 +136,7 @@ export function RecordList() {
           </Link>
           {mode !== 'example' && (
             <Link className="journal-next text-link" to="/backup">
-              기록 저장·백업 <Icon name="arrow" size={16} />
+              기록 백업 <Icon name="arrow" size={16} />
             </Link>
           )}
         </div>
@@ -173,8 +172,9 @@ export function RecordList() {
 function ResumedNotice() {
   return (
     <p className="working-notice resumed-notice" role="status">
-      저장하지 않은 내용을 이어서 보여 줘요. 처음부터 쓰려면 맨 아래 ‘작성 내용 지우기’를 눌러
-      주세요.
+      저장하지 않은 내용이 남아 있어요.
+      <br />
+      처음부터 쓰려면 맨 아래 ‘작성 내용 지우기’를 누르세요.
     </p>
   );
 }
@@ -329,7 +329,6 @@ function CutFormBody({
       <PageHeading
         back={<BackLink to={returnUrl}>{editingId ? '커트 기록으로' : '기록 목록으로'}</BackLink>}
         title={editingId ? '커트 기록 수정' : '커트 기록 남기기'}
-        description="커트한 날짜와 마음에 든 부분을 남겨 보세요."
       />
       {resumed && <ResumedNotice />}
       <Dialog
@@ -774,7 +773,9 @@ export function RecordDetail() {
           {!entries.length && (
             <section className="record-progress-empty">
               <p className="muted">
-                아직 경과를 남기지 않았어요. 집에서 느낀 점을 이어서 적어 보세요.
+                아직 경과를 남기지 않았어요.
+                <br />
+                집에서 느낀 점을 이어서 적어 보세요.
               </p>
             </section>
           )}
@@ -849,8 +850,9 @@ export function RecordDetail() {
             <section className="panel record-community">
               <h3>커뮤니티에 공유</h3>
               <p className="muted">
-                이 커트를 사례로 올리면 비슷한 고민을 가진 사람이 참고할 수 있어요. 올릴 사진은 직접
-                골라요.
+                이 커트를 사례로 올리면 비슷한 고민을 가진 사람이 참고할 수 있어요.
+                <br />
+                올릴 사진은 직접 골라요.
               </p>
               <Link
                 className="text-link"
@@ -863,7 +865,9 @@ export function RecordDetail() {
           <section className="panel">
             <h3>경과를 남기는 시점</h3>
             <p className="muted">
-              손질하면서 변화를 느꼈을 때 남겨 주세요. 날짜는 그날 확인한 시점이에요.
+              손질하면서 변화를 느꼈을 때 남겨요.
+              <br />
+              날짜는 그날 확인한 시점이에요.
             </p>
           </section>
         </aside>
@@ -1089,9 +1093,15 @@ function ProgressFormBody({
           </button>
         </div>
         <p className="form-note">
-          {editingId
-            ? '경과를 수정해도 이미 정리한 커트 준비 내용은 그대로 남아요.'
-            : '관찰 날짜는 내용을 확인한 날입니다. 커트 기록에 이어서 보관해요.'}
+          {editingId ? (
+            '경과를 수정해도 이미 정리한 커트 준비 내용은 그대로 남아요.'
+          ) : (
+            <>
+              관찰 날짜는 내용을 확인한 날이에요.
+              <br />
+              커트 기록에 이어서 보관해요.
+            </>
+          )}
         </p>
         <button
           type="button"

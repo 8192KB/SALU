@@ -21,8 +21,8 @@ export function Completion({
   children: ReactNode;
   primary: string;
   to: string;
-  secondary: string;
-  secondaryTo: string;
+  secondary?: string;
+  secondaryTo?: string;
   description?: string;
   // 주 버튼·보조 링크 다음에 둘 덜 중요한 동작
   after?: ReactNode;
@@ -48,9 +48,11 @@ export function Completion({
       <Link className="button primary full" to={to} replace>
         {primary} <Icon name="arrow" />
       </Link>
-      <Link className="text-link" to={secondaryTo}>
-        {secondary}
-      </Link>
+      {secondary && secondaryTo && (
+        <Link className="text-link" to={secondaryTo}>
+          {secondary}
+        </Link>
+      )}
       {after}
     </section>
   );

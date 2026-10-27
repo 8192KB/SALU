@@ -744,9 +744,7 @@ export class PersonalStore {
       errorSource: null,
     });
   }
-  markSyncError(
-    error = '서버 저장을 확인하지 못했어요. 기기 기록은 그대로 두고 자동으로 다시 시도할게요.',
-  ) {
+  markSyncError(error = '계정에 저장하지 못했어요. 잠시 후 자동으로 다시 저장해요.') {
     if (this.view.errorSource === 'local') return;
     this.setView({ status: 'error', error, errorSource: 'cloud' });
   }

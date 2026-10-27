@@ -32,6 +32,11 @@ public class NotificationService {
         if (mapper.insert(member, type, targetId, actorName) != 1) throw ApiException.conflict();
         realtime.send(member, RealtimePublisher.NOTIFICATION, Long.toString(mapper.lastId()));
     }
+    // 취소된 일(지운 후기)의 알림은 남기지 않음. 업무와 같은 transaction에서 지우고, 안 읽은 수가 바뀌므로 신호를 보냄
+    @Transactional(propagation=Propagation.MANDATORY)
+    public void withdraw(long member, String type, String targetId) {
+        if (mapper.deleteByTarget(member, type, targetId) > 0) realtime.send(member, RealtimePublisher.NOTIFICATION, targetId);
+    }
     @Transactional(readOnly=true) public Inbox inbox(MemberPrincipal principal) {
         return new Inbox(mapper.unread(principal.id()), mapper.recent(principal.id()).stream()
             .map(row -> new Notification(row.id(), row.type(), row.targetId(), row.actorName(), Inputs.time(row.createdAt()), row.readAt() != null)).toList());

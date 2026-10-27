@@ -43,6 +43,8 @@
 | `COMMUNITY_COMMENT_HIDDEN` | 숨겨진 댓글을 쓴 회원 | 그 댓글이 달린 글 ID | `null` | `/community/{id}` |
 | `COMMUNITY_SUSPENDED` | 제재받은 회원 | 제재 ID | `null` | `/community/mine`(이용 제한 안내) |
 
+고객이 후기를 지우면 디자이너에게 쌓였던 그 상담의 `REVIEW_RECEIVED`도 함께 지우고 실시간 신호를 보냅니다. 후기가 없는데 알림만 남지 않게 하려는 것입니다.
+
 숨김 알림은 보이던 글·댓글이 숨김으로 바뀔 때(관리자 숨기기, 신고 5건 자동 숨김)만 쌓입니다. 이미 숨겨진 것을 관리자가 확정해도 다시 쌓이지 않습니다.
 
 디자이너의 첫 메시지는 답변이라 `CONSULTATION_ANSWERED`로, 그 뒤의 메시지는 `CONSULTATION_MESSAGE`로 쌓입니다. 2026-10-20 전에 쌓인 답변 알림은 `CONSULTATION_MESSAGE`로 남아 있습니다.

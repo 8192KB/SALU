@@ -58,8 +58,9 @@ public class ReviewService {
     @Transactional(rollbackFor=Exception.class)
     public void delete(MemberPrincipal principal, String context, String consultation) {
         StorageContext.check(principal, context);
-        locked(principal, consultation);
+        var target = locked(principal, consultation);
         if (mapper.delete(consultation, principal.id()) != 1) throw ApiException.notFound();
+        notifications.withdraw(target.designerMemberId(), NotificationService.REVIEW_RECEIVED, consultation);
     }
 
     // 상담의 두 참여자가 그 상담의 후기를 봄. 아직 없으면 404

@@ -43,6 +43,8 @@ public interface CommunityMapper {
     int insertPost(String id, long author, String authorName, String key, byte[] hash, String category, String title, String content, LocalDate cutDate, String service, String summary);
     @Insert("INSERT INTO community_post_photos(post_id,position,content_type,byte_size,data) VALUES(#{post},#{position},#{type},#{size},#{data})") int insertPhoto(String post, int position, String type, int size, byte[] data);
     @Select("SELECT f.content_type,f.data FROM community_post_photos f JOIN community_posts p ON p.id=f.post_id WHERE f.post_id=#{post} AND f.position=#{position} AND p.status='VISIBLE'") Photo photo(String post, int position);
+    // 관리자 검토용이라 숨김·삭제된 글의 사진도 줌
+    @Select("SELECT f.content_type,f.data FROM community_post_photos f WHERE f.post_id=#{post} AND f.position=#{position}") Photo adminPhoto(String post, int position);
     @Select("SELECT id,author_id,status FROM community_posts WHERE id=#{id} FOR UPDATE") Locked lockPost(String id);
     @Update("UPDATE community_posts SET title=#{title},content=#{content} WHERE id=#{id} AND author_id=#{author} AND status='VISIBLE'") int updatePost(String id, long author, String title, String content);
     @Update("UPDATE community_posts SET status='DELETED' WHERE id=#{id} AND author_id=#{author} AND status<>'DELETED'") int deletePost(String id, long author);

@@ -20,9 +20,17 @@ function Item({ to, title, note }: { to: string; title: string; note?: string })
     </li>
   );
 }
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({
+  title,
+  designer,
+  children,
+}: {
+  title: string;
+  designer?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className="more-group">
+    <section className="more-group" data-area={designer ? 'designer' : undefined}>
       <h2>{title}</h2>
       <ul>{children}</ul>
     </section>
@@ -73,9 +81,13 @@ export function MorePage() {
       <Group title="디자이너">
         <Item to="/designers" title="디자이너 찾기" />
         {member && <Item to="/designers?favorites=1" title="찜한 디자이너" />}
-        {member && designer !== false && <Item to="/consultations/received" title="받은 상담" />}
-        {member && <Item to="/account/designer" title="내 디자이너 프로필" />}
       </Group>
+      {member && (
+        <Group title="디자이너 활동" designer>
+          {designer !== false && <Item to="/consultations/received" title="받은 상담" />}
+          <Item to="/account/designer" title="내 디자이너 프로필" />
+        </Group>
+      )}
       {admin && (
         <Group title="관리자">
           <Item to="/admin/reports" title="신고 처리" note="신고된 글과 댓글, 회원 제재" />

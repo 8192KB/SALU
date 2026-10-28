@@ -39,6 +39,11 @@ export function isTaskPath(pathname: string) {
     /^\/community\/(?:new|[^/]+\/edit)$/.test(path)
   );
 }
+// 받은 상담·내 디자이너 프로필처럼 디자이너로 활동하는 화면. 같은 회원이 고객으로도 쓰므로 계정이 아니라 주소로 정함
+export const isDesignerAreaPath = (pathname: string) =>
+  /^\/(?:consultations\/received|account\/designer)(\/|$)/.test(
+    pathname.replace(/^\/examples(?=\/|$)/, '') || '/',
+  );
 const isDesignerPath = (pathname: string) =>
   /^\/designers(\/|$)/.test(pathname.replace(/^\/examples(?=\/|$)/, '') || '/');
 // 저장 완료 화면은 한 번 보는 화면이라 메뉴의 마지막 화면으로 남기지 않음

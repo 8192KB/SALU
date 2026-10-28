@@ -47,6 +47,11 @@ const path = (value: string) => encodeURIComponent(value);
 // 서버는 종류와 대상 ID만 보내므로 문구와 갈 화면은 이곳 한 곳에서 정함.
 // 상담 메시지는 받는 사람이 고객인지 디자이너인지에 따라 갈 화면이 달라 보낸 상담 ID 목록으로 정함.
 // 목록을 아직 못 받았으면(sent가 null) 누를 때 다시 받아 정함
+// 디자이너로 받은 알림은 목록에서 디자이너 색으로 구분함. 메시지는 보낸 상담 목록을 받은 뒤에만 표시
+function isDesignerNotification(item: Notification, sent: Set<string> | null) {
+  if (item.type === 'CONSULTATION_REQUESTED' || item.type === 'REVIEW_RECEIVED') return true;
+  return item.type === 'CONSULTATION_MESSAGE' && sent !== null && !sent.has(item.targetId);
+}
 function describe(item: Notification, sent: Set<string> | null) {
   const actor = item.actorName ?? '회원';
   switch (item.type) {
@@ -304,8 +309,9 @@ export function NotificationList() {
         <ul className="notification-list">
           {inbox.items.map((item) => {
             const { text, to } = describe(item, sent);
+            const designer = isDesignerNotification(item, sent);
             return (
-              <li key={item.id}>
+              <li key={item.id} data-area={designer ? 'designer' : undefined}>
                 <a
                   href={to}
                   className={item.read ? '' : 'unread'}
@@ -319,6 +325,7 @@ export function NotificationList() {
                   <span className="notification-dot" aria-hidden="true" />
                   <span className="notification-text">
                     {!item.read && <span className="sr-only">읽지 않음. </span>}
+                    {designer && <span className="notification-role">디자이너</span>}
                     {text}
                   </span>
                   <time dateTime={item.createdAt}>{sentTime(item.createdAt)}</time>

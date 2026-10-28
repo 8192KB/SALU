@@ -787,8 +787,12 @@ export function AccountPage() {
         </Link>
       </section>
       {designer?.profile ? (
-        <section className="panel account-designer" aria-labelledby="account-designer-heading">
-          <h2 id="account-designer-heading">디자이너</h2>
+        <section
+          className="panel account-designer"
+          data-area="designer"
+          aria-labelledby="account-designer-heading"
+        >
+          <h2 id="account-designer-heading">디자이너 활동</h2>
           <Link className="button full" to="/consultations/received">
             받은 상담
             {designer.waiting > 0 && (

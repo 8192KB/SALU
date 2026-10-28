@@ -27,6 +27,11 @@
   --overlay-solid: #183c3cf2;
   --overlay: #0b242699;
   --focus-fill: #14615b18;
+  --designer: #2d4f8c;
+  --designer-soft: #ebf0f8;
+  --designer-success-bg: #e3eaf6;
+  --designer-focus: #2d4f8c18;
+  --designer-page: #f3f6fa;
 }
 :root[data-theme='dark'] {
   --page: #121a19;
@@ -52,6 +57,23 @@
   --on-action: #102d25;
   --shadow: #00000033;
   --focus-fill: #85d8c122;
+  --designer: #a9c3f2;
+  --designer-soft: #26324a;
+  --designer-success-bg: #2b3a58;
+  --designer-focus: #a9c3f222;
+  --designer-page: #12171f;
+}
+/* 디자이너로 활동하는 화면은 강조색을 바꿈. 화면 전체(html)일 때만 배경도 바꿈.
+   :root 쪽 선택자는 어두운 화면 토큰보다 뒤에 있어야 덮어씀 */
+:root[data-area='designer'] {
+  --page: var(--designer-page);
+}
+:root[data-area='designer'],
+[data-area='designer'] {
+  --teal: var(--designer);
+  --soft: var(--designer-soft);
+  --success-bg: var(--designer-success-bg);
+  --focus-fill: var(--designer-focus);
 }
 body {
   background: var(--page);

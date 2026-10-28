@@ -31,7 +31,7 @@ import { BackupPage, StorageNotice } from './storage-page';
 import { CloudSync } from './prototype/cloud-sync';
 import { HomePage } from './home-page';
 import { Link as WorkspaceLink, useWorkspace, WorkspaceContext } from './workspace';
-import { RetainedPage, useMainNavigation, isTaskPath } from './main-navigation';
+import { RetainedPage, useMainNavigation, isTaskPath, isDesignerAreaPath } from './main-navigation';
 import { ThemeSettings } from './theme';
 import { KEEP_TRAIL, taskOrigin, useBackTrailTracker } from './back-trail';
 import { ConsultationProvider, useConsultations } from './consultation-store';
@@ -119,6 +119,13 @@ function Layout() {
   const [resetOpen, setResetOpen] = useState(false);
   const [exitTo, setExitTo] = useState<string | null>(null);
   const focused = isTaskPath(path);
+  // 디자이너로 활동하는 화면이면 머리글·메뉴까지 디자이너 색으로 바꿈
+  const designerArea = isDesignerAreaPath(path);
+  useEffect(() => {
+    const root = document.documentElement;
+    if (designerArea) root.dataset.area = 'designer';
+    else delete root.dataset.area;
+  }, [designerArea]);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   useEffect(() => {
     const viewport = window.visualViewport;

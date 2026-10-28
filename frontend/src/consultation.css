@@ -532,6 +532,24 @@
 .unread .notification-text {
   font-weight: 700;
 }
+.notification-role {
+  display: inline-block;
+  margin-right: 8px;
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 700;
+  vertical-align: 2px;
+}
+.more-group[data-area='designer'] h2 {
+  color: var(--teal);
+}
+.more-group[data-area='designer'] ul {
+  background: var(--soft);
+  border-color: transparent;
+}
+.more-group[data-area='designer'] svg {
+  color: var(--teal);
+}
 .notification-list time {
   grid-column: 2;
   font-size: 13px;

@@ -272,18 +272,18 @@
   width: 42px;
   height: 42px;
 }
+/* 상태는 배경 없이 글자로만. 할 일이 있는 상태(답변 대기·답변 도착)만 강조색 */
 .consultation-status {
+  flex: none;
   margin-left: auto;
-  border-radius: 8px;
-  padding: 5px 10px;
-  background: var(--soft);
-  color: var(--teal);
+  color: var(--muted);
   font-size: 14px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .consultation-status.filled {
-  background: var(--teal);
-  color: var(--on-action);
+  color: var(--teal);
+  font-weight: 700;
 }
 .consultation-reply {
   background: var(--soft);
@@ -431,7 +431,7 @@
     bottom: 0;
   }
   .example-notice > .example-notice-inner {
-    padding: 0 12px;
+    padding: 0 16px;
     gap: 8px;
   }
   .example-notice-inner > .example-directory {
@@ -826,16 +826,13 @@
 .community-category {
   display: inline-block;
   margin-right: 8px;
-  padding: 3px 8px;
-  border-radius: 8px;
-  background: var(--soft);
   color: var(--teal);
   font-size: 13px;
   font-weight: 700;
 }
 .community-hidden {
   font-size: 13px;
-  color: var(--coral);
+  color: var(--error);
 }
 .community-cut {
   font-size: 14px;
@@ -1239,7 +1236,7 @@
   flex-wrap: wrap;
 }
 .community-suspended h2 {
-  color: var(--coral);
+  color: var(--error);
 }
 .community-suspended-reason {
   overflow-wrap: anywhere;

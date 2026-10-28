@@ -392,8 +392,8 @@ h2 {
   .app-header nav a.active {
     background: transparent;
   }
-  .app-header nav a.active svg {
-    background: var(--soft);
+  .app-header nav a.active {
+    font-weight: 700;
   }
   .app-header nav a:active {
     transform: scale(0.94);
@@ -452,12 +452,8 @@ h2 {
     font-size: 18px;
     margin-bottom: 8px;
   }
-  .journal-entry .chip-row {
-    gap: 4px;
-  }
   .journal-entry .chip {
-    padding: 2px 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .journal-entry .card-note {
     font-size: 12px;
@@ -884,9 +880,6 @@ h2 {
   }
   .profile-identity h2 {
     font-size: 22px;
-  }
-  .profile-identity .chip-row {
-    gap: 4px 8px;
   }
   .profile-action {
     position: fixed;
@@ -2507,8 +2500,8 @@ html {
     padding: 5px;
     border-radius: 12px;
   }
-  .app-header nav a.active svg {
-    background: var(--soft);
+  .app-header nav a.active {
+    font-weight: 700;
   }
   .app-shell:not(.task-focused) main {
     padding-bottom: calc(100px + env(safe-area-inset-bottom));
@@ -2618,7 +2611,7 @@ html {
   min-height: 44px;
 }
 .app-crash {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 20px;

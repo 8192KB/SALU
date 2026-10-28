@@ -717,68 +717,73 @@ export function RecordDetail() {
       />
       <div className="two-column">
         <section>
-          <article
-            className={`panel record-hero${photos.some((photo) => !photo.progressId) ? '' : ' no-photo'}`}
-          >
-            <Cover
-              photo={photos.find((photo) => !photo.progressId)}
-              expandable
-              cutDate={cut.cutDate}
-            />
-            <div className="record-hero-content">
-              <time className="record-date" dateTime={cut.cutDate}>
-                {displayDate(cut.cutDate)}
-              </time>
-              <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
-              <AreaChips areas={cut.areas} />
-              <p className="card-note">{cut.goodNote || '커트 당일 메모를 남겨 보세요.'}</p>
-              <div className="detail-values">
-                {cut.salonName && <span>{cut.salonName}</span>}
-                {cut.designerName && <span>{cut.designerName} 디자이너</span>}
-                {cut.price !== undefined && <span>{cut.price.toLocaleString()}원</span>}
-              </div>
-              {/* 같은 날 찍은 나머지 사진은 기록 카드 안에 작게 모아 둠 */}
-              <PhotoList
-                photos={photos.filter((photo) => !photo.progressId).slice(1)}
+          {/* 커트와 그 뒤 경과를 한 카드로 묶어 같은 기록임을 보여 줌 */}
+          <div className="record-thread">
+            <article
+              className={`panel record-hero${photos.some((photo) => !photo.progressId) ? '' : ' no-photo'}`}
+            >
+              <Cover
+                photo={photos.find((photo) => !photo.progressId)}
+                expandable
                 cutDate={cut.cutDate}
-                captions={false}
               />
-              <div className="record-edit-actions">
-                <Link className="text-link" to={`/records/${cut.id}/edit`}>
-                  기록 수정 <Icon name="arrow" size={17} />
-                </Link>
+              <div className="record-hero-content">
+                <time className="record-date" dateTime={cut.cutDate}>
+                  {displayDate(cut.cutDate)}
+                </time>
+                <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
+                <AreaChips areas={cut.areas} />
+                <p className="card-note">{cut.goodNote || '커트 당일 메모를 남겨 보세요.'}</p>
+                <div className="detail-values">
+                  {cut.salonName && <span>{cut.salonName}</span>}
+                  {cut.designerName && <span>{cut.designerName} 디자이너</span>}
+                  {cut.price !== undefined && <span>{cut.price.toLocaleString()}원</span>}
+                </div>
+                {/* 같은 날 찍은 나머지 사진은 기록 카드 안에 작게 모아 둠 */}
+                <PhotoList
+                  photos={photos.filter((photo) => !photo.progressId).slice(1)}
+                  cutDate={cut.cutDate}
+                  captions={false}
+                />
+                <div className="record-edit-actions">
+                  <Link className="text-link" to={`/records/${cut.id}/edit`}>
+                    기록 수정 <Icon name="arrow" size={17} />
+                  </Link>
+                </div>
               </div>
-            </div>
-          </article>
-          <div className="section-heading">
-            <h2>커트 이후의 변화</h2>
-            <div className="section-heading-actions">
-              <span className="count-label">경과 {entries.length}건</span>
-              <Link className="text-link" to={`/records/${cut.id}/progress/new`}>
-                경과 추가 <Icon name="plus" />
-              </Link>
-            </div>
-          </div>
-          <div className="timeline">
-            {entries.map((entry) => (
-              <ProgressBlock
-                key={entry.id}
-                editUrl={`/records/${cut.id}/progress/${entry.id}/edit`}
-                entry={entry}
-                cutDate={cut.cutDate}
-                photos={photos.filter((photo) => photo.progressId === entry.id)}
-              />
-            ))}
-          </div>
-          {!entries.length && (
-            <section className="record-progress-empty">
-              <p className="muted">
-                아직 경과를 남기지 않았어요.
-                <br />
-                집에서 느낀 점을 이어서 적어 보세요.
-              </p>
+            </article>
+            <section className="record-progress" aria-labelledby="record-progress-heading">
+              <div className="section-heading">
+                <h2 id="record-progress-heading">커트 이후의 변화</h2>
+                <div className="section-heading-actions">
+                  <span className="count-label">경과 {entries.length}건</span>
+                  <Link className="text-link" to={`/records/${cut.id}/progress/new`}>
+                    경과 추가 <Icon name="plus" />
+                  </Link>
+                </div>
+              </div>
+              <div className="timeline">
+                {entries.map((entry) => (
+                  <ProgressBlock
+                    key={entry.id}
+                    editUrl={`/records/${cut.id}/progress/${entry.id}/edit`}
+                    entry={entry}
+                    cutDate={cut.cutDate}
+                    photos={photos.filter((photo) => photo.progressId === entry.id)}
+                  />
+                ))}
+              </div>
+              {!entries.length && (
+                <section className="record-progress-empty">
+                  <p className="muted">
+                    아직 경과를 남기지 않았어요.
+                    <br />
+                    집에서 느낀 점을 이어서 적어 보세요.
+                  </p>
+                </section>
+              )}
             </section>
-          )}
+          </div>
           <section className="record-next-action" aria-label="다음 커트 준비">
             <Icon name="chat" size={25} />
             <h2 style={{ marginTop: 13 }}>다음 커트 준비</h2>

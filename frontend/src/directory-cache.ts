@@ -1,6 +1,8 @@
 import { directoryRequest } from './auth/api';
 import type { DesignerProfile } from './prototype/types';
-export type Salon = { id: string; name: string; region: string; branch: string };
+import { salonLocation } from './salon-map';
+type Located = { address: string | null; latitude: number | null; longitude: number | null };
+export type Salon = { id: string; name: string; region: string; branch: string } & Located;
 export type PublicProfile = {
   id: string;
   name: string;
@@ -13,7 +15,9 @@ export type PublicProfile = {
   branch: string | null;
   reviewCount: number;
   averageRating: number | null;
-};
+  // V16 전 서버 응답에는 없을 수 있어 0(무료)으로 봄
+  consultationFee?: number;
+} & Located;
 export const salonLabel = (salon: Salon) =>
   [salon.name, salon.branch, salon.region].filter(Boolean).join(' · ');
 export function profileModel(profile: PublicProfile): DesignerProfile {
@@ -23,6 +27,8 @@ export function profileModel(profile: PublicProfile): DesignerProfile {
     introduction: profile.introduction,
     specialties: profile.specialties.split(',').filter(Boolean),
     salonId: profile.salonId ?? undefined,
+    salonLocation: salonLocation(profile),
+    consultationFee: profile.consultationFee ?? 0,
     affiliations: profile.salonName
       ? [
           {

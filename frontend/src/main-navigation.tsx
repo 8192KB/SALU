@@ -83,8 +83,17 @@ export function useMainNavigation(ready: boolean) {
   useEffect(() => {
     if (!isDesignerPath(location.pathname)) origin.current = sectionOf(location.pathname);
     else origin.current ??= candidate;
-    if (activePageKey && !isCompletionPath(location.pathname))
-      setVisited((previous) => ({ ...previous, [activePageKey]: location }));
+    if (!activePageKey) return;
+    // 완료 화면에 오면 그 메뉴의 작성 화면은 끝난 것이라 숨겨 둔 입력을 버림. 다시 열면 빈 화면
+    if (isCompletionPath(location.pathname)) {
+      const task = `${activePageKey}-task`;
+      setVisited((previous) => {
+        if (!previous[task]) return previous;
+        const next = { ...previous };
+        delete next[task];
+        return next;
+      });
+    } else setVisited((previous) => ({ ...previous, [activePageKey]: location }));
   }, [activePageKey, location, candidate]);
 
   useEffect(() => {

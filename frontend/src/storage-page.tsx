@@ -8,7 +8,7 @@ import { Dialog } from './dialog';
 import { isBlankCutDraft } from './prototype/memory-repository';
 import { readGuestRecords } from './prototype/personal-store';
 import type { GuestRecords } from './prototype/personal-store';
-import { GuestRecordList, guestRecordsLabel } from './auth/pages';
+import { GuestRecordList, guestRecordsLabel, useLoginPath } from './auth/pages';
 
 export function StorageNotice({ compact = false }: { compact?: boolean }) {
   const { storage } = usePrototype();
@@ -78,9 +78,9 @@ function PersonalStorageNotice({
         <div className="warning-notice">
           <Icon name="warning" size={18} />
           {onBackup ? (
-            <a href="#conflicts">변경 충돌 {view.conflicts}건 · 따로 보관하기</a>
+            <a href="#conflicts">변경 충돌 {view.conflicts}건 따로 보관하기</a>
           ) : (
-            <Link to="/backup#conflicts">변경 충돌 {view.conflicts}건 · 따로 보관하기</Link>
+            <Link to="/backup#conflicts">변경 충돌 {view.conflicts}건 따로 보관하기</Link>
           )}
         </div>
       )}
@@ -126,6 +126,7 @@ function PersonalBackupPage({
 }) {
   const navigate = useNavigate();
   const { state: auth } = useAuth();
+  const loginPath = useLoginPath();
   const view = useSyncExternalStore(storage.subscribe, storage.getSnapshot);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -199,11 +200,11 @@ function PersonalBackupPage({
               로그인해서 계정에 옮겨 두세요.
             </p>
             <div className="backup-actions">
-              <Link className="button primary" to="/login">
+              <Link className="button primary" to={loginPath}>
                 로그인
               </Link>
               {auth.status !== 'prototype' && (
-                <Link className="button" to="/signup">
+                <Link className="button" to={loginPath.replace('/login', '/signup')}>
                   회원가입
                 </Link>
               )}

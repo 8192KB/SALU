@@ -2,7 +2,17 @@ import { ApiFailure, memberRequest } from './auth/api';
 import type { SessionMember } from './auth/api';
 
 // 상담 API 계약(docs/consultation-api.md)의 응답 모양
-export type ConsultationStatus = 'REQUESTED' | 'ANSWERED';
+export type ConsultationStatus = 'PAYMENT_PENDING' | 'REQUESTED' | 'ANSWERED' | 'CANCELED';
+// 요금이 있는 상담의 결제(docs/payment-api.md). 보낸 회원에게만 옴
+export type ConsultationPayment = {
+  orderId: string;
+  amount: number;
+  orderName: string;
+  status: 'READY' | 'PAID' | 'REFUND_PENDING' | 'CANCELED' | 'EXPIRED';
+  // 토스 승인을 받은 적이 있는지. 결제 전에 취소한 주문은 CANCELED여도 false
+  paid: boolean;
+};
+const statuses: unknown[] = ['PAYMENT_PENDING', 'REQUESTED', 'ANSWERED', 'CANCELED'];
 export type Consultation = {
   id: string;
   status: ConsultationStatus;
@@ -26,6 +36,10 @@ export type Consultation = {
   canReview: boolean;
   // 지금 회원이 이 상담에서 보낸 사람인지 받은 디자이너인지
   viewerRole?: 'CUSTOMER' | 'DESIGNER';
+  // V16 전 서버 응답에는 없을 수 있음
+  fee?: number;
+  payment?: ConsultationPayment | null;
+  canCancel?: boolean;
 };
 export type ConsultationMessage = {
   id: number;
@@ -38,7 +52,13 @@ export type ConsultationInput = {
   requestKey: string;
   designerId: string;
   request: string;
-  attachment: { cutDate: string; service: string; summary: string; photoLabels?: string[] };
+  attachment: {
+    cutDate: string;
+    service: string;
+    summary: string;
+    photoLabels?: string[];
+    linkedDesigner?: boolean;
+  };
 };
 export const MAX_CONSULTATION_PHOTOS = 6;
 
@@ -49,8 +69,11 @@ const sendMessages: Record<string, string> = {
   RESOURCE_NOT_FOUND: '지금은 이 디자이너에게 상담을 보낼 수 없어요.',
   RESOURCE_CONFLICT: '이미 보낸 요청이에요. 새로운 상담 요청을 작성해 주세요.',
   STORAGE_CONTEXT_CHANGED: '로그인 계정이 바뀌었어요. 화면을 새로고침해 주세요.',
-  UPLOAD_TOO_LARGE: '사진이 너무 커서 보낼 수 없어요. 사진을 줄이거나 몇 장 빼고 보내 주세요.',
-  UNSUPPORTED_MEDIA_TYPE: 'JPEG, PNG, WebP 사진만 보낼 수 있어요.',
+  UPLOAD_TOO_LARGE:
+    '사진이 너무 커서 보낼 수 없어요. 준비 고치기에서 사진을 몇 장 빼고 다시 보내 주세요.',
+  UNSUPPORTED_MEDIA_TYPE:
+    '보낼 수 없는 형식의 사진이 있어요. 준비 고치기에서 그 사진을 빼고 다시 보내 주세요.',
+  PAYMENT_UNAVAILABLE: '지금은 결제할 수 없어 요금이 있는 디자이너에게 보낼 수 없어요.',
 };
 const readMessages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: '로그인 후 상담을 이용할 수 있어요.',
@@ -65,7 +88,8 @@ const replyMessages: Record<string, string> = {
 const messageMessages: Record<string, string> = {
   ...readMessages,
   INVALID_REQUEST: '메시지를 2,000자 이내로 적어 주세요.',
-  RESOURCE_CONFLICT: '보내던 메시지와 내용이 달라요. 다시 보내 주세요.',
+  // 내용이 바뀌면 화면이 새 키를 만들어 같은 키 충돌은 거의 없음. 남는 409는 상담이 취소돼 대화가 닫힌 경우
+  RESOURCE_CONFLICT: '상담이 취소돼 더는 메시지를 보낼 수 없어요.',
 };
 function translate(error: unknown, table: Record<string, string>): never {
   if (error instanceof ApiFailure) {
@@ -83,7 +107,7 @@ function isConsultation(value: unknown): value is Consultation {
   const designer = item.designer as Record<string, unknown> | null;
   return (
     typeof item.id === 'string' &&
-    (item.status === 'REQUESTED' || item.status === 'ANSWERED') &&
+    statuses.includes(item.status) &&
     typeof item.request === 'string' &&
     typeof item.sentAt === 'string' &&
     typeof item.canReply === 'boolean' &&
@@ -167,6 +191,56 @@ export async function replyConsultation(member: SessionMember, id: string, conte
     );
   } catch (error) {
     translate(error, replyMessages);
+  }
+}
+
+const paymentMessages: Record<string, string> = {
+  ...readMessages,
+  INVALID_REQUEST: '결제 정보를 읽지 못했어요. 상담 화면에서 다시 결제해 주세요.',
+  PAYMENT_MISMATCH:
+    '이미 처리했거나 상담과 맞지 않는 결제예요. 상담 화면에서 상태를 확인해 주세요.',
+  PAYMENT_REJECTED: '결제가 승인되지 않았어요. 결제 수단을 확인한 뒤 다시 시도해 주세요.',
+  PAYMENT_UNAVAILABLE: '지금은 결제를 진행할 수 없어요. 잠시 뒤 다시 시도해 주세요.',
+};
+const cancelMessages: Record<string, string> = {
+  ...readMessages,
+  ACCESS_DENIED: '이 상담을 취소할 수 없어요.',
+  RESOURCE_CONFLICT: '디자이너가 이미 답변했거나 취소된 상담이에요.',
+};
+// 토스 결제창이 성공 주소에 붙여 준 값을 서버가 대조한 뒤 승인함
+export async function confirmPayment(
+  member: SessionMember,
+  input: { paymentKey: string; orderId: string; amount: number },
+) {
+  try {
+    return await readOne(
+      await memberRequest(
+        '/api/payments/confirm',
+        member,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        },
+        30000,
+      ),
+    );
+  } catch (error) {
+    translate(error, paymentMessages);
+  }
+}
+export async function cancelConsultation(member: SessionMember, id: string) {
+  try {
+    return await readOne(
+      await memberRequest(
+        `/api/consultations/${encodeURIComponent(id)}/cancel`,
+        member,
+        { method: 'POST' },
+        30000,
+      ),
+    );
+  } catch (error) {
+    translate(error, cancelMessages);
   }
 }
 

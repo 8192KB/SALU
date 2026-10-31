@@ -42,6 +42,10 @@ export type DesignerProfile = {
   introduction: string;
   specialties: string[];
   affiliations: { salonName: string; period: string; current: boolean }[];
+  // 현재 소속 미용실의 위치. 서버에 위치가 있는 미용실만
+  salonLocation?: { address: string; latitude: number; longitude: number };
+  // 상담 요금(원). 없거나 0이면 무료
+  consultationFee?: number;
   reviewExamples: { id: Id; content: string; date: string }[];
   // 실제 공간의 서버 후기 요약. 예시 디자이너는 reviewExamples를 씀
   rating?: { count: number; average: number | null };
@@ -108,6 +112,10 @@ export interface PrototypeRepository {
   updateCut(id: Id, input: Omit<CutDraft, 'photos'>): Promise<CutRecord>;
   addProgress(cutId: Id, input: ProgressDraft): Promise<ProgressEntry>;
   updateProgress(cutId: Id, id: Id, input: Omit<ProgressDraft, 'photos'>): Promise<ProgressEntry>;
+  // 지우면 그 기록으로 만든 준비 내용에서도 빠짐
+  deleteCut(id: Id): Promise<void>;
+  deleteProgress(cutId: Id, id: Id): Promise<void>;
+  deletePhoto(id: Id): Promise<void>;
   createPreview(draft: RequestDraft): Promise<RequestPreview>;
   // 저장한 준비를 고친 내용으로 바꿈. 고치는 초안의 ID는 준비 ID와 같음
   updatePreview(previewId: Id, draft: RequestDraft): Promise<RequestPreview>;

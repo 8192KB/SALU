@@ -24,6 +24,7 @@ import {
   decide,
   fetchCommentReports,
   fetchPostReview,
+  fetchHidden,
   fetchReports,
   fetchSanctions,
   liftSanction,
@@ -299,17 +300,16 @@ function CommentItem({ item, onDone }: { item: ReportedComment; onDone: () => un
 }
 
 export function AdminReports() {
-  const [data, setData] = useState<{ posts: ReportedPost[]; comments: ReportedComment[] } | null>(
-    null,
-  );
+  type Lists = { posts: ReportedPost[]; comments: ReportedComment[] };
+  const [data, setData] = useState<(Lists & { hidden: Lists }) | null>(null);
   const [error, setError] = useState<LoadProblem | null>(null);
   const { state } = useAuth();
   const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
   const load = useCallback(
     () =>
-      fetchReports().then(
-        (value) => {
-          setData(value);
+      Promise.all([fetchReports(), fetchHidden()]).then(
+        ([reports, hidden]) => {
+          setData({ ...reports, hidden });
           setError(null);
         },
         (failure: unknown) => setError(loadProblem(failure, '신고를 불러오지 못했어요.')),
@@ -373,6 +373,28 @@ export function AdminReports() {
                 </ul>
               ) : (
                 <p className="muted">처리할 댓글 신고가 없어요.</p>
+              )}
+            </section>
+            <section className="admin-section">
+              <h2>숨긴 글·댓글 {data.hidden.posts.length + data.hidden.comments.length}</h2>
+              {data.hidden.posts.length + data.hidden.comments.length ? (
+                <ul>
+                  {data.hidden.posts.map((item) => (
+                    <li key={item.id} className="admin-item">
+                      <Link to={`/admin/posts/${item.id}`}>
+                        <strong>{item.title}</strong>
+                      </Link>
+                      <p className="community-meta">
+                        {item.authorName} · {sentTime(item.latestAt)}
+                      </p>
+                    </li>
+                  ))}
+                  {data.hidden.comments.map((item) => (
+                    <CommentItem key={item.id} item={item} onDone={load} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted">숨긴 글과 댓글이 없어요.</p>
               )}
             </section>
           </>
@@ -486,6 +508,8 @@ export function AdminMember() {
   const notify = useFeedback();
   const { state } = useAuth();
   const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
+  // 서버는 관리자 자신의 제재를 거절하므로 양식 대신 이유를 보여 줌
+  const self = state.status === 'authenticated' && state.member.id === String(memberId);
   const load = useCallback(
     () =>
       fetchSanctions(memberId).then(setItems, (failure: unknown) =>
@@ -575,7 +599,12 @@ export function AdminMember() {
             <p className="muted">제재 기록이 없어요.</p>
           )}
         </section>
-        {active ? (
+        {self ? (
+          <section className="admin-section">
+            <h2>새 제재</h2>
+            <p className="muted">내 계정은 제재할 수 없어요.</p>
+          </section>
+        ) : active ? (
           <section className="admin-section">
             <h2>새 제재</h2>
             <p className="muted">

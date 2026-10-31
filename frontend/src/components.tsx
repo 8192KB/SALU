@@ -1,9 +1,10 @@
 import { Component, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router';
 import { Link, scopedTo, useWorkspace } from './workspace';
-import { KEEP_TRAIL, useBackTrail } from './back-trail';
+import { KEEP_TRAIL, stepsBackTo, useBackTrail } from './back-trail';
 import { ApiFailure } from './auth/api';
+import { useAuth } from './auth/context';
 
 export function Icon({
   name,
@@ -203,15 +204,28 @@ export function BackLink({
   const mode = useWorkspace();
   const previous = useBackTrail(location);
   const fallback = scopedTo(to, mode) as string;
+  const navigate = useNavigate();
+  const leave = (target: string) => (event: MouseEvent) => {
+    if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const steps = stepsBackTo(target);
+    if (!steps) return;
+    event.preventDefault();
+    navigate(-steps);
+  };
   if (trail && previous && previous.to !== fallback)
     return (
-      <RouterLink className="heading-back" to={previous.to} state={KEEP_TRAIL}>
+      <RouterLink
+        className="heading-back"
+        to={previous.to}
+        state={KEEP_TRAIL}
+        onClick={leave(previous.to)}
+      >
         <Icon name="back" />
         <span>{previous.label}</span>
       </RouterLink>
     );
   return (
-    <RouterLink className="heading-back" to={fallback} state={KEEP_TRAIL}>
+    <RouterLink className="heading-back" to={fallback} state={KEEP_TRAIL} onClick={leave(fallback)}>
       <Icon name="back" />
       <span>{children}</span>
     </RouterLink>
@@ -391,6 +405,17 @@ export function NotFound() {
   );
 }
 
+// 예시 체험 주소로 계정·로그인·기록 백업 화면을 열었을 때. 예시는 기기에만 잠깐 두는 체험이라 이 화면이 없음
+export function ExampleUnavailable() {
+  return (
+    <ErrorState
+      kind="missing"
+      title="예시 체험에는 없는 화면이에요"
+      message="로그인, 내 계정, 기록 백업은 체험을 마친 뒤 쓸 수 있어요."
+    />
+  );
+}
+
 // 서버에서 받은 자료가 없거나 불러오지 못했을 때. 없음이면 제목 그대로, 그 밖에는 종류에 맞는 제목
 export function LoadFailure({
   problem,
@@ -422,14 +447,29 @@ export function Missing({
   title?: string;
   message?: string;
 }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const { state } = useAuth();
+  const mode = useWorkspace();
   const record = /^(\/examples)?\/records/.test(pathname);
+  // 로그아웃 뒤 뒤로 가기처럼 계정 자료 주소를 로그인 전에 열면 여기 옴. 로그인하면 그 주소로 돌아옴
+  const guest = state.status === 'guest' && mode !== 'example';
+  const next = `${pathname}${search}`;
   return (
     <ErrorState
       kind="missing"
       title={title}
-      message={message ?? (record ? '내 기록에서 자료를 다시 선택해 주세요.' : undefined)}
-    />
+      message={
+        guest
+          ? '계정에 저장한 자료라면 로그인하면 볼 수 있어요.'
+          : (message ?? (record ? '내 기록에서 자료를 다시 선택해 주세요.' : undefined))
+      }
+    >
+      {guest && (
+        <RouterLink className="button" to={`/login?next=${encodeURIComponent(next)}`}>
+          로그인
+        </RouterLink>
+      )}
+    </ErrorState>
   );
 }
 

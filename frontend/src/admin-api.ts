@@ -56,6 +56,10 @@ export const fetchReports = async () =>
   (await directoryRequest<{ posts: ReportedPost[]; comments: ReportedComment[] }>(
     '/api/admin/community/reports',
   )) ?? { posts: [], comments: [] };
+export const fetchHidden = async () =>
+  (await directoryRequest<{ posts: ReportedPost[]; comments: ReportedComment[] }>(
+    '/api/admin/community/hidden',
+  )) ?? { posts: [], comments: [] };
 export const fetchPostReview = (id: string) =>
   directoryRequest<PostReview>(`/api/admin/community/posts/${encodeURIComponent(id)}`);
 export const fetchCommentReports = async (id: number) =>

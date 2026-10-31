@@ -3,6 +3,7 @@ import { useDirectory } from './directory';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useParams, useSearchParams } from 'react-router';
+import { KEEP_TRAIL, useReturnTo } from './back-trail';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import { useAuth } from './auth/context';
 import {
@@ -126,7 +127,7 @@ export function RecordList() {
           <div className="record-empty">
             <Icon name="cut" size={28} />
             <h3>아직 남긴 커트 기록이 없어요</h3>
-            <p>새 기록 버튼으로 날짜와 좋았던 점부터 남겨요.</p>
+            <p>날짜와 좋았던 점부터 남겨 보세요.</p>
           </div>
         )}
         {/* 두 링크가 한 줄에 붙어 하나로 읽히지 않게 따로 줄을 나눔 */}
@@ -236,24 +237,37 @@ function CutFormBody({
   const [photosBusy, setPhotosBusy] = useState(false);
   const [manualDesigner, setManualDesigner] = useState(false);
   const navigate = useNavigate();
+  const returnTo = useReturnTo();
   // 디자이너 상세의 '담당자로 연결'에서 오면 그 디자이너를 담당자로 골라 둠. 저장해야 연결됨
   const [search] = useSearchParams();
   const connectId = editingId ? search.get('designer') : null;
+  const consultId = search.get('consult');
+  const share = search.has('share');
   const connectDesigner = connectId
     ? directory.designers.find((value) => value.id === connectId)
     : undefined;
   const connected = useRef(false);
+  const savedCut = editingId ? state.cuts.find((value) => value.id === editingId) : undefined;
   useEffect(() => {
-    if (connected.current || !connectDesigner || draft.designerProfileId) return;
+    // 저장된 담당자는 덮지 않음. 저장하지 않고 둔 수정 초안의 담당자는 지금 연결하러 온 디자이너로 바꿈
+    if (
+      connected.current ||
+      !connectDesigner ||
+      savedCut?.designerProfileId ||
+      draft.designerProfileId === connectDesigner.id
+    )
+      return;
     connected.current = true;
     update({
       designerProfileId: connectDesigner.id,
       designerName: connectDesigner.name,
-      salonName:
-        draft.salonName ||
-        connectDesigner.affiliations.find((value) => value.current)?.salonName ||
-        '',
-      salonId: draft.salonName ? draft.salonId : connectDesigner.salonId,
+      // 다른 디자이너를 골라 둔 초안이면 그 디자이너의 매장도 함께 바꿈
+      ...(draft.salonName && !draft.designerProfileId
+        ? { salonName: draft.salonName, salonId: draft.salonId }
+        : {
+            salonName: connectDesigner.affiliations.find((value) => value.current)?.salonName ?? '',
+            salonId: connectDesigner.salonId,
+          }),
     });
   }, [connectDesigner]);
   const previousDesigners = Array.from(
@@ -310,7 +324,14 @@ function CutFormBody({
       clear();
       navigate(`/records/${cut.id}/complete`, {
         replace: true,
-        state: { operation: editingId ? 'update' : 'create', celebrate: true },
+        state: {
+          operation: editingId ? 'update' : 'create',
+          celebrate: true,
+          // 디자이너 상담 중에 기록을 남기거나 담당을 연결하러 왔으면 완료 화면에서 그 상담으로 이어감
+          ...(consultId ? { consult: consultId } : {}),
+          // 커뮤니티 글쓰기에서 기록부터 남기러 왔으면 완료 화면에서 그 기록으로 글쓰기로 이어감
+          ...(share ? { share: true } : {}),
+        },
       });
     } catch (failure) {
       setErrors(
@@ -352,7 +373,7 @@ function CutFormBody({
               setDiscardOpen(false);
               if (!editingId) draft.photos.forEach(repository.releasePhoto);
               clear();
-              navigate(returnUrl);
+              returnTo(returnUrl);
             }}
           >
             작성 내용 지우기
@@ -406,13 +427,13 @@ function CutFormBody({
             </Field>
             {editingId ? (
               <>
-                <PhotoList
+                <SavedPhotos
                   photos={state.photos.filter(
                     (photo) => photo.cutId === editingId && !photo.progressId,
                   )}
                   cutDate={draft.cutDate}
                 />
-                <p className="form-note">저장한 사진은 수정 화면에서 바꾸거나 뺄 수 없어요.</p>
+                <p className="form-note">저장한 사진은 바꿀 수 없고 지울 수 있어요.</p>
               </>
             ) : (
               <PhotoPicker
@@ -460,7 +481,7 @@ function CutFormBody({
                     <option value="">매장 이름 직접 입력</option>
                     {draft.salonId &&
                       !directory.salons.some((value) => value.id === draft.salonId) && (
-                        <option value={draft.salonId}>{draft.salonName} · 이전 선택</option>
+                        <option value={draft.salonId}>{draft.salonName} (이전 선택)</option>
                       )}
                     {directory.salons.map((salon) => (
                       <option key={salon.id} value={salon.id}>
@@ -521,14 +542,14 @@ function CutFormBody({
                         (value) => value.id === draft.designerProfileId,
                       ) && (
                         <option value={`profile/${draft.designerProfileId}`}>
-                          {draft.designerName} · 이전 선택
+                          {draft.designerName} (이전 선택)
                         </option>
                       )}
                     {previousDesigners.length > 0 && (
                       <optgroup label="이전 기록의 담당자">
                         {previousDesigners.map((cut) => (
                           <option key={cut.id} value={`previous/${cut.id}`}>
-                            {cut.designerName} · {cut.salonName || '매장 이름 없음'}
+                            {cut.designerName} ({cut.salonName || '매장 이름 없음'})
                           </option>
                         ))}
                       </optgroup>
@@ -677,19 +698,94 @@ export function ProgressBlock({
   );
 }
 
+// 지우기 버튼과 확인창. 지운 뒤 돌아갈 곳은 부르는 쪽이 정함
+function DeleteAction({
+  label,
+  title,
+  message,
+  onDelete,
+}: {
+  label: string;
+  title: string;
+  message: string;
+  onDelete: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const confirm = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await onDelete();
+      setOpen(false);
+    } catch {
+      setError('지우지 못했어요. 기록은 그대로 있어요. 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button type="button" className="text-link danger-link" onClick={() => setOpen(true)}>
+        {label}
+      </button>
+      <Dialog open={open} title={title} onClose={() => setOpen(false)}>
+        <p>{message}</p>
+        <Alert message={error} />
+        <div className="dialog-actions">
+          <button type="button" className="button" disabled={busy} onClick={() => setOpen(false)}>
+            그대로 두기
+          </button>
+          <button
+            type="button"
+            className="button coral"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={() => void confirm()}
+          >
+            {busy ? '지우는 중' : '지우기'}
+          </button>
+        </div>
+      </Dialog>
+    </>
+  );
+}
+
+// 수정 화면의 저장한 사진. 사진마다 지울 수 있음
+function SavedPhotos({ photos, cutDate }: { photos: RecordPhoto[]; cutDate: string }) {
+  const { repository } = usePrototype();
+  return (
+    <ul className="saved-photo-list">
+      {photos.map((photo) => (
+        <li key={photo.id}>
+          <PhotoList photos={[photo]} cutDate={cutDate} />
+          <DeleteAction
+            label="사진 지우기"
+            title="이 사진을 지울까요?"
+            message="기록과 이 기록으로 만든 준비 내용에서 빠지고 되돌릴 수 없어요. 이미 보낸 상담과 올린 글의 사진은 그대로예요."
+            onDelete={() => repository.deletePhoto(photo.id)}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function RecordDetail() {
   const { id } = useParams();
   const [search] = useSearchParams();
-  const { state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
+  const { repository, state, requestDrafts, setRequestDraft, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
   const navigate = useNavigate();
   const mode = useWorkspace();
+  const deleting = useRef(false);
   const signedIn = useAuth().state.status === 'authenticated';
   const cut = state.cuts.find((value) => value.id === id);
   const preview = state.previews.find(
     (value) => value.id === search.get('preview') && value.cut.id === id,
   );
-  if (!cut) return <Missing />;
+  if (!cut) return deleting.current ? null : <Missing />;
   const recordedDesigner = directory.designers.find(
     (designer) => designer.id === cut.designerProfileId,
   );
@@ -697,7 +793,13 @@ export function RecordDetail() {
     .filter((entry) => entry.cutId === id)
     .sort((a, b) => a.observedOn.localeCompare(b.observedOn));
   const photos = state.photos.filter((photo) => photo.cutId === id);
-  const drafts = unfinishedDrafts(state, requestDrafts).filter((draft) => draft.cutId === id);
+  // 디자이너를 골라 시작한 초안은 상담 신청이라 개인 커트 준비 이어쓰기와 나눔
+  const unfinished = unfinishedDrafts(state, requestDrafts).filter((draft) => draft.cutId === id);
+  const drafts = unfinished.filter((draft) => !draft.designerId);
+  const consultDraft = unfinished.find((draft) => draft.designerId);
+  const consultName =
+    directory.designers.find((value) => value.id === consultDraft?.designerId)?.name ??
+    consultDraft?.designerSnapshot?.name;
   const previews = state.previews.filter((value) => value.cut.id === id).reverse();
   const startPersonalRequest = () => {
     const draft = newRequestDraft(cut.id);
@@ -707,13 +809,14 @@ export function RecordDetail() {
   return (
     <>
       {preview && (
-        <Link className="preview-return-link" to={previewUrl(preview)}>
+        // 돌아가는 링크라 준비 내용의 원래 뒤로 링크(준비 목록)를 덮지 않음
+        <Link className="preview-return-link" to={previewUrl(preview)} state={KEEP_TRAIL}>
           준비 내용으로 돌아가기 <Icon name="arrow" size={17} />
         </Link>
       )}
       <PageHeading
         back={<BackLink to="/records">기록 목록으로</BackLink>}
-        title="커트 기록 · 경과"
+        title="커트 기록과 경과"
       />
       <div className="two-column">
         <section>
@@ -787,7 +890,6 @@ export function RecordDetail() {
           <section className="record-next-action" aria-label="다음 커트 준비">
             <Icon name="chat" size={25} />
             <h2 style={{ marginTop: 13 }}>다음 커트 준비</h2>
-            <p className="muted">이 기록으로 다음 커트에서 원하는 점을 정리해요.</p>
             {drafts.length ? (
               <>
                 <Link className="button primary full" to={resumeUrl(drafts[0])}>
@@ -806,6 +908,14 @@ export function RecordDetail() {
               <button className="button primary full" onClick={startPersonalRequest}>
                 이 기록으로 다음 커트 준비 <Icon name="arrow" />
               </button>
+            )}
+            {consultDraft && (
+              <Link className="text-link designer-secondary" to={resumeUrl(consultDraft)}>
+                {consultName
+                  ? `${consultName} 디자이너 상담 신청 이어쓰기`
+                  : '디자이너 상담 신청 이어쓰기'}{' '}
+                <Icon name="arrow" size={16} />
+              </Link>
             )}
             <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
               디자이너 골라 상담 <Icon name="arrow" size={16} />
@@ -827,7 +937,7 @@ export function RecordDetail() {
                 className="button full"
                 to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
               >
-                프로필 · 상담 요청 <Icon name="arrow" size={17} />
+                프로필 보고 상담 신청 <Icon name="arrow" size={17} />
               </Link>
             </section>
           )}
@@ -837,7 +947,7 @@ export function RecordDetail() {
               {previews.slice(0, 3).map((value) => (
                 <Link className="record-request-link" key={value.id} to={previewUrl(value)}>
                   <span>
-                    {value.designer ? `${value.designer.name} · 상담 준비` : '내 커트 준비'}
+                    {value.designer ? `${value.designer.name} 디자이너 상담 준비` : '내 커트 준비'}
                   </span>
                   <strong>{value.requests[0]?.content}</strong>
                   <span className="card-action">
@@ -875,6 +985,21 @@ export function RecordDetail() {
               날짜는 그날 확인한 시점이에요.
             </p>
           </section>
+          <DeleteAction
+            label="이 기록 지우기"
+            title="이 기록을 지울까요?"
+            message="경과와 사진, 이 기록으로 만든 커트 준비까지 모두 지워지고 되돌릴 수 없어요. 이미 보낸 상담과 올린 글은 그대로예요."
+            onDelete={async () => {
+              deleting.current = true;
+              try {
+                await repository.deleteCut(cut.id);
+              } catch (failure) {
+                deleting.current = false;
+                throw failure;
+              }
+              navigate('/records', { replace: true });
+            }}
+          />
         </aside>
       </div>
     </>
@@ -913,6 +1038,7 @@ function ProgressFormBody({
 }: { cut: CutRecord; editingId?: string; resumed: boolean } & ReturnType<typeof useProgressDraft>) {
   const { repository, state } = usePrototype();
   const navigate = useNavigate();
+  const returnTo = useReturnTo();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const saving = useRef(false);
@@ -980,7 +1106,7 @@ function ProgressFormBody({
               setDiscardOpen(false);
               if (!editingId) draft.photos.forEach(repository.releasePhoto);
               clear();
-              navigate(`/records/${cut.id}`);
+              returnTo(`/records/${cut.id}`);
             }}
           >
             작성 내용 지우기
@@ -1032,11 +1158,11 @@ function ProgressFormBody({
             </Field>
             {editingId ? (
               <>
-                <PhotoList
+                <SavedPhotos
                   photos={state.photos.filter((photo) => photo.progressId === editingId)}
                   cutDate={cut.cutDate}
                 />
-                <p className="form-note">저장한 사진은 수정 화면에서 바꾸거나 뺄 수 없어요.</p>
+                <p className="form-note">저장한 사진은 바꿀 수 없고 지울 수 있어요.</p>
               </>
             ) : (
               <PhotoPicker
@@ -1116,6 +1242,18 @@ function ProgressFormBody({
         >
           작성 내용 지우기
         </button>
+        {editingId && (
+          <DeleteAction
+            label="이 경과 지우기"
+            title="이 경과를 지울까요?"
+            message="경과와 그 사진이 기록과 준비 내용에서 빠지고 되돌릴 수 없어요. 이미 보낸 상담과 올린 글은 그대로예요."
+            onDelete={async () => {
+              await repository.deleteProgress(cut.id, editingId);
+              clear();
+              navigate(`/records/${cut.id}`, { replace: true });
+            }}
+          />
+        )}
       </form>
     </div>
   );

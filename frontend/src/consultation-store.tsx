@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
+import { ApiFailure } from './auth/api';
+import { fitPhoto } from './prototype/photo-fit';
 import { newId } from './prototype/ids';
 import {
   getConsultation,
@@ -7,7 +9,7 @@ import {
   MAX_CONSULTATION_PHOTOS,
   sendConsultation,
 } from './consultation-api';
-import type { Consultation } from './consultation-api';
+import type { Consultation, ConsultationPayment, ConsultationStatus } from './consultation-api';
 import type { SessionMember } from './auth/api';
 
 // label은 디자이너가 어느 때 사진인지 알 수 있게 붙이는 이름(커트 당일·경과 D+12)
@@ -19,6 +21,8 @@ export type ConsultationAttachment = {
   service: string;
   summary: string;
   photos: AttachmentPhoto[];
+  // 담당 디자이너에게 보내면 서버가 요금을 받지 않음(docs/payment-api.md)
+  linkedDesigner?: boolean;
 };
 export type ConsultationReply = { content: string; repliedAt: string };
 export type ConsultationThread = {
@@ -28,7 +32,7 @@ export type ConsultationThread = {
   attachment: ConsultationAttachment;
   request: string;
   sentAt: string;
-  status: 'REQUESTED' | 'ANSWERED';
+  status: ConsultationStatus;
   reply?: ConsultationReply;
   customer?: { displayName: string };
   canReply?: boolean;
@@ -37,6 +41,9 @@ export type ConsultationThread = {
   unreadCount?: number;
   reviewId?: string | null;
   canReview?: boolean;
+  fee?: number;
+  payment?: ConsultationPayment | null;
+  canCancel?: boolean;
 };
 export type ConsultationDraft = {
   id: string;
@@ -45,6 +52,8 @@ export type ConsultationDraft = {
   request: string;
   // 준비 내용에서 시작한 상담이면 그 준비 ID
   sourceId?: string;
+  // 준비 내용으로 처음 채운 요청. 다시 들어올 때 준비를 고쳤는지 비교함
+  base?: string;
 };
 export type ConsultationSend = Pick<
   ConsultationThread,
@@ -54,7 +63,7 @@ type ConsultationSnapshot = {
   generation: number;
   threads: ConsultationThread[];
   drafts: Record<string, ConsultationDraft>;
-  // 준비 내용 ID → 그 준비로 보낸 상담 ID. 이 탭에서 보낸 상담만 기억함
+  // 준비 내용 ID → 그 준비로 보낸 상담 ID. 서버 상담은 계정별로 이 기기에도 남겨 새로고침 뒤에도 보임
   sentFrom?: Record<string, string[]>;
   // 서버 상담만 사용. 예시 상담은 메모리에 있어 항상 불러온 상태
   loading?: boolean;
@@ -81,6 +90,8 @@ export interface ConsultationRepository {
   readonly server?: boolean;
   refresh?(): Promise<void>;
   load?(id: string): Promise<void>;
+  // 결제 승인·취소처럼 상담 응답을 직접 받은 뒤 저장소를 바꿈
+  accept?(value: Consultation): ConsultationThread;
 }
 const empty: ConsultationSnapshot = { generation: 0, threads: [], drafts: {} };
 
@@ -104,24 +115,63 @@ export class MemoryConsultationRepository implements ConsultationRepository {
   }
   list = () => this.snapshot.threads;
   get = (id: string) => this.snapshot.threads.find((thread) => thread.id === id);
+  // 서버 상담은 고쳐 쓴 요청을 이 탭에 남겨 새로고침해도 이어 씀. 예시 상담은 남기지 않음
+  protected draftStoreKey(): string | null {
+    return null;
+  }
+  private readStored(): Record<string, ConsultationDraft> {
+    const storeKey = this.draftStoreKey();
+    if (!storeKey) return {};
+    try {
+      const value: unknown = JSON.parse(sessionStorage.getItem(storeKey) ?? '{}');
+      return value && typeof value === 'object' ? (value as Record<string, ConsultationDraft>) : {};
+    } catch {
+      return {};
+    }
+  }
+  private writeStored(key: string, draft: ConsultationDraft | null) {
+    const storeKey = this.draftStoreKey();
+    if (!storeKey) return;
+    try {
+      const stored = this.readStored();
+      if (draft) stored[key] = draft;
+      else delete stored[key];
+      sessionStorage.setItem(storeKey, JSON.stringify(stored));
+    } catch {
+      // 저장소가 막혀 있으면 이 화면에서만 기억함
+    }
+  }
   draft(designerId: string, recordId = '', sourceId = '', request = '') {
     const key = JSON.stringify([designerId, recordId, sourceId]);
+    if (!this.targets.has(key)) {
+      const stored = this.readStored()[key];
+      if (
+        stored &&
+        typeof stored.id === 'string' &&
+        typeof stored.request === 'string' &&
+        stored.designerId === designerId
+      ) {
+        this.targets.set(key, stored.id);
+        this.drafts.set(stored.id, stored);
+      }
+    }
     const existingId = this.targets.get(key);
     const existing = existingId && this.drafts.get(existingId);
-    if (existing) {
-      // 손대지 않은 초안(화면에서 고친 적이 없어 snapshot에 없음)은 그사이 준비를 고쳤으면 바뀐 내용으로 다시 채움
-      if (existing.request === request || this.snapshot.drafts[existing.id]) return existing;
-      const refreshed = { ...existing, request };
-      this.drafts.set(existing.id, refreshed);
-      return refreshed;
-    }
+    // 준비 내용이 그대로면 고쳐 쓴 요청을 이어 씀. 준비를 고쳤거나 요청 칸을 비운 채 다시 들어오면 준비 내용으로 새로 시작함
+    if (existing && (existing.base ?? '') === request && (existing.request.trim() || !request))
+      return existing;
     const draft: ConsultationDraft = {
       id: newId(),
       designerId,
       cutId: recordId,
       request,
+      ...(request ? { base: request } : {}),
       ...(sourceId ? { sourceId } : {}),
     };
+    if (existing) {
+      this.drafts.delete(existing.id);
+      this.writeStored(key, null);
+    }
     this.targets.set(key, draft.id);
     this.drafts.set(draft.id, draft);
     return draft;
@@ -131,6 +181,7 @@ export class MemoryConsultationRepository implements ConsultationRepository {
     if (!draft) throw new Error('작성 중인 상담을 찾을 수 없어요.');
     const updated = { ...draft, ...change };
     this.drafts.set(id, updated);
+    for (const [key, value] of this.targets) if (value === id) this.writeStored(key, updated);
     this.publish({ ...this.snapshot, drafts: { ...this.snapshot.drafts, [id]: updated } });
   }
   protected checked(input: ConsultationSend) {
@@ -148,7 +199,11 @@ export class MemoryConsultationRepository implements ConsultationRepository {
     return request;
   }
   protected forgetDraft(draftId: string) {
-    for (const [key, value] of this.targets) if (value === draftId) this.targets.delete(key);
+    for (const [key, value] of this.targets)
+      if (value === draftId) {
+        this.targets.delete(key);
+        this.writeStored(key, null);
+      }
   }
   protected sentFrom(draftId: string, threadId: string) {
     const source = this.drafts.get(draftId)?.sourceId;
@@ -207,38 +262,6 @@ export class MemoryConsultationRepository implements ConsultationRepository {
   }
 }
 
-const MAX_EDGE = 1600;
-const KEEP_BYTES = 1.5 * 1024 * 1024;
-// 휴대폰 원본 사진을 여러 장 그대로 보내면 요청이 커지고 느려 긴 변을 1,600px로 줄임.
-// 줄이지 못하는 브라우저·파일은 원본을 보내고 크기·형식은 서버가 다시 검사함
-async function fitForSending(blob: Blob): Promise<Blob> {
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(blob);
-  } catch {
-    return blob;
-  }
-  try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    if (scale === 1 && blob.size <= KEEP_BYTES) return blob;
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext('2d');
-    if (!context) return blob;
-    // JPEG에는 투명한 곳이 없어 흰 바탕에 그림(화면 색 토큰과 무관한 사진 내용)
-    context.fillStyle = '#fff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const fitted = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, 'image/jpeg', 0.85),
-    );
-    return fitted && fitted.size < blob.size ? fitted : blob;
-  } finally {
-    bitmap.close();
-  }
-}
-
 export function threadFrom(value: Consultation, draftId = ''): ConsultationThread {
   const photos =
     value.attachment.photos ??
@@ -274,6 +297,9 @@ export function threadFrom(value: Consultation, draftId = ''): ConsultationThrea
     unreadCount: value.unreadCount,
     reviewId: value.reviewId,
     canReview: value.canReview,
+    fee: value.fee,
+    payment: value.payment,
+    canCancel: value.canCancel,
   };
 }
 
@@ -284,7 +310,13 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
   private prepared = new Map<string, Blob[]>();
   constructor(private member: SessionMember | null) {
     super();
-    this.snapshot = { ...this.snapshot, loaded: false, loading: false, error: '' };
+    this.snapshot = {
+      ...this.snapshot,
+      loaded: false,
+      loading: false,
+      error: '',
+      sentFrom: readSentFrom(member),
+    };
   }
   // 계정이 바뀌면 이전 계정의 상담과 작성 중인 상담을 비움. 같은 계정의 새 세션은 그대로 둠
   setMember(member: SessionMember | null) {
@@ -293,8 +325,29 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     if (changed) {
       this.prepared.clear();
       this.reset();
-      this.publish({ ...this.snapshot, loaded: false, loading: false, error: '' });
+      this.publish({
+        ...this.snapshot,
+        loaded: false,
+        loading: false,
+        error: '',
+        sentFrom: readSentFrom(member),
+      });
     }
+  }
+  protected draftStoreKey() {
+    return this.member ? `salu-consult-drafts-${this.member.id}` : null;
+  }
+  // 다른 탭에서 준비로 상담을 보내면 이 탭의 `이 준비로 보냈어요`도 맞춤. 모르는 상담이면 목록을 다시 받음
+  syncSentFrom(key: string | null) {
+    if (!this.member || key !== sentFromKey(this.member)) return;
+    const sentFrom = readSentFrom(this.member);
+    this.publish({ ...this.snapshot, sentFrom });
+    const known = new Set(this.snapshot.threads.map((thread) => thread.id));
+    if (
+      this.snapshot.loaded &&
+      Object.values(sentFrom ?? {}).some((ids) => ids.some((id) => !known.has(id)))
+    )
+      void this.refresh();
   }
   private account() {
     if (!this.member?.storageContext) throw new Error('로그인 후 상담을 이용할 수 있어요.');
@@ -346,6 +399,11 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     }
     this.upsert(threadFrom(value));
   };
+  accept = (value: Consultation) => {
+    const thread = threadFrom(value);
+    this.upsert(thread);
+    return thread;
+  };
   private async photosFor(input: ConsultationSend) {
     const saved = this.prepared.get(input.draftId);
     if (saved) return saved;
@@ -353,7 +411,7 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     try {
       photos = await Promise.all(
         input.attachment.photos.map(async (photo) =>
-          fitForSending(await (await fetch(photo.url)).blob()),
+          fitPhoto(await (await fetch(photo.url)).blob()),
         ),
       );
     } catch {
@@ -368,10 +426,44 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
     if (input.attachment.photos.length > MAX_CONSULTATION_PHOTOS)
       throw new Error(`사진은 ${MAX_CONSULTATION_PHOTOS}장까지 보낼 수 있어요.`);
     const photos = await this.photosFor(input);
-    const sent = await sendConsultation(
+    const sent = await this.sendOnce(member, input, request, photos);
+    this.prepared.delete(input.draftId);
+    this.requestKeys.delete(input.draftId);
+    const thread = threadFrom(sent, input.draftId);
+    this.forgetDraft(input.draftId);
+    this.upsert(thread);
+    const sentFrom = this.sentFrom(input.draftId, thread.id);
+    this.publish({ ...this.snapshot, sentFrom });
+    writeSentFrom(member, sentFrom);
+    return thread;
+  }
+  // 같은 키에 다른 내용이면 서버가 409로 거절함(복제한 탭에서 먼저 보낸 경우 등). 안내 뒤 다시 누르면 새 요청으로 보냄
+  private readonly requestKeys = new Map<string, string>();
+  private async sendOnce(
+    member: SessionMember,
+    input: ConsultationSend,
+    request: string,
+    photos: Blob[],
+  ) {
+    try {
+      return await this.post(member, input, request, photos);
+    } catch (failure) {
+      if (failure instanceof ApiFailure && failure.code === 'RESOURCE_CONFLICT') {
+        this.requestKeys.set(input.draftId, newId());
+        throw new ApiFailure(
+          failure.status,
+          failure.code,
+          '이 작성 내용으로 이미 보낸 상담이 있어요. 상담 내역을 확인하고, 지금 내용도 보내려면 다시 눌러 주세요.',
+        );
+      }
+      throw failure;
+    }
+  }
+  private post(member: SessionMember, input: ConsultationSend, request: string, photos: Blob[]) {
+    return sendConsultation(
       member,
       {
-        requestKey: input.draftId,
+        requestKey: this.requestKeys.get(input.draftId) ?? input.draftId,
         designerId: input.designer.id,
         request,
         attachment: {
@@ -379,16 +471,37 @@ export class ServerConsultationRepository extends MemoryConsultationRepository {
           service: input.attachment.service,
           summary: input.attachment.summary,
           photoLabels: input.attachment.photos.map((photo) => photo.label),
+          linkedDesigner: Boolean(input.attachment.linkedDesigner),
         },
       },
       photos,
     );
-    this.prepared.delete(input.draftId);
-    const thread = threadFrom(sent, input.draftId);
-    this.forgetDraft(input.draftId);
-    this.upsert(thread);
-    this.publish({ ...this.snapshot, sentFrom: this.sentFrom(input.draftId, thread.id) });
-    return thread;
+  }
+}
+
+// 새로고침하면 준비로 보낸 상담 표시가 사라져 같은 준비를 다시 보내(결제하)게 되므로 기기에 남김.
+// 저장소를 쓸 수 없으면 이 탭에서만 기억함
+const sentFromKey = (member: SessionMember) => `salu-sent-from-${member.id}`;
+function readSentFrom(member: SessionMember | null): Record<string, string[]> | undefined {
+  if (!member) return undefined;
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(sentFromKey(member)) ?? 'null');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        (entry): entry is [string, string[]] =>
+          Array.isArray(entry[1]) && entry[1].every((id) => typeof id === 'string'),
+      ),
+    );
+  } catch {
+    return undefined;
+  }
+}
+function writeSentFrom(member: SessionMember, value: Record<string, string[]> | undefined) {
+  try {
+    if (value) localStorage.setItem(sentFromKey(member), JSON.stringify(value));
+  } catch {
+    // 저장소가 막혀 있으면 이 탭에서만 기억함
   }
 }
 
@@ -409,6 +522,12 @@ export function ConsultationProvider({
   useEffect(() => {
     if (repository instanceof ServerConsultationRepository) repository.setMember(member ?? null);
   }, [repository, member]);
+  useEffect(() => {
+    if (!(repository instanceof ServerConsultationRepository)) return;
+    const changed = (event: StorageEvent) => repository.syncSentFrom(event.key);
+    window.addEventListener('storage', changed);
+    return () => window.removeEventListener('storage', changed);
+  }, [repository]);
   return <Context.Provider value={repository}>{children}</Context.Provider>;
 }
 const noSubscribe = () => () => {};

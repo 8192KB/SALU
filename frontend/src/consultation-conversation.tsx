@@ -9,6 +9,7 @@ import type { ConsultationMessage } from './consultation-api';
 import { newId } from './prototype/ids';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
 import { sentTime } from './prototype/dates';
+import { useTabDraftText } from './tab-draft';
 
 function merge(current: ConsultationMessage[], next: ConsultationMessage[]) {
   const byId = new Map(current.map((message) => [message.id, message]));
@@ -42,7 +43,7 @@ export function ConsultationConversation({
   const signal = useLocalSignal();
   const [messages, setMessages] = useState<ConsultationMessage[] | null>(null);
   const [loadError, setLoadError] = useState('');
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useTabDraftText(`salu-message-draft-${member.id}-${id}`);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -109,6 +110,9 @@ export function ConsultationConversation({
       setMessages(latest.current);
       setDraft('');
     } catch (failure) {
+      // 대화가 닫혔으면 상담을 다시 받아 상태를 바꿈
+      if (failure instanceof ApiFailure && failure.code === 'RESOURCE_CONFLICT')
+        signal({ type: 'CONSULTATION', id });
       // 연결이 끊겨 저장됐는지 모를 때도 입력을 지우지 않음. 다시 보내면 같은 키라 두 번 저장되지 않음
       setError(
         failure instanceof ApiFailure && (failure.status === 0 || failure.status >= 500)

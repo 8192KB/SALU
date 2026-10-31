@@ -2327,6 +2327,16 @@ html {
   min-height: 28px;
   font-size: 12px;
 }
+.danger-link {
+  color: var(--danger-action);
+}
+.saved-photo-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .discard-draft {
   color: var(--muted);
   font-size: 13px;

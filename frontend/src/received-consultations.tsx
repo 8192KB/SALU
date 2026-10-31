@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { Link, useNavigate, useWorkspace } from './workspace';
@@ -24,6 +24,7 @@ import { ReceivedReview } from './consultation-review';
 import { sentTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
 import { useReadNotifications } from './notifications';
+import { readTabDraft, writeTabDraft } from './tab-draft';
 
 // 디자이너가 받은 상담. 로그인한 실제 회원 화면이며 예시 체험과 섞지 않음
 function useMember() {
@@ -32,10 +33,10 @@ function useMember() {
 }
 // 답변할 차례인 상담은 색을 채워 보낸 상담의 '답변 도착'처럼 눈에 띄게 함
 function Status({ item }: { item: Consultation }) {
-  const waiting = item.status !== 'ANSWERED';
+  const waiting = item.status === 'REQUESTED';
   return (
     <span className={waiting ? 'consultation-status filled' : 'consultation-status'}>
-      {waiting ? '답변 대기' : '답변 완료'}
+      {waiting ? '답변 대기' : item.status === 'CANCELED' ? '취소됨' : '답변 완료'}
     </span>
   );
 }
@@ -57,7 +58,7 @@ export function ReceivedList() {
   const access = useConsultationAccess();
   const member = useMember();
   const [items, setItems] = useState<Consultation[] | null>(null);
-  const [hasProfile, setHasProfile] = useState(true);
+  const [profileState, setProfileState] = useState<'PUBLIC' | 'PRIVATE' | 'NONE'>('PUBLIC');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const load = useCallback(async () => {
@@ -66,10 +67,12 @@ export function ReceivedList() {
     try {
       const [list, profile] = await Promise.all([
         listReceivedConsultations(member),
-        directoryRequest<{ id: string }>('/api/my/designer-profile'),
+        directoryRequest<{ id: string; visibility: 'PUBLIC' | 'PRIVATE' }>(
+          '/api/my/designer-profile',
+        ),
       ]);
       setItems(list);
-      setHasProfile(Boolean(profile));
+      setProfileState(profile ? profile.visibility : 'NONE');
       setError('');
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '받은 상담을 불러오지 못했어요.');
@@ -115,8 +118,15 @@ export function ReceivedList() {
         ) : (
           <section className="consultation-soft-panel">
             <h2>아직 받은 상담이 없어요</h2>
-            {hasProfile ? (
+            {profileState === 'PUBLIC' ? (
               <p>고객이 상담을 보내면 여기에 떠요.</p>
+            ) : profileState === 'PRIVATE' ? (
+              <>
+                <p>디자이너 프로필이 비공개라 새 상담을 받을 수 없어요.</p>
+                <Link className="button" to="/account/designer">
+                  디자이너 프로필 공개하기
+                </Link>
+              </>
             ) : (
               <>
                 <p>디자이너 프로필을 공개로 등록하면 고객이 상담을 보낼 수 있어요.</p>
@@ -158,6 +168,19 @@ export function ReceivedDetail() {
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
+  // 쓰던 답변은 이 탭에 남겨 세션이 끊겨 다시 로그인하거나 새로고침해도 이어 씀
+  const draftKey = member && !example ? `salu-reply-draft-${member.id}-${id}` : null;
+  const restored = useRef<string | null>(null);
+  useEffect(() => {
+    if (!draftKey || restored.current === draftKey) return;
+    restored.current = draftKey;
+    const saved = readTabDraft<unknown>(draftKey);
+    if (typeof saved === 'string') setContent(saved);
+  }, [draftKey]);
+  useEffect(() => {
+    if (draftKey && restored.current === draftKey)
+      writeTabDraft(draftKey, content.trim() ? content : null);
+  }, [draftKey, content]);
   const load = useCallback(async () => {
     if (!member) return;
     try {
@@ -212,6 +235,7 @@ export function ReceivedDetail() {
     setError('');
     try {
       const saved = await replyConsultation(member, id, text);
+      if (draftKey) writeTabDraft(draftKey, null);
       setItem(saved);
       navigate(`/consultations/received/${id}/complete`, {
         replace: true,
@@ -219,9 +243,16 @@ export function ReceivedDetail() {
       });
     } catch (failure) {
       // 이미 답변한 상담이면 상담과 대화를 다시 받아 저장된 답변을 보여 줌. 그 밖의 실패는 입력을 유지함
+      // 답변 전에 고객이 취소했어도 같은 409이므로 상담을 다시 받아 어느 쪽인지 가름
       if (failure instanceof ApiFailure && failure.code === 'RESOURCE_CONFLICT') {
         signal({ type: 'CONSULTATION', id });
-        setNotice('이미 답변한 상담이에요. 저장된 답변은 대화에서 볼 수 있어요.');
+        if (draftKey) writeTabDraft(draftKey, null);
+        const current = await getConsultation(member, id).catch(() => null);
+        setNotice(
+          current?.status === 'CANCELED'
+            ? '고객이 취소한 상담이라 답변을 보낼 수 없어요.'
+            : '이미 답변한 상담이에요. 저장된 답변은 대화에서 볼 수 있어요.',
+        );
       } else
         setError(
           failure instanceof Error
@@ -251,6 +282,11 @@ export function ReceivedDetail() {
         <AttachmentCard attachment={threadFrom(item).attachment} />
       </section>
       <ReceivedReview id={item.id} reviewId={item.reviewId} />
+      {item.status === 'CANCELED' && (
+        <section className="consultation-soft-panel" role="status">
+          <p>고객이 답변 전에 취소했거나 72시간 안에 답변하지 않아 취소된 상담이에요.</p>
+        </section>
+      )}
       {notice && (
         <section className="consultation-soft-panel" role="status">
           <p>{notice}</p>
@@ -262,7 +298,7 @@ export function ReceivedDetail() {
           member={member}
           partner={`${item.customer.displayName}님`}
           placeholder="예: 오시면 옆머리 숱을 조금 더 정리해 볼게요."
-          canWrite={!item.canReply}
+          canWrite={!item.canReply && item.status !== 'CANCELED'}
         />
       )}
       {item.canReply && (

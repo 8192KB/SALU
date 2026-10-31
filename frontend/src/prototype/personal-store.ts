@@ -1,3 +1,4 @@
+import { fitPhoto } from './photo-fit';
 import { newId } from './ids';
 import { openDB } from 'idb';
 import { createMemoryRepository, InputError, isBlankCutDraft } from './memory-repository';
@@ -47,6 +48,8 @@ type Document = {
   items: Record<string, SyncItem>;
   // 로그인 뒤 로그인 전 기록을 옮길지 이 기기에서 이미 물었음. 서버로 보내지 않음
   guestMoveAsked?: boolean;
+  // 물을 때 있던 로그인 전 기록 ID. 그 뒤 새로 남긴 기록이 있으면 다시 물음
+  guestMoveSeen?: string[];
 };
 export type StoreView = {
   bundle: Bundle;
@@ -91,8 +94,15 @@ export const flushPersonalStores = () => Promise.all([...stores].map((store) => 
 export type GuestRecords = {
   cuts: number;
   ids: Set<string>;
+  // 쓰던 새 기록 초안의 내용 표시. 글자만 쓴 초안은 ID가 없어 이것으로 새로 생긴 초안을 알아봄
+  draft?: string;
   // 옮길지 물을 때 어떤 기록인지 알아볼 수 있게 최근 커트 3개를 보여 줌
   recent: { id: string; cutDate: string; service: string }[];
+};
+const textHash = (text: string) => {
+  let hash = 5381;
+  for (let i = 0; i < text.length; i++) hash = (hash * 33 + text.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
 };
 export async function readGuestRecords(): Promise<GuestRecords | null> {
   const guest: Document | undefined = await (await database()).get('workspaces', 'guest');
@@ -103,7 +113,39 @@ export async function readGuestRecords(): Promise<GuestRecords | null> {
     .sort((a, b) => b.cutDate.localeCompare(a.cutDate))
     .slice(0, 3)
     .map(({ id, cutDate, service }) => ({ id, cutDate, service }));
-  return { cuts: cuts.length, ids: new Set(copyBundle(guest.bundle).ids.keys()), recent };
+  const draft = guest.bundle.drafts.cutDraft;
+  return {
+    cuts: cuts.length,
+    ids: new Set(copyBundle(guest.bundle).ids.keys()),
+    draft: isBlankCutDraft(draft) ? undefined : `draft:${textHash(JSON.stringify(draft))}`,
+    recent,
+  };
+}
+
+// 예전 수정 초안은 기록 ID를 함께 담았음. 서버는 초안의 모르는 필드를 거절하므로 보낼 때 뺌
+function withoutIds<T extends object>(draft: T): T {
+  const { id: _id, cutId: _cutId, ...fields } = draft as T & { id?: unknown; cutId?: unknown };
+  return fields as T;
+}
+
+// 저장해 둔 백업 항목은 고치기 전 내용이 남아 있을 수 있어 보내기 직전에도 초안의 ID를 뺌
+export function sendablePayload<T>(payload: T): T {
+  const drafts = (payload as { drafts?: Record<string, unknown> }).drafts;
+  if (!drafts) return payload;
+  const clean = (value: unknown) =>
+    value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value).map(([key, draft]) => [key, withoutIds(draft as object)]),
+        )
+      : value;
+  return {
+    ...payload,
+    drafts: {
+      ...drafts,
+      cutEdits: clean(drafts.cutEdits),
+      progressEdits: clean(drafts.progressEdits),
+    },
+  };
 }
 
 function groupByCut<T>(values: T[], cutId: (value: T) => string) {
@@ -164,12 +206,12 @@ export function splitItems(
           ? { [cut.id]: bundle.drafts.progressDrafts[cut.id] }
           : {},
         cutEdits: bundle.drafts.cutEdits[cut.id]
-          ? { [cut.id]: bundle.drafts.cutEdits[cut.id] }
+          ? { [cut.id]: withoutIds(bundle.drafts.cutEdits[cut.id]) }
           : {},
         progressEdits: Object.fromEntries(
           entries
             .filter((p) => bundle.drafts.progressEdits[p.id])
-            .map((p) => [p.id, bundle.drafts.progressEdits[p.id]]),
+            .map((p) => [p.id, withoutIds(bundle.drafts.progressEdits[p.id])]),
         ),
         requests,
         currentRequestId:
@@ -216,6 +258,47 @@ function combine(items: Record<string, SyncItem>): Bundle {
     };
   return bundle;
 }
+// 지운 기록·경과·사진을 가리키는 초안을 정리함. 안 그러면 기록 묶음 검사에 걸려 저장되지 않음
+function cleanDrafts(drafts: Drafts, state: PrototypeState, cuts = new Set<string>()): Drafts {
+  const progressIds = new Set(state.progress.map((entry) => entry.id));
+  const photoIds = new Set(state.photos.map((photo) => photo.id));
+  const requests = Object.fromEntries(
+    Object.entries(drafts.requests)
+      .filter(([, draft]) => !cuts.has(draft.cutId))
+      .map(([id, draft]) => {
+        const frozen =
+          draft.referencePreviewId &&
+          state.previews.find((preview) => preview.id === draft.referencePreviewId);
+        const allowedProgress = frozen
+          ? new Set(frozen.progress.map((entry) => entry.id))
+          : progressIds;
+        const allowedPhotos = frozen ? new Set(frozen.photos.map((photo) => photo.id)) : photoIds;
+        return [
+          id,
+          {
+            ...draft,
+            progressIds: draft.progressIds.filter((value) => allowedProgress.has(value)),
+            photoIds: draft.photoIds.filter((value) => allowedPhotos.has(value)),
+          },
+        ];
+      }),
+  );
+  const without = <T>(record: Record<string, T>) =>
+    Object.fromEntries(Object.entries(record).filter(([key]) => !cuts.has(key)));
+  return {
+    ...drafts,
+    progressDrafts: without(drafts.progressDrafts),
+    cutEdits: without(drafts.cutEdits),
+    progressEdits: Object.fromEntries(
+      Object.entries(drafts.progressEdits).filter(([key]) => progressIds.has(key)),
+    ),
+    requests,
+    currentRequestId:
+      drafts.currentRequestId && requests[drafts.currentRequestId] ? drafts.currentRequestId : null,
+    steps: Object.fromEntries(Object.entries(drafts.steps).filter(([key]) => requests[key])),
+  };
+}
+const otherTabError = '다른 탭에서 기록이 바뀌었어요. 파일로 백업한 뒤 이 탭을 다시 열어 주세요.';
 const storageError = () =>
   '기기에 저장하지 못했어요. 입력은 그대로 있어요. 저장 공간을 확인한 뒤 다시 시도해 주세요.';
 
@@ -286,6 +369,21 @@ export class PersonalStore {
             cutEdits: Object.fromEntries(Object.entries(d.cutEdits).filter(([key]) => key !== id)),
           }),
         ),
+      deleteCut: (id) =>
+        operation(
+          () => this.engine.deleteCut(id),
+          (d, state) => cleanDrafts(d, state, new Set([id])),
+        ),
+      deleteProgress: (id, p) =>
+        operation(
+          () => this.engine.deleteProgress(id, p),
+          (d, state) => cleanDrafts(d, state),
+        ),
+      deletePhoto: (id) =>
+        operation(
+          () => this.engine.deletePhoto(id),
+          (d, state) => cleanDrafts(d, state),
+        ),
       addProgress: (id, v) =>
         operation(
           () => this.engine.addProgress(id, v),
@@ -340,9 +438,16 @@ export class PersonalStore {
               photos: '5 MiB·4천만 화소 이하의 올바른 JPEG·PNG·WebP 사진을 선택해 주세요.',
             });
           });
-        const photos = await this.engine.preparePhotos(files, count);
+        // 원본은 확인만 하고 줄인 사진을 저장함. 이름은 화면 설명으로 쓰여 그대로 둠
+        const fitted = await Promise.all(
+          files.map(async (file) => {
+            const blob = await fitPhoto(file);
+            return blob === file ? file : new File([blob], file.name, { type: blob.type });
+          }),
+        );
+        const photos = await this.engine.preparePhotos(fitted, count);
         photos.forEach((p, i) => {
-          this.assets.set(p.id, files[i]);
+          this.assets.set(p.id, fitted[i]);
           this.urls.set(p.id, p.url);
         });
         return photos;
@@ -369,7 +474,7 @@ export class PersonalStore {
           void this.enqueue(async () => {
             if (this.pendingDrafts) {
               this.setView({
-                error: '다른 탭에서 기록이 바뀌었어요. 파일로 백업한 뒤 이 탭을 다시 열어 주세요.',
+                error: otherTabError,
                 errorSource: 'local',
                 status: 'error',
               });
@@ -443,13 +548,20 @@ export class PersonalStore {
       return moved;
     });
   }
-  get guestMoveAsked() {
-    return this.document.guestMoveAsked === true;
+  guestMoveAsked(guest: GuestRecords) {
+    const seen = new Set(this.document.guestMoveSeen ?? []);
+    return (
+      this.document.guestMoveAsked === true &&
+      [...guest.ids, ...(guest.draft ? [guest.draft] : [])].every((id) => seen.has(id))
+    );
   }
-  async markGuestMoveAsked() {
+  async markGuestMoveAsked(guest: GuestRecords) {
     await this.enqueue(async () => {
-      if (this.document.guestMoveAsked) return;
-      this.document = { ...this.document, guestMoveAsked: true };
+      this.document = {
+        ...this.document,
+        guestMoveAsked: true,
+        guestMoveSeen: [...guest.ids, ...(guest.draft ? [guest.draft] : [])],
+      };
       await this.commit(this.view.bundle);
     });
   }
@@ -541,7 +653,7 @@ export class PersonalStore {
     });
   }
   private changedItems(bundle: Bundle, previous = this.document.items): Record<string, SyncItem> {
-    return Object.fromEntries(
+    const current: Record<string, SyncItem> = Object.fromEntries(
       Object.entries(
         splitItems(
           bundle,
@@ -565,6 +677,13 @@ export class PersonalStore {
         ];
       }),
     );
+    // 지운 기록은 빈 묶음으로 남겨 서버와 다른 기기에도 지웠음을 알림. 항목을 없애면 서버 것을 다시 받아 되살아남
+    for (const [id, old] of Object.entries(previous))
+      if (!current[id])
+        current[id] = old.payload.state.cuts.length
+          ? { ...old, payload: serialize(emptyBundle()), mutationId: newId(), dirty: true }
+          : old;
+    return current;
   }
   private async commit(bundle: Bundle, items = this.changedItems(bundle)) {
     const serial = serialize(bundle);
@@ -575,6 +694,7 @@ export class PersonalStore {
       bundle: serial,
       items,
       guestMoveAsked: this.document.guestMoveAsked,
+      guestMoveSeen: this.document.guestMoveSeen,
     };
     try {
       const db = await database();
@@ -628,9 +748,14 @@ export class PersonalStore {
       });
       this.channel?.postMessage(this.scope);
       this.onChange?.();
-    } catch {
-      this.setView({ status: 'error', error: storageError(), errorSource: 'local' });
-      throw new InputError({ form: storageError() });
+    } catch (failure) {
+      // 다른 탭이 먼저 저장한 것은 저장 공간 문제가 아니라서 원인을 그대로 알림
+      const error =
+        failure instanceof Error && failure.message === 'concurrent tab'
+          ? otherTabError
+          : storageError();
+      this.setView({ status: 'error', error, errorSource: 'local' });
+      throw new InputError({ form: error });
     }
   }
   updateDrafts(action: (previous: Drafts) => Drafts) {

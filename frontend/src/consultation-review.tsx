@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import { useLocation, useParams } from 'react-router';
 import { ApiFailure } from './auth/api';
@@ -21,6 +21,7 @@ import { Link, useNavigate } from './workspace';
 import { useAuth } from './auth/context';
 import type { SessionMember } from './auth/api';
 import { getConsultation } from './consultation-api';
+import { directorySnapshot, subscribeDirectory } from './directory-cache';
 import type { Consultation } from './consultation-api';
 import {
   deleteReview,
@@ -31,6 +32,7 @@ import {
 import type { DesignerReview, DesignerReviews } from './designer-api';
 import { sentTime } from './prototype/dates';
 import { useLocalSignal, useOnReactivate } from './realtime';
+import { readTabDraft, writeTabDraft } from './tab-draft';
 
 const RATINGS = [1, 2, 3, 4, 5];
 
@@ -242,7 +244,7 @@ export function DesignerReviewList({ designerId }: { designerId: string }) {
         {reviews?.averageRating != null && (
           <span className="review-average">
             <Stars rating={Math.round(reviews.averageRating)} /> {reviews.averageRating.toFixed(1)}{' '}
-            · {reviews.count}개
+            ({reviews.count}개)
           </span>
         )}
       </h2>
@@ -274,6 +276,10 @@ export function DesignerReviewList({ designerId }: { designerId: string }) {
     </section>
   );
 }
+
+type ReviewDraft = { reviewId: string | null; rating: number; content: string };
+const reviewDraftKey = (memberId: string | number, consultationId: string) =>
+  `salu-review-draft-${memberId}-${consultationId}`;
 
 export function ReviewWrite() {
   const { id = '' } = useParams();
@@ -308,6 +314,12 @@ export function ReviewWrite() {
         setExisting(review);
         setRating(review?.rating ?? 0);
         setContent(review?.content ?? '');
+        // 같은 후기에 쓰다 만 내용이 이 탭에 있으면 이어 씀
+        const draft = readTabDraft<ReviewDraft>(reviewDraftKey(account.id, id));
+        if (draft && draft.reviewId === (review?.id ?? null) && typeof draft.content === 'string') {
+          setRating(Number.isInteger(draft.rating) ? draft.rating : 0);
+          setContent(draft.content);
+        }
         setError('');
         setFieldError(null);
       }
@@ -320,13 +332,20 @@ export function ReviewWrite() {
     void load();
   }, [load]);
   useOnReactivate(load);
+  // 고치거나 새로 쓴 내용은 이 탭에 남겨 세션이 끊겨 다시 로그인하거나 새로고침해도 이어 씀
+  const draftKey = member ? reviewDraftKey(member.id, id) : null;
+  useEffect(() => {
+    if (!draftKey || !consultation) return;
+    const changed = content !== (existing?.content ?? '') || rating !== (existing?.rating ?? 0);
+    writeTabDraft(draftKey, changed ? { reviewId: existing?.id ?? null, rating, content } : null);
+  }, [draftKey, consultation, existing, rating, content]);
   const back = <BackLink to={`/consultations/${id}`}>보낸 상담</BackLink>;
   if (state.status === 'checking') return <Loading>로그인 상태를 확인하고 있어요.</Loading>;
   if (state.status !== 'authenticated')
     return (
       <div className="consultation-screen">
         <PageHeading title="후기 남기기" back={back} />
-        <ErrorState kind="login" message="로그인하면 받은 상담에 후기를 남길 수 있어요." />
+        <ErrorState kind="login" message="로그인하면 보낸 상담에 후기를 남길 수 있어요." />
       </div>
     );
   if (!consultation)
@@ -373,6 +392,7 @@ export function ReviewWrite() {
       const saved = await saveReview(member, id, { rating, content: text }, Boolean(existing));
       // 저장한 후기를 기준으로 삼아, 나중에 지워지면 다시 들어올 때 지운 내용 없이 빈 칸으로 시작함
       applied.current = saved.id;
+      writeTabDraft(reviewDraftKey(member.id, id), null);
       setExisting(saved);
       signal({ type: 'CONSULTATION', id });
       navigate(`/consultations/${id}/review/complete`, {
@@ -474,6 +494,11 @@ export function ReviewComplete() {
   const member = useMember();
   const edited = Boolean((useLocation().state as { edited?: boolean } | null)?.edited);
   const [designerId, setDesignerId] = useState('');
+  const directory = useSyncExternalStore(subscribeDirectory, directorySnapshot);
+  // 그 뒤 비공개로 바뀐 디자이너는 프로필을 열 수 없으므로 링크를 숨김. 목록을 아직 못 받았으면 그대로 보여 줌
+  const designerOpen =
+    Boolean(designerId) &&
+    (!directory.loaded || directory.designers.some((value) => value.id === designerId));
   useEffect(() => {
     if (!member) return;
     getConsultation(member, id).then(
@@ -485,11 +510,15 @@ export function ReviewComplete() {
     <div className="consultation-sent">
       <Completion
         title={edited ? '후기를 고쳤어요' : '후기를 남겼어요'}
-        description="디자이너 프로필에 보여요."
+        description={
+          designerId && !designerOpen
+            ? '디자이너 프로필이 지금은 비공개라, 다시 공개되면 보여요.'
+            : '디자이너 프로필에 보여요.'
+        }
         primary="보낸 상담 보기"
         to={`/consultations/${id}`}
-        secondary="디자이너 프로필 보기"
-        secondaryTo={designerId ? `/designers/${designerId}` : '/designers'}
+        secondary={designerOpen ? '디자이너 프로필 보기' : undefined}
+        secondaryTo={`/designers/${designerId}`}
       >
         {null}
       </Completion>

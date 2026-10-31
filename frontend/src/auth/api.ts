@@ -26,15 +26,17 @@ const messages: Record<string, string> = {
   DATABASE_UNAVAILABLE: '계정 정보를 확인할 수 없어요. 잠시 후 다시 시도해 주세요.',
   CURRENT_PASSWORD_INVALID: '현재 비밀번호가 맞지 않아요.',
   PASSWORD_NOT_SET: '소셜 로그인으로 가입한 계정은 비밀번호가 없어요.',
+  MAIL_UNAVAILABLE: '지금은 메일을 보낼 수 없어요. 잠시 후 다시 시도해 주세요.',
+  RESET_TOKEN_INVALID: '링크가 만료됐거나 이미 썼어요. 비밀번호 찾기를 다시 요청해 주세요.',
 };
 
-async function request(path: string, options: RequestInit = {}): Promise<Response> {
+async function request(path: string, options: RequestInit = {}, timeout = 8000): Promise<Response> {
   try {
     return await fetch(path, {
       ...options,
       credentials: 'same-origin',
       cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(timeout),
     });
   } catch {
     throw new ApiFailure(
@@ -66,8 +68,13 @@ async function failure(response: Response): Promise<ApiFailure> {
         (response.status >= 500
           ? '서버를 사용할 수 없어요. 잠시 후 다시 시도해 주세요.'
           : '요청을 처리하지 못했어요. 입력과 로그인 상태를 확인해 주세요.'));
+  // 세션이 끝났거나 계정이 바뀌었으면 로그인 상태를 다시 확인하게 알림. 화면마다 따로 처리하지 않아도
+  // 머리글과 각 화면이 로그인 안내로 바뀜
+  if (code === 'AUTHENTICATION_REQUIRED' || code === 'STORAGE_CONTEXT_CHANGED')
+    window.dispatchEvent(new Event(SESSION_CHANGED));
   return new ApiFailure(response.status, code, message);
 }
+export const SESSION_CHANGED = 'salu:session-changed';
 
 async function readMember(response: Response): Promise<SessionMember> {
   if (!response.ok) throw await failure(response);
@@ -203,6 +210,15 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await post('/api/auth/password', JSON.stringify({ currentPassword, newPassword }));
 }
 
+// 가입하지 않은 이메일도 같은 성공 응답(docs/login.md)
+export async function requestPasswordReset(email: string): Promise<void> {
+  await post('/api/auth/password-reset', JSON.stringify({ email }));
+}
+
+export async function confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+  await post('/api/auth/password-reset/confirm', JSON.stringify({ token, newPassword }));
+}
+
 export async function backupRequest(
   path: string,
   member: SessionMember,
@@ -230,17 +246,23 @@ export async function backupRequest(
   throw new Error('csrf');
 }
 
+// AI 도우미처럼 응답이 오래 걸리는 요청은 timeout을 늘려 씀
 export async function directoryRequest<T>(
   path: string,
   method = 'GET',
   body?: unknown,
+  timeout?: number,
 ): Promise<T | null> {
-  const response = await request(path, {
-    method,
-    headers:
-      method === 'GET' ? {} : { ...(await csrfHeaders()), 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const response = await request(
+    path,
+    {
+      method,
+      headers:
+        method === 'GET' ? {} : { ...(await csrfHeaders()), 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    timeout,
+  );
   if (!response.ok) throw await failure(response);
   if (response.status === 204) return null;
   return response.json() as Promise<T>;

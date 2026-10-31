@@ -12,7 +12,7 @@ import {
 import type { Location } from 'react-router';
 import { DirectoryEditor } from './directory-page';
 import { RecordComplete } from './completion';
-import { Icon, LoadBoundary, NotFound, Loading } from './components';
+import { ExampleUnavailable, Icon, LoadBoundary, NotFound, Loading } from './components';
 import { PrototypeProvider, usePrototype } from './prototype/context';
 import { CutForm, ProgressForm, RecordDetail, RecordList } from './record-pages';
 import { RequestList } from './request-pages';
@@ -22,6 +22,7 @@ import { AuthProvider, useAuth } from './auth/context';
 import {
   AccountControls,
   LoginPage,
+  PasswordResetPage,
   SignupPage,
   SessionNotice,
   AccountPage,
@@ -38,6 +39,7 @@ import { ConsultationProvider, useConsultations } from './consultation-store';
 import { RealtimeProvider } from './realtime';
 import { NotificationButton, NotificationList } from './notifications';
 import { MorePage } from './more-page';
+import { PaymentFail, PaymentSuccess } from './payment';
 import {
   DesignerDetail,
   DesignerList,
@@ -266,10 +268,14 @@ function Layout() {
       !loadFailed &&
       path !== '/' &&
       path !== '/login' &&
-      path !== '/signup' ? (
+      path !== '/signup' &&
+      path !== '/password-reset' ? (
         <StorageNotice compact={focused} />
       ) : null}
-      {path === '/login' || path === '/signup' || path === '/account' ? null : (
+      {path === '/login' ||
+      path === '/signup' ||
+      path === '/password-reset' ||
+      path === '/account' ? null : (
         <SessionNotice compact />
       )}
       <Dialog open={exitTo !== null} title="예시 체험을 끝낼까요?" onClose={() => setExitTo(null)}>
@@ -385,12 +391,34 @@ function PageRoutes({
               mode === 'example' ? <Navigate to="/examples/records" replace /> : <HomePage />
             }
           />
-          <Route path="login" element={<LoginPage />} />
-          <Route path="signup" element={<SignupPage />} />
-          <Route path="backup" element={<BackupPage />} />
-          <Route path="account/designer" element={<DirectoryEditor />} />
-          <Route path="account" element={<AccountPage />} />
-          <Route path="auth/complete" element={<AuthCompletePage />} />
+          <Route
+            path="login"
+            element={mode === 'example' ? <ExampleUnavailable /> : <LoginPage />}
+          />
+          <Route
+            path="signup"
+            element={mode === 'example' ? <ExampleUnavailable /> : <SignupPage />}
+          />
+          <Route
+            path="password-reset"
+            element={mode === 'example' ? <ExampleUnavailable /> : <PasswordResetPage />}
+          />
+          <Route
+            path="backup"
+            element={mode === 'example' ? <ExampleUnavailable /> : <BackupPage />}
+          />
+          <Route
+            path="account/designer"
+            element={mode === 'example' ? <ExampleUnavailable /> : <DirectoryEditor />}
+          />
+          <Route
+            path="account"
+            element={mode === 'example' ? <ExampleUnavailable /> : <AccountPage />}
+          />
+          <Route
+            path="auth/complete"
+            element={mode === 'example' ? <ExampleUnavailable /> : <AuthCompletePage />}
+          />
           <Route path="notifications" element={<NotificationList />} />
           <Route path="more" element={<MorePage />} />
           <Route path="community" element={<CommunityList />} />
@@ -422,6 +450,8 @@ function PageRoutes({
           <Route path="consultations/:id/review/complete" element={<ReviewComplete />} />
           <Route path="consultations/:id" element={<ConsultationDetail />} />
           <Route path="consultations/materials" element={<MaterialsPage />} />
+          <Route path="payments/success" element={<PaymentSuccess />} />
+          <Route path="payments/fail" element={<PaymentFail />} />
           <Route path="consultations/request" element={<RequestPage />} />
           <Route path="consultations/previews/:id" element={<PreviewPage />} />
           <Route path="requests" element={<RequestList />} />

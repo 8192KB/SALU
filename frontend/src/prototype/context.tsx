@@ -107,6 +107,21 @@ function MemoryPrototypeProvider({
         });
         return preview;
       },
+      async deleteCut(id) {
+        await memory.deleteCut(id);
+        setRequestDrafts((previous) => {
+          const saved = Object.fromEntries(
+            Object.entries(previous.saved).filter(([, draft]) => draft.cutId !== id),
+          );
+          return {
+            current: previous.current?.cutId === id ? null : previous.current,
+            saved,
+            targets: Object.fromEntries(
+              Object.entries(previous.targets).filter(([, value]) => Object.hasOwn(saved, value)),
+            ),
+          };
+        });
+      },
     }),
     [memory],
   );
@@ -370,8 +385,14 @@ export function useProgressDraft(cutId: string) {
 export function useCutEditDraft(cut?: CutRecord) {
   const { cutEdits, setCutEdits } = usePrototype();
   const key = cut?.id ?? '';
+  // 초안에는 기록 ID를 넣지 않음. 백업 서버가 초안의 모르는 필드를 거절해 그 커트 전체가 올라가지 않음
   const initial: CutDraft = cut
-    ? { ...cut, areas: [...cut.areas], price: cut.price?.toString() ?? '', photos: [] }
+    ? (({ id: _id, ...fields }) => ({
+        ...fields,
+        areas: [...cut.areas],
+        price: cut.price?.toString() ?? '',
+        photos: [],
+      }))(cut)
     : newCutDraft();
   const draft = cutEdits[key] ?? initial;
   const update = (input: Partial<CutDraft>) =>
@@ -392,7 +413,11 @@ export function useProgressEditDraft(entry?: ProgressEntry) {
   const { progressEdits, setProgressEdits } = usePrototype();
   const key = entry?.id ?? '';
   const initial: ProgressDraft = entry
-    ? { ...entry, areas: [...entry.areas], photos: [] }
+    ? (({ id: _id, cutId: _cutId, ...fields }) => ({
+        ...fields,
+        areas: [...entry.areas],
+        photos: [],
+      }))(entry)
     : newProgressDraft();
   const draft = progressEdits[key] ?? initial;
   const update = (input: Partial<ProgressDraft>) =>

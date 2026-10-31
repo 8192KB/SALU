@@ -1220,11 +1220,10 @@ legend {
   font-size: 14px;
 }
 .request-chip {
-  font-size: 11px;
+  margin-left: 4px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--teal);
-  background: var(--soft);
-  padding: 4px 8px;
-  border-radius: 6px;
 }
 .request-summary {
   border-top: 1px solid var(--line);
@@ -1700,6 +1699,13 @@ legend {
 }
 .login-form .field {
   margin: 0;
+}
+.login-form > p,
+.login-form .login-forgot {
+  margin: 0;
+}
+.login-form .login-forgot {
+  justify-self: center;
 }
 .login-hint {
   font-size: 13px;

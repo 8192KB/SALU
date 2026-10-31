@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { Alert, BackLink, FieldFeedback, Icon, PageHeading } from '../components';
+import { isTaskPath } from '../main-navigation';
 import { Field, PasswordInput } from '../fields';
 import { Dialog } from '../dialog';
 import { useAuth } from './context';
@@ -10,9 +11,11 @@ import {
   ApiFailure,
   backupRequest,
   changePassword,
+  confirmPasswordReset,
   directoryRequest,
   emailAvailable,
   renameMember,
+  requestPasswordReset,
   signup,
 } from './api';
 import type { SessionMember } from './api';
@@ -53,7 +56,7 @@ export function AccountControls() {
     }
     const success = await logout();
     setOpen(false);
-    if (success) navigate('/');
+    if (success) navigate('/', { replace: true });
   };
   if (state.status === 'prototype') return <span className="member-label">나의 헤어 기록</span>;
   return (
@@ -85,7 +88,7 @@ export function AccountControls() {
       ) : state.status === 'checking' ? (
         <span className="muted">계정 확인 중</span>
       ) : state.status === 'unavailable' && activeMember ? (
-        <span className="muted">{activeMember.displayName}님 · 연결 확인 중</span>
+        <span className="muted">{activeMember.displayName}님 계정 연결 확인 중</span>
       ) : (
         <Link className="button account-button" to={loginPath}>
           <Icon name="user" size={16} />
@@ -197,8 +200,21 @@ function completePath(next: string | null) {
 function withNext(path: string, next: string | null) {
   return next ? `${path}?next=${encodeURIComponent(next)}` : path;
 }
-// 뒤로 링크는 돌아갈 화면 이름으로 부름(DESIGN.md). 모르는 주소는 이전 화면
+// 뒤로 링크는 돌아갈 화면 이름으로 부름(DESIGN.md). 상세 화면은 목록보다 그 화면 이름으로 부르므로
+// 위에서부터 처음 맞는 것을 씀. 모르는 주소는 이전 화면
 const RETURN_LABELS: [RegExp, string][] = [
+  [/^\/community\/mine/, '내 글로'],
+  [/^\/community\/(?!mine|new)[^/?#]+(?=[?#]|$)/, '글로'],
+  [/^\/designers\/[^/?#]+(?=[?#]|$)/, '디자이너 프로필로'],
+  [/^\/consultations\/new/, '상담 신청으로'],
+  [/^\/consultations\/received/, '받은 상담으로'],
+  [
+    /^\/consultations\/(?!received|materials|request|review|previews)[^/?#]+(?=[?#]|$)/,
+    '보낸 상담으로',
+  ],
+  [/^\/requests\/previews\/[^/?#]+/, '준비 내용으로'],
+  [/^\/records\/(?!new)[^/?#]+(?=[?#]|$)/, '커트 기록으로'],
+  [/^\/account\/designer/, '내 디자이너 프로필로'],
   [/^\/community/, '커뮤니티로'],
   [/^\/designers/, '디자이너 찾기로'],
   [/^\/consultations/, '상담으로'],
@@ -210,6 +226,14 @@ const RETURN_LABELS: [RegExp, string][] = [
   [/^\/notifications/, '알림으로'],
   [/^\/admin/, '신고 처리로'],
 ];
+// 로그인이 필요한 작성 화면(글쓰기 등)은 로그인 전에 열리지 않으므로 뒤로 가면 그 메뉴의 목록으로 감
+function backPath(next: string | null) {
+  if (!next) return '/';
+  const path = next.split(/[?#]/)[0]!;
+  if (!isTaskPath(path)) return next;
+  const parts = path.split('/');
+  return parts[1] === 'examples' ? `/examples/${parts[2]}` : `/${parts[1]}`;
+}
 const returnLabel = (next: string | null) =>
   next ? (RETURN_LABELS.find(([path]) => path.test(next))?.[1] ?? '이전 화면으로') : '홈으로';
 
@@ -250,7 +274,7 @@ export function LoginPage() {
   return (
     <div className="login-page">
       <PageHeading
-        back={<BackLink to={next ?? '/'}>{returnLabel(next)}</BackLink>}
+        back={<BackLink to={backPath(next)}>{returnLabel(backPath(next))}</BackLink>}
         title="로그인"
       />
       {state.status === 'prototype' ? (
@@ -274,7 +298,7 @@ export function LoginPage() {
         <section className="panel">
           <h2>이미 로그인했어요</h2>
           <p>
-            {state.member.displayName}님 · {state.member.email}
+            {state.member.displayName}님({state.member.email})으로 로그인했어요.
           </p>
           <Link className="button primary" to={next ?? '/'} replace>
             {returnLabel(next)}
@@ -330,6 +354,9 @@ export function LoginPage() {
               로그인 상태 다시 확인
             </button>
           )}
+          <Link className="text-link login-forgot" to={withNext('/password-reset', next)}>
+            비밀번호를 잊었나요?
+          </Link>
         </form>
       )}
       {state.status !== 'prototype' && state.status !== 'authenticated' && (
@@ -339,6 +366,156 @@ export function LoginPage() {
         <p className="auth-switch">
           아직 계정이 없나요? <Link to={withNext('/signup', next)}>회원가입</Link>
         </p>
+      )}
+    </div>
+  );
+}
+
+// 비밀번호 찾기. 메일 링크(#token=…)로 들어오면 새 비밀번호 칸, 아니면 이메일 칸
+export function PasswordResetPage() {
+  // 토큰은 주소의 # 뒤에 있어 서버로 가지 않음. 읽은 뒤 주소에서 지워 기록·화면 공유에 남지 않게 함
+  const [token, setToken] = useState(() =>
+    new URLSearchParams(window.location.hash.slice(1)).get('token'),
+  );
+  // 로그인 화면에서 왔으면 로그인 뒤 돌아갈 화면을 이어 받음
+  const [params] = useSearchParams();
+  const next = safeReturnPath(params.get('next'));
+  useEffect(() => {
+    if (window.location.hash)
+      window.history.replaceState(
+        window.history.state,
+        '',
+        window.location.pathname + window.location.search,
+      );
+  }, []);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const match = passwordMatch(password, confirm);
+  const fail = (failure: unknown) =>
+    setError(failure instanceof Error ? failure.message : '요청하지 못했어요. 다시 시도해 주세요.');
+  return (
+    <div className="login-page">
+      <PageHeading
+        back={<BackLink to={withNext('/login', next)}>로그인</BackLink>}
+        title="비밀번호 찾기"
+      />
+      {done ? (
+        <section className="panel">
+          <h2>{token ? '비밀번호를 바꿨어요' : '메일을 보냈어요'}</h2>
+          <p>
+            {token
+              ? '새 비밀번호로 로그인해 주세요.'
+              : `${email.trim()}으로 가입한 계정이 있으면 30분 안에 쓸 수 있는 링크를 보냈어요. 메일이 보이지 않으면 스팸함도 확인해 주세요.`}
+          </p>
+          <Link className="button primary" to={withNext('/login', next)} replace>
+            로그인하러 가기
+          </Link>
+        </section>
+      ) : token ? (
+        <form
+          className="panel login-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError('');
+            if (password.length < 8) return setError('새 비밀번호를 8자 이상 입력해 주세요.');
+            if (new TextEncoder().encode(password).length > 72)
+              return setError('새 비밀번호가 너무 길어요. 글자 수를 줄여 주세요.');
+            if (password !== confirm) return;
+            setBusy(true);
+            try {
+              await confirmPasswordReset(token, password);
+              setDone(true);
+            } catch (failure) {
+              fail(failure);
+              setExpired(failure instanceof ApiFailure && failure.code === 'RESET_TOKEN_INVALID');
+            } finally {
+              setPassword('');
+              setConfirm('');
+              setBusy(false);
+            }
+          }}
+        >
+          <Alert message={error} />
+          <Field label="새 비밀번호" hint="8자 이상">
+            <PasswordInput
+              name="newPassword"
+              autoComplete="new-password"
+              minLength={8}
+              maxLength={72}
+              required
+              value={password}
+              disabled={busy}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+          <PasswordConfirmField
+            match={match}
+            value={confirm}
+            disabled={busy}
+            onChange={setConfirm}
+          />
+          <button type="submit" className="button primary full" disabled={busy}>
+            {busy ? '바꾸는 중' : '비밀번호 바꾸기'}
+          </button>
+          {/* 링크가 만료됐거나 이미 쓴 경우 이 화면에서 바로 새 링크를 요청함 */}
+          {expired && (
+            <button
+              type="button"
+              className="text-link"
+              onClick={() => {
+                setToken(null);
+                setError('');
+                setExpired(false);
+              }}
+            >
+              새 링크 받기
+            </button>
+          )}
+        </form>
+      ) : (
+        <form
+          className="panel login-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError('');
+            if (!email.trim()) return setError('가입한 이메일을 입력해 주세요.');
+            setBusy(true);
+            try {
+              await requestPasswordReset(email.trim());
+              setDone(true);
+            } catch (failure) {
+              fail(failure);
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p>
+            가입한 이메일로 비밀번호를 다시 정하는 링크를 보내요. 소셜 로그인으로 가입했다면 그
+            계정으로 로그인해 주세요.
+          </p>
+          <Alert message={error} />
+          <Field label="이메일">
+            <input
+              name="email"
+              type="email"
+              autoComplete="username"
+              maxLength={254}
+              required
+              value={email}
+              disabled={busy}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </Field>
+          <button type="submit" className="button primary full" disabled={busy}>
+            {busy ? '보내는 중' : '링크 보내기'}
+          </button>
+        </form>
       )}
     </div>
   );
@@ -744,6 +921,7 @@ function useDesignerSummary(member: SessionMember | null) {
 }
 export function AccountPage() {
   const { state } = useAuth();
+  const loginPath = useLoginPath();
   const [params] = useSearchParams();
   const linkedNotice = params.has('linked');
   const designer = useDesignerSummary(state.status === 'authenticated' ? state.member : null);
@@ -753,11 +931,11 @@ export function AccountPage() {
         <PageHeading back={<BackLink to="/">홈으로</BackLink>} title="내 계정" />
         <SessionNotice />
         <section className="panel">
-          <Link className="button primary full" to="/login">
+          <Link className="button primary full" to={loginPath}>
             로그인
           </Link>
           {state.status !== 'prototype' && (
-            <Link className="button full" to="/signup">
+            <Link className="button full" to={loginPath.replace('/login', '/signup')}>
               회원가입
             </Link>
           )}
@@ -997,7 +1175,7 @@ export function GuestRecordList({ guest }: { guest: GuestRecords }) {
   );
 }
 
-// 로그인 뒤 옮기기 질문은 이 기기에서 계정마다 한 번만 띄움. 표시를 남기지 못하면 다음 로그인 때 다시 물음
+// 로그인 뒤 옮기기 질문은 이 기기에서 계정마다 한 번만 띄우고, 그 뒤 로그인 전 기록이 새로 생기면 다시 물음. 표시를 남기지 못하면 다음 로그인 때 다시 물음
 function GuestMoveQuestion({
   storage,
   guest,
@@ -1016,7 +1194,7 @@ function GuestMoveQuestion({
   // 같은 주소에서 로그인 확인 문구가 질문으로 바뀌므로 제목으로 초점을 옮김
   useEffect(() => heading.current?.focus(), []);
   const finish = async (moved: boolean) => {
-    await storage.markGuestMoveAsked().catch(() => {});
+    await storage.markGuestMoveAsked(guest).catch(() => {});
     const ids = storage.migratedIds;
     // 옮긴 기록은 새 ID를 받음. 옮기지 않은 기록의 주소는 계정 공간에 없으므로 내 기록 목록으로 감
     const path = moved
@@ -1092,11 +1270,10 @@ export function AuthCompletePage() {
     done.current = true;
     const next = safeReturnPath(params.get('next')) ?? takeReturnPath() ?? '/';
     const leave = () => void navigate(next, { replace: true });
-    if (storage.guestMoveAsked) {
-      leave();
-      return;
-    }
-    readGuestRecords().then((guest) => (guest ? setQuestion({ guest, next }) : leave()), leave);
+    readGuestRecords().then(
+      (guest) => (guest && !storage.guestMoveAsked(guest) ? setQuestion({ guest, next }) : leave()),
+      leave,
+    );
   }, [initialized, ready, state, navigate, params, storage]);
   if (question && storage) return <GuestMoveQuestion storage={storage} {...question} />;
   return (

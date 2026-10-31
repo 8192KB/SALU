@@ -37,6 +37,10 @@
 .consultation-screen .page-heading {
   margin-bottom: 28px;
 }
+/* 바로 위가 여백 없는 이름 줄이어도 붙지 않게. 위 칸에 여백이 있으면 겹쳐 그대로 */
+.consultation-screen > .form-error {
+  margin-top: 20px;
+}
 .consultation-profile-identity {
   display: flex;
   align-items: center;
@@ -839,8 +843,34 @@
   color: var(--teal);
 }
 .community-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
   font-size: 13px;
   color: var(--muted);
+}
+/* 글 상세 머리. 작성자와 날짜를 이름·값으로 나눠 둠 */
+.community-byline {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+.community-byline strong {
+  font-size: 15px;
+}
+.community-dates {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.community-dates div {
+  display: flex;
+  gap: 8px;
+}
+.community-dates dd {
+  margin: 0;
 }
 .community-thumb {
   position: relative;
@@ -1311,6 +1341,53 @@
 .salon-inline-open {
   margin: 0 0 16px;
 }
+/* 매장 위치. 지도를 못 그리면 칸을 접고 주소·링크만 남김 */
+.salon-map {
+  display: grid;
+  gap: 12px;
+}
+.salon-map p {
+  margin: 0;
+}
+.salon-map-place {
+  display: grid;
+  gap: 4px;
+}
+.salon-map-place strong {
+  font-size: 17px;
+}
+.salon-map-canvas {
+  height: 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.salon-map-canvas[data-drawn] {
+  height: 240px;
+  border: 1px solid var(--line);
+}
+.salon-address {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.salon-address p {
+  margin: 0;
+}
+.address-search {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.address-search-frame {
+  width: 100%;
+  height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
 /* PC에서 디자이너 목록을 다른 목록 화면처럼 가운데에 둠. 카드 두 줄이 들어가는 폭 */
 .designer-list-screen {
   width: min(100%, 880px);
@@ -1358,4 +1435,102 @@
   overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 15px;
+}
+/* AI 도우미. 제안은 연한 배경 칸으로, 고르기 전까지 입력 칸은 그대로 */
+.ai-helper {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  margin-top: 10px;
+}
+.ai-suggestion {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  background: var(--surface-subtle);
+}
+.ai-suggestion > p:first-child {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.ai-suggestion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.ai-match {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.ai-match h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.ai-match form {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+}
+.ai-match textarea {
+  width: 100%;
+  font: inherit;
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+.ai-match ul {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.ai-match li a {
+  font-weight: 700;
+  color: var(--teal);
+}
+.ai-match li p,
+.ai-match [role='status'] > p {
+  margin: 4px 0 0;
+}
+/* 보낸 상담의 결제 안내와 결제하기·취소 */
+.consultation-payment {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.consultation-payment > .button {
+  justify-self: stretch;
+}
+.consultation-payment > :is(.button, .text-link) {
+  margin-top: 0;
+}
+/* 처음 상담하는 디자이너의 상담 요금. 상품 가격처럼 이름과 금액을 한 줄에 */
+.consultation-price {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.consultation-price dt {
+  color: var(--text);
+}
+.consultation-price dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
 }

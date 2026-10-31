@@ -128,6 +128,8 @@ function useMember(): SessionMember | null {
 
 // 상담·글 상세를 보고 있으면 그 대상의 안 읽은 알림을 읽음으로 바꿈. 알림 목록을 거치지 않고 열어도
 // 배지가 남지 않게 함. 메뉴를 옮겨 숨겨진 화면에서는 바꾸지 않음
+// 내 글처럼 여러 대상을 한 화면에 보여 주면 대상과 상관없이 그 종류의 알림을 읽음으로 바꿈
+export const ANY_TARGET = '*';
 export function useReadNotifications(
   targetId: string | undefined,
   types: NotificationType[],
@@ -148,7 +150,10 @@ export function useReadNotifications(
     try {
       const inbox = await fetchInbox();
       const unread = inbox.items.filter(
-        (item) => !item.read && item.targetId === targetId && kinds.split(',').includes(item.type),
+        (item) =>
+          !item.read &&
+          (targetId === ANY_TARGET || item.targetId === targetId) &&
+          kinds.split(',').includes(item.type),
       );
       if (!unread.length) return;
       await latest.current?.();
@@ -265,7 +270,7 @@ export function NotificationList() {
   const heading = (
     <PageHeading
       title="알림"
-      back={<BackLink to="/">홈</BackLink>}
+      back={<BackLink to="/">{example ? '내 기록' : '홈'}</BackLink>}
       action={
         inbox && inbox.unreadCount > 0 ? (
           <button type="button" className="button" disabled={busy} onClick={() => void readAll()}>
@@ -304,7 +309,13 @@ export function NotificationList() {
       {heading}
       <Alert message={error} />
       {!inbox ? (
-        !error && <Loading>알림을 불러오고 있어요.</Loading>
+        error ? (
+          <button type="button" className="button" onClick={() => void load()}>
+            다시 불러오기
+          </button>
+        ) : (
+          <Loading>알림을 불러오고 있어요.</Loading>
+        )
       ) : inbox.items.length ? (
         <ul className="notification-list">
           {inbox.items.map((item) => {

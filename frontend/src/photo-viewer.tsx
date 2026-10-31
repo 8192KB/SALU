@@ -18,7 +18,7 @@ export function PhotoButton({
   // 화면에는 파일 이름을 숨기지만 대체 글에는 남겨 여러 장을 구분하게 함
   const label = photo.caption.trim() || '커트 사진';
   const moment =
-    cutDate && 'date' in photo ? `${photoOrigin(photo, cutDate)} · ${displayDate(photo.date)}` : '';
+    cutDate && 'date' in photo ? `${photoOrigin(photo, cutDate)} ${displayDate(photo.date)}` : '';
   return (
     <>
       <button

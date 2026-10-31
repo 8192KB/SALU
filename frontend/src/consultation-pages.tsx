@@ -4,7 +4,7 @@ import { useDirectory } from './directory';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Completion } from './completion';
 import { useActivePage } from './main-navigation';
-import { useFavorites } from './designer-favorites';
+import { reloadFavorites, useFavorites } from './designer-favorites';
 import type { FormEvent } from 'react';
 import { useLocation, useParams, useSearchParams } from 'react-router';
 import { useBackTrail } from './back-trail';
@@ -30,6 +30,8 @@ import { prepareRequest } from './prototype/memory-repository';
 import { AREAS, INTENTS } from './prototype/types';
 import type { Area, RequestDraft, DesignerProfile, Intent, RequestItem } from './prototype/types';
 import { cutTitle, daysAfter, displayDate } from './prototype/dates';
+import { DesignerMatch } from './ai-assist';
+import { chargedFee, won } from './payment';
 import {
   completeUrl,
   reviewUrl,
@@ -60,10 +62,14 @@ function profileUrl(id: string, record: string | null, preview?: string | null) 
   if (preview) search.set('preview', preview);
   return `/designers/${id}${search.size ? `?${search}` : ''}`;
 }
-function Steps({ current }: { current: number }) {
+// 디자이너를 골라 들어온 준비는 확인 뒤 상담 신청 화면으로 이어짐. 신청은 그 화면에서 하므로 마지막 단계는 확인
+function Steps({ current, consult }: { current: number; consult?: boolean }) {
+  const labels = consult
+    ? ['자료 고르기', '상담 내용 적기', '내용 확인']
+    : ['자료 고르기', '원하는 점 적기', '내용 확인'];
   return (
-    <ol className="steps" aria-label="커트 준비 단계">
-      {['자료 고르기', '원하는 점 적기', '내용 확인'].map((label, index) => (
+    <ol className="steps" aria-label={consult ? '상담 신청 단계' : '커트 준비 단계'}>
+      {labels.map((label, index) => (
         <li
           key={label}
           className={index === current ? 'active' : index < current ? 'done' : ''}
@@ -77,12 +83,15 @@ function Steps({ current }: { current: number }) {
   );
 }
 function SelectedDesigner({ designer }: { designer: DesignerProfile }) {
+  const { state } = usePrototype();
+  const fee = chargedFee(state, designer);
   return (
     <div className="selected-designer">
       <Avatar name={designer.name} src={designer.avatarUrl} />
       <div>
         <strong>{designer.name} 디자이너</strong>
         <p>{currentSalon(designer)}</p>
+        {fee > 0 && <p>상담 1회 {won(fee)}</p>}
       </div>
     </div>
   );
@@ -113,7 +122,7 @@ function SelectedMaterials({
           defaultOpen={initialOpen}
           summary={
             <span className="reference-context">
-              <span>지난 커트 · {displayDate(cut.cutDate)}</span>
+              <span>{displayDate(cut.cutDate)} 커트</span>
               <span className="reference-count">
                 {selectedCount(draft) ? `자료 ${selectedCount(draft)}개 보기` : '고른 자료 없음'}
               </span>
@@ -124,7 +133,7 @@ function SelectedMaterials({
             <p className="reference-cut">{cutTitle(cut.cutDate, cut.service)}</p>
             {draft.includeGoodNote && cut.goodNote && (
               <article className="reference-entry">
-                <h3>커트 당일 · 좋았던 점</h3>
+                <h3>커트 당일 좋았던 점</h3>
                 <p>{cut.goodNote}</p>
                 <button
                   className="text-link reference-action"
@@ -255,7 +264,10 @@ export function DesignerList() {
   if (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
     return <Missing title="준비한 요청 자료를 찾을 수 없어요" />;
   if (record && !cut) return <Missing title="선택한 커트 기록을 찾을 수 없어요" />;
-  const others = directory.designers.filter((value) => value !== recorded);
+  // 준비 내용에서 고르면 바로 상담 작성으로 가므로 내 디자이너 프로필은 빼 둠(자기에게는 보낼 수 없음)
+  const others = directory.designers.filter(
+    (value) => value !== recorded && !(sourcePreview && value.id === favorites?.ownId),
+  );
   // 준비 내용에서 왔으면 디자이너를 고르는 즉시 그 준비 내용으로 상담을 작성함
   const card = (designer: DesignerProfile) => (
     <Link
@@ -287,11 +299,11 @@ export function DesignerList() {
           {mode === 'example'
             ? `상담 후기 ${designer.reviewExamples.length}개`
             : designer.rating?.count
-              ? `★ ${designer.rating.average?.toFixed(1)} · 후기 ${designer.rating.count}개`
+              ? `★ ${designer.rating.average?.toFixed(1)} (후기 ${designer.rating.count}개)`
               : '아직 후기가 없어요'}
         </span>
         <span className="card-action">
-          {sourcePreview ? '상담 요청' : '프로필 보기'} <Icon name="arrow" size={16} />
+          {sourcePreview ? '상담 신청' : '프로필 보기'} <Icon name="arrow" size={16} />
         </span>
       </div>
     </Link>
@@ -311,6 +323,13 @@ export function DesignerList() {
         }
         description={sourcePreview ? '준비한 내용을 보낼 디자이너를 골라 주세요.' : undefined}
       />
+      <DesignerMatch
+        profileUrl={(id) =>
+          sourcePreview
+            ? `/consultations/new?${new URLSearchParams({ designer: id, preview: sourcePreview.id })}`
+            : profileUrl(id, record, previewId)
+        }
+      />
       {mode !== 'example' && favorites?.loaded && (
         <button
           type="button"
@@ -324,7 +343,14 @@ export function DesignerList() {
       )}
       {showFavorites ? (
         <section aria-label="찜한 디자이너">
-          {directory.designers.some((value) => favorites!.ids.has(value.id)) ? (
+          {favorites!.error ? (
+            <section className="empty-state">
+              <Alert title="찜한 디자이너를 불러오지 못했어요" message={favorites!.error} />
+              <button type="button" className="button" onClick={reloadFavorites}>
+                다시 불러오기
+              </button>
+            </section>
+          ) : directory.designers.some((value) => favorites!.ids.has(value.id)) ? (
             <div className="designer-grid">
               {directory.designers.filter((value) => favorites!.ids.has(value.id)).map(card)}
             </div>
@@ -332,6 +358,9 @@ export function DesignerList() {
             <section className="empty-state">
               <h2>찜한 디자이너가 없어요</h2>
               <p>디자이너 프로필에서 찜하면 여기에 모여요.</p>
+              <button type="button" className="button" onClick={() => setFavoriteOnly(false)}>
+                전체 디자이너 보기
+              </button>
             </section>
           )}
         </section>
@@ -449,7 +478,7 @@ function useSavedDraftRedirect(draft: RequestDraft | null | undefined, active: b
 }
 
 // 커트 준비 목록에서 지난 커트를 골라 시작한 초안. 자료 선택의 뒤로 링크가 고르던 화면으로 돌아감.
-// 기록 ID라 브라우저 저장소에 남기지 않고 이 탭 메모리에만 둠
+// 기록 ID라 브라우저 저장소에 남기지 않고 이 탭 메모리와 주소의 picked 표시로만 둠(새로고침해도 유지)
 const pickedDrafts = new Set<string>();
 
 export function MaterialsPage() {
@@ -507,8 +536,9 @@ export function MaterialsPage() {
   ]);
   useEffect(() => {
     if (!active || draftId || !draft) return;
-    if (search.has('picked')) pickedDrafts.add(draft.id);
-    navigate(materialUrl(draft), { replace: true });
+    const picked = search.has('picked');
+    if (picked) pickedDrafts.add(draft.id);
+    navigate(`${materialUrl(draft)}${picked ? '&picked=1' : ''}`, { replace: true });
   }, [active, draftId, draft, navigate]);
   const alreadySaved = useSavedDraftRedirect(draftId ? draft : undefined, active);
   useEffect(() => {
@@ -530,7 +560,7 @@ export function MaterialsPage() {
           }
           title="참고할 지난 커트를 골라 주세요"
         />
-        <Steps current={0} />
+        <Steps current={0} consult={Boolean(designer)} />
         {state.cuts.length ? (
           <div className="reference-record-list">
             {state.cuts.map((cut) => (
@@ -560,7 +590,15 @@ export function MaterialsPage() {
           <section className="record-empty">
             <h2>먼저 커트 기록을 남겨 주세요</h2>
             <p>날짜와 좋았던 점만 간단히 적어도 시작할 수 있어요.</p>
-            <Link className="button primary" to="/records/new">
+            {/* 디자이너를 골라 왔으면 기록을 남긴 뒤 완료 화면에서 그 디자이너 상담으로 이어감 */}
+            <Link
+              className="button primary"
+              to={
+                designerId
+                  ? `/records/new?${new URLSearchParams({ consult: designerId })}`
+                  : '/records/new'
+              }
+            >
               커트 기록 남기기
             </Link>
           </section>
@@ -595,7 +633,7 @@ export function MaterialsPage() {
         back={
           isEditDraft(state, draft) ? (
             <BackLink to={previewUrl(draft)}>준비 내용으로</BackLink>
-          ) : pickedDrafts.has(draft.id) ? (
+          ) : pickedDrafts.has(draft.id) || search.has('picked') ? (
             <BackLink
               to={designer ? `/requests/materials?designer=${designer.id}` : '/requests/materials'}
               trail={false}
@@ -608,10 +646,10 @@ export function MaterialsPage() {
             </BackLink>
           )
         }
-        title={designer ? '상담에 참고할 자료 선택' : '참고 자료 선택'}
+        title={designer ? '상담에 보낼 자료 고르기' : '참고 자료 선택'}
         description="같이 보낼 내용을 골라 주세요."
       />
-      <Steps current={0} />
+      <Steps current={0} consult={Boolean(designer) && !isEditDraft(state, draft)} />
       <div className="two-column materials-layout">
         <section className="material-picker">
           {designer && <SelectedDesigner designer={designer} />}
@@ -637,12 +675,25 @@ export function MaterialsPage() {
               <select
                 value={cut.id}
                 disabled={source.frozen}
-                onChange={(event) =>
+                onChange={(event) => {
+                  // 글을 쓰지 않고 자료만 고른 초안은 다른 커트로 바꾸면 비워 `작성 중`에 쌓이지 않게 함. 쓴 글은 커트별로 남김
+                  if (
+                    !isEditDraft(state, draft) &&
+                    !draft.requests.some((item) => item.content.trim()) &&
+                    !draft.homeStyling.trim() &&
+                    !draft.additionalQuestion.trim()
+                  )
+                    setRequestDraft({
+                      ...draft,
+                      includeGoodNote: false,
+                      progressIds: [],
+                      photoIds: [],
+                    });
                   setSearch({
                     ...(designer ? { designer: designer.id } : {}),
                     record: event.target.value,
-                  })
-                }
+                  });
+                }}
               >
                 {state.cuts.map((value) => (
                   <option key={value.id} value={value.id}>
@@ -678,9 +729,7 @@ export function MaterialsPage() {
                 key={photo.id}
                 name={`사진 ${index + 1} 선택`}
                 title={photoOrigin(photo, cut.cutDate)}
-                summary={[displayDate(photo.date), visibleCaption(photo.caption)]
-                  .filter(Boolean)
-                  .join(' · ')}
+                summary={visibleCaption(photo.caption) || displayDate(photo.date)}
                 checked={draft.photoIds.includes(photo.id)}
                 onChange={() => toggle('photoIds', photo.id)}
                 image={<PhotoButton photo={photo} cutDate={cut.cutDate} />}
@@ -689,7 +738,13 @@ export function MaterialsPage() {
             {!photos.length && (
               <div className="material-empty-photo">
                 <PhotoPlaceholder />
-                <p>사진 없이 메모나 경과를 골라도 돼요.</p>
+                <p>
+                  {eligibleCount
+                    ? '사진 없이 메모나 경과를 골라도 돼요.'
+                    : designer
+                      ? '고를 자료가 없어도 커트 날짜와 시술로 상담을 신청할 수 있어요.'
+                      : '고를 자료가 없어도 원하는 점만 적을 수 있어요.'}
+                </p>
               </div>
             )}
           </div>
@@ -764,8 +819,8 @@ export function MaterialsPage() {
               <small style={{ fontSize: 14, marginLeft: 6 }}>개</small>
             </p>
             <p className="muted selection-detail">
-              메모 {Number(draft.includeGoodNote)} · 경과 {draft.progressIds.length} · 사진{' '}
-              {draft.photoIds.length}
+              메모 {Number(draft.includeGoodNote)}개, 경과 {draft.progressIds.length}개, 사진{' '}
+              {draft.photoIds.length}장
             </p>
             <p className="muted selection-scope">커트 날짜, 시술, 부위와 고른 자료만 담아요.</p>
             {!designer && (
@@ -775,12 +830,12 @@ export function MaterialsPage() {
             <button
               className="button primary full"
               onClick={() => {
-                if (designer && !selectedCount(draft))
+                if (designer && eligibleCount && !selectedCount(draft))
                   setError('상담에 사용할 자료를 하나 이상 선택해 주세요.');
                 else navigate(requestUrl(draft));
               }}
             >
-              원하는 점 적기
+              {designer ? '상담 내용 적기' : '원하는 점 적기'}
               <Icon name="arrow" />
             </button>
           </section>
@@ -820,7 +875,14 @@ export function RequestPage() {
         message="준비할 기록과 작성 중인 내용을 찾을 수 없어요. 내 기록에서 다시 선택해 주세요."
       />
     );
-  if (!draft || !source || (draft.designerId && (!designer || !selectedCount(draft))))
+  const hasMaterials = Boolean(
+    source && (source.cut.goodNote || source.progress.length || source.photos.length),
+  );
+  if (
+    !draft ||
+    !source ||
+    (draft.designerId && (!designer || (hasMaterials && !selectedCount(draft))))
+  )
     return (
       <Missing
         title="먼저 요청에 사용할 기록을 선택해 주세요"
@@ -866,12 +928,16 @@ export function RequestPage() {
             자료 선택
           </BackLink>
         }
-        title="이번 커트에서 원하는 점을 적어 주세요"
+        title={
+          designer
+            ? '디자이너에게 상담할 내용을 적어 주세요'
+            : '이번 커트에서 원하는 점을 적어 주세요'
+        }
         description={
           isEditDraft(state, draft) ? '저장하면 원래 준비가 고친 내용으로 바뀌어요.' : undefined
         }
       />
-      <Steps current={1} />
+      <Steps current={1} consult={Boolean(designer) && !isEditDraft(state, draft)} />
       <div className="two-column request-layout">
         <SelectedMaterials draft={draft} onUse={useRecordedText} />
         <form className="request-editor" onSubmit={submit} noValidate>
@@ -983,7 +1049,7 @@ export function RequestPage() {
             }
           >
             <div className="form-body">
-              <Field label="집에서 손질" hint="선택 · 고른 기록에 없는 내용만 추가">
+              <Field label="집에서 손질" hint="고른 기록에 없는 내용만 적어 주세요">
                 <textarea
                   maxLength={2000}
                   value={draft.homeStyling}
@@ -991,7 +1057,7 @@ export function RequestPage() {
                   placeholder="예: 드라이만 하고 있어요"
                 />
               </Field>
-              <Field label="추가 질문" hint="선택 · 고른 기록에 없는 내용만 추가">
+              <Field label="추가 질문" hint="고른 기록에 없는 내용만 적어 주세요">
                 <textarea
                   maxLength={2000}
                   value={draft.additionalQuestion}
@@ -1004,9 +1070,7 @@ export function RequestPage() {
           {designer && (
             <p className="request-designer-context">
               <Icon name="user" size={18} />
-              <span>
-                {designer.name} 디자이너 · {currentSalon(designer)}
-              </span>
+              <span>{designer.name} 디자이너</span>
             </p>
           )}
           <div className="form-actions request-editor-actions">
@@ -1023,12 +1087,28 @@ export function RequestPage() {
   );
 }
 
+// 고치기 초안이 저장한 준비와 내용이 다른지 볼 때 쓰는 값. 항목 ID처럼 내용과 무관한 값은 뺌
+const draftContent = (draft: RequestDraft) =>
+  JSON.stringify([
+    draft.requests.map((item) => [item.area, item.intent, item.content]),
+    draft.homeStyling,
+    draft.additionalQuestion,
+    draft.includeGoodNote,
+    [...draft.progressIds].sort(),
+    [...draft.photoIds].sort(),
+  ]);
+
 export function PreviewPage() {
   const { id } = useParams();
   const { state, requestDrafts, setRequestDraft } = usePrototype();
   const navigate = useNavigate();
   const directory = useDirectory(state);
-  const { state: consultations } = useConsultations();
+  const { state: consultations, repository } = useConsultations();
+  // 새로고침 뒤에는 보낸 상담을 아직 안 받았으므로 이 준비로 보낸 상담이 있으면 받아 와 표시함
+  const sentBefore = Boolean(id && consultations.sentFrom?.[id]?.length);
+  useEffect(() => {
+    if (sentBefore && consultations.loaded === false) void repository?.refresh?.();
+  }, [sentBefore, consultations.loaded, repository]);
   const preview = state.previews.find((value) => value.id === id);
   if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
   // 보여 줄 디자이너: 디자이너용으로 준비했으면 그 디자이너, 아니면 이 커트를 해 준 디자이너
@@ -1137,7 +1217,7 @@ export function PreviewPage() {
             {/* 준비를 마친 다음 할 일은 대개 디자이너에게 상담 요청이라 가장 먼저 둠 */}
             {target ? (
               <Link className="button primary full" to={consultUrl(target.id)}>
-                {target.name} 디자이너에게 상담 요청 <Icon name="arrow" />
+                {target.name} 디자이너에게 상담 신청 <Icon name="arrow" />
               </Link>
             ) : (
               <Link className="button primary full" to={`/designers?${designerQuery}`}>
@@ -1161,7 +1241,10 @@ export function PreviewPage() {
                   navigate(requestUrl(draft));
                 }}
               >
-                준비 고치기
+                {requestDrafts[preview.id] &&
+                draftContent(requestDrafts[preview.id]!) !== draftContent(editDraft(preview))
+                  ? '고치던 내용 이어쓰기'
+                  : '준비 고치기'}
               </button>
               <Link
                 className="text-link"
@@ -1197,8 +1280,8 @@ function PreparationSummary({ prepared }: { prepared: ReturnType<typeof prepareR
               : '내 커트 준비'}
           </p>
           <span>
-            메모 {Number(Boolean(prepared.goodNote))} · 경과 {prepared.progress.length} · 사진{' '}
-            {prepared.photos.length}
+            메모 {Number(Boolean(prepared.goodNote))}개, 경과 {prepared.progress.length}개, 사진{' '}
+            {prepared.photos.length}장
           </span>
         </div>
       </div>
@@ -1264,6 +1347,8 @@ export function ReviewPage() {
     draftId && Object.hasOwn(requestDrafts, draftId) ? requestDrafts[draftId] : undefined;
   if (!draft) return <Missing title="작성 중인 요청을 찾을 수 없어요" />;
   const editing = isEditDraft(state, draft);
+  // 디자이너를 골라 시작한 새 준비는 저장한 뒤 바로 그 디자이너 상담 신청으로 이어짐
+  const consult = Boolean(draft.designerId) && !editing;
   let prepared: ReturnType<typeof prepareRequest> | undefined;
   let validationError = '';
   try {
@@ -1287,6 +1372,13 @@ export function ReviewPage() {
         (value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft),
       );
       const preview = existing ?? (await repository.createPreview(draft));
+      if (consult && draft.designerId) {
+        navigate(
+          `/consultations/new?${new URLSearchParams({ designer: draft.designerId, preview: preview.id })}`,
+          { replace: true },
+        );
+        return;
+      }
       navigate(completeUrl(preview), { replace: true, state: { celebrate: !existing } });
     } catch (failure) {
       setError(
@@ -1305,9 +1397,15 @@ export function ReviewPage() {
             요청 작성으로
           </BackLink>
         }
-        title={editing ? '고친 내용을 확인해 주세요' : '저장할 내용을 확인해 주세요'}
+        title={
+          editing
+            ? '고친 내용을 확인해 주세요'
+            : consult
+              ? '상담 신청 전에 확인해 주세요'
+              : '저장할 내용을 확인해 주세요'
+        }
       />
-      <Steps current={2} />
+      <Steps current={2} consult={consult} />
       <Alert message={error || validationError} />
       {prepared && <PreparationSummary prepared={prepared} />}
       <div className="review-edit-actions">
@@ -1331,7 +1429,8 @@ export function ReviewPage() {
             </>
           ) : (
             <>
-              {editing ? '고친 내용 저장' : '준비 저장하기'} <Icon name="check" />
+              {editing ? '고친 내용 저장' : consult ? '상담 신청으로' : '준비 저장하기'}{' '}
+              <Icon name={consult ? 'arrow' : 'check'} />
             </>
           )}
         </button>
@@ -1353,8 +1452,17 @@ export function CompletePage() {
       }
       primary="준비한 내용 보기"
       to={previewUrl(preview)}
-      secondary="준비 목록으로"
-      secondaryTo="/requests"
+      // 준비와 상담은 다른 기능이지만 마친 자리에서 바로 상담으로 이어짐
+      secondary={
+        preview.designer
+          ? `${preview.designer.name} 디자이너에게 상담 신청`
+          : '디자이너 골라 상담 신청'
+      }
+      secondaryTo={
+        preview.designer
+          ? `/consultations/new?${new URLSearchParams({ designer: preview.designer.id, preview: preview.id })}`
+          : `/designers?${new URLSearchParams({ preview: preview.id })}`
+      }
     >
       <div className="completed-summary">
         <div className="prepared-cut-photo">
@@ -1367,12 +1475,7 @@ export function CompletePage() {
         <div>
           <strong>{cutTitle(preview.cut.cutDate, preview.cut.service)}</strong>
           <p>{preview.requests[0]?.content}</p>
-          <span>
-            {preview.designer
-              ? `${preview.designer.name} 디자이너에게 보여 줄 준비`
-              : '내 커트 준비'}{' '}
-            · 사진 {preview.photos.length}장
-          </span>
+          <span>사진 {preview.photos.length}장</span>
         </div>
       </div>
     </Completion>

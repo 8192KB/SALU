@@ -52,7 +52,10 @@ export function prepareRequest(
     throw new InputError({
       materials: '선택한 자료를 찾을 수 없어요. 자료를 다시 확인해 주세요.',
     });
-  if (designer && !draft.includeGoodNote && !progress.length && !photos.length)
+  // 고를 자료가 하나도 없는 기록은 커트 날짜·시술만으로 상담할 수 있음
+  const hasMaterials =
+    Boolean(cut.goodNote) || source.progress.length > 0 || source.photos.length > 0;
+  if (designer && hasMaterials && !draft.includeGoodNote && !progress.length && !photos.length)
     throw new InputError({ materials: '상담에 사용할 자료를 하나 이상 선택해 주세요.' });
   if (
     !draft.requests.length ||
@@ -116,6 +119,28 @@ const id = (prefix: string) => `${prefix}-${newId()}`;
 const checkAreas = (values: string[]) =>
   values.length > 0 && values.every((value) => Object.hasOwn(AREAS, value));
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+// 지운 경과·사진을 준비 내용에서도 뺌. 준비를 만든 초안도 같이 맞춰 `저장한 준비`로 계속 알아봄
+function withoutMaterials(
+  preview: RequestPreview,
+  progressIds: Set<string>,
+  photoIds: Set<string>,
+): RequestPreview {
+  const photos = preview.photos.filter((photo) => !photoIds.has(photo.id));
+  const progress = preview.progress.filter((entry) => !progressIds.has(entry.id));
+  if (photos.length === preview.photos.length && progress.length === preview.progress.length)
+    return preview;
+  return {
+    ...preview,
+    photos,
+    progress,
+    sourceDraft: {
+      ...preview.sourceDraft,
+      photoIds: preview.sourceDraft.photoIds.filter((id) => !photoIds.has(id)),
+      progressIds: preview.sourceDraft.progressIds.filter((id) => !progressIds.has(id)),
+    },
+  };
+}
 
 export function createMemoryRepository(
   seed: WorkspaceMode = 'empty',
@@ -227,6 +252,36 @@ export function createMemoryRepository(
         ),
       });
       return cut;
+    },
+    async deleteCut(cutId) {
+      await publish({
+        ...state,
+        cuts: state.cuts.filter((cut) => cut.id !== cutId),
+        progress: state.progress.filter((entry) => entry.cutId !== cutId),
+        photos: state.photos.filter((photo) => photo.cutId !== cutId),
+        previews: state.previews.filter((preview) => preview.cut.id !== cutId),
+      });
+    },
+    async deleteProgress(_cutId, progressId) {
+      const gone = new Set(
+        state.photos.filter((photo) => photo.progressId === progressId).map((photo) => photo.id),
+      );
+      await publish({
+        ...state,
+        progress: state.progress.filter((entry) => entry.id !== progressId),
+        photos: state.photos.filter((photo) => !gone.has(photo.id)),
+        previews: state.previews.map((preview) =>
+          withoutMaterials(preview, new Set([progressId]), gone),
+        ),
+      });
+    },
+    async deletePhoto(photoId) {
+      const gone = new Set([photoId]);
+      await publish({
+        ...state,
+        photos: state.photos.filter((photo) => photo.id !== photoId),
+        previews: state.previews.map((preview) => withoutMaterials(preview, new Set(), gone)),
+      });
     },
     async addProgress(cutId, input) {
       const cut = state.cuts.find((value) => value.id === cutId);

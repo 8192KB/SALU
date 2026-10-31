@@ -2,9 +2,17 @@ import { useEffect, useRef } from 'react';
 import { useAuth } from '../auth/context';
 import { ApiFailure, backupRequest } from '../auth/api';
 import { usePrototype } from './context';
+import { sendablePayload } from './personal-store';
 import { photoIds, validateBundle } from './storage-model';
 import { checkImage } from './zip-backup';
-import type { Asset } from './storage-model';
+import { cutTitle } from './dates';
+import type { Asset, Bundle } from './storage-model';
+
+// 거절된 기록을 사람이 찾을 수 있는 이름으로. 새 기록 작성 중 항목은 커트가 없음
+const itemName = (payload: Bundle) => {
+  const cut = payload.state.cuts[0];
+  return cut ? cutTitle(cut.cutDate, cut.service) : '작성 중인 새 기록';
+};
 
 export function CloudSync() {
   const { state: auth, refresh } = useAuth();
@@ -13,14 +21,22 @@ export function CloudSync() {
     context: '',
     photos: new Set<string>(),
     rejected: new Map<string, string>(),
+    // 사진을 올리다 거절된 기록. 같은 내용을 다시 보내지 않을 때도 사진 안내를 유지함
+    photoRejected: new Set<string>(),
   });
   const member = auth.status === 'authenticated' ? auth.member : null;
   useEffect(() => {
     if (!storage || !ready || !member || storage.scope !== `member-${member.id}`) return;
     if (uploads.current.context !== member.storageContext)
-      uploads.current = { context: member.storageContext, photos: new Set(), rejected: new Map() };
+      uploads.current = {
+        context: member.storageContext,
+        photos: new Set(),
+        rejected: new Map(),
+        photoRejected: new Set(),
+      };
     const uploaded = uploads.current.photos;
     const rejected = uploads.current.rejected;
+    const photoRejected = uploads.current.photoRejected;
     const controller = new AbortController();
     let running = false;
     let rerun = false;
@@ -68,6 +84,8 @@ export function CloudSync() {
       rerun = false;
       let unreadable = 0;
       let refused = 0;
+      let photoRefused = 0;
+      const refusedNames: string[] = [];
       try {
         await storage.flush();
         storage.markSyncing();
@@ -89,9 +107,12 @@ export function CloudSync() {
           // 서버가 거절한 같은 내용은 바뀌기 전까지 다시 보내지 않음
           if (rejected.get(id) === item.mutationId) {
             refused++;
+            refusedNames.push(itemName(item.payload));
+            if (photoRejected.has(id)) photoRefused++;
             continue;
           }
           storage.markSyncing();
+          let sendingPhotos = true;
           try {
             for (const photoId of photoIds(item.payload)) {
               if (uploaded.has(photoId)) continue;
@@ -104,6 +125,7 @@ export function CloudSync() {
               });
               uploaded.add(photoId);
             }
+            sendingPhotos = false;
             const value = await (
               await call(`/api/personal-backups/${encodeURIComponent(id)}`, {
                 method: 'PUT',
@@ -111,7 +133,7 @@ export function CloudSync() {
                 body: JSON.stringify({
                   expectedRevision: item.revision,
                   mutationId: item.mutationId,
-                  payload: item.payload,
+                  payload: sendablePayload(item.payload),
                   photoIds: photoIds(item.payload),
                 }),
               })
@@ -136,14 +158,23 @@ export function CloudSync() {
             if (fatal(error)) throw error;
             rejected.set(id, item.mutationId);
             refused++;
+            refusedNames.push(itemName(item.payload));
+            if (sendingPhotos) {
+              photoRejected.add(id);
+              photoRefused++;
+            } else photoRejected.delete(id);
           }
         }
         if (controller.signal.aborted) return;
-        if (refused)
+        // 서버는 거절 이유를 400 하나로만 알려 줌. 사진을 올리다 거절됐을 때만 사진 용량을 안내함
+        if (refused) {
+          const names = `${refusedNames.slice(0, 3).join(', ')}${refused > 3 ? ' 등' : ''}`;
           storage.markSyncError(
-            `서버가 기록 ${refused}건을 받지 않았어요. 계정 사진 용량(128 MiB)이나 사진 크기를 확인해 주세요. 기기 기록은 그대로 있고 다른 기록은 계속 저장해요.`,
+            photoRefused
+              ? `서버가 기록 ${refused}건(${names})의 사진을 받지 않았어요. 계정 사진은 모두 128 MiB까지 저장할 수 있어요. 기기 기록은 그대로 있으니 파일로 백업해 두세요. 다른 기록은 계속 저장해요.`
+              : `서버가 기록 ${refused}건(${names})을 받지 않았어요. 기기 기록은 그대로 있고, 그 기록을 고치면 다시 보내요. 다른 기록은 계속 저장해요.`,
           );
-        else if (unreadable)
+        } else if (unreadable)
           storage.markSyncError(
             `서버의 기록 ${unreadable}건을 이 기기에서 열지 못했어요. 다른 기록은 계속 저장해요.`,
           );

@@ -147,7 +147,7 @@ export function PhotoList({
             <figcaption>
               {cutDate && 'date' in photo && (
                 <strong className="photo-moment">
-                  {photoOrigin(photo, cutDate)} · {displayDate(photo.date)}
+                  {photoOrigin(photo, cutDate)} {displayDate(photo.date)}
                 </strong>
               )}
               {visibleCaption(photo.caption)}
@@ -194,7 +194,7 @@ export function PhotoPicker({
         <Icon name="photo" size={30} />
         <div>
           <strong>사진으로 남기기</strong>
-          <p>JPEG · PNG · WebP / 장당 5 MiB, 최대 6장</p>
+          <p>JPEG, PNG, WebP 사진을 장당 5 MiB까지, 최대 6장 올릴 수 있어요.</p>
           <label className="photo-picker-button">
             <span>사진 추가</span>
             <input

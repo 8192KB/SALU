@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { useAuth } from './auth/context';
 import { ApiFailure, directoryRequest } from './auth/api';
@@ -11,16 +11,25 @@ import { useDirectory } from './directory';
 import { refreshDirectory, salonLabel } from './directory-cache';
 import type { PublicProfile, Salon } from './directory-cache';
 import { Completion } from './completion';
-
-// 서버 오류 코드를 이 화면에서 할 수 있는 일로 바꿈
-function directoryError(error: unknown, fallback: string, conflict: string) {
+import { AddressSearch, mapAvailable } from './salon-map';
+import type { PickedAddress } from './salon-map';
+// 서버는 거절 이유를 400 하나로 알려 줌. 길이는 화면에서 먼저 막으므로 400은 화면마다 남은 원인을 안내함
+function directoryError(error: unknown, fallback: string, conflict: string, invalid: string) {
   if (!(error instanceof ApiFailure)) return error instanceof Error ? error.message : fallback;
   if (error.status === 401) return '로그인이 끝났어요. 다시 로그인한 뒤 저장해 주세요.';
   if (error.status === 409) return conflict;
-  if (error.status === 400)
-    return '입력을 확인해 주세요. 전문 분야는 10개까지, 하나에 40자까지 쓸 수 있어요.';
+  if (error.status === 400) return invalid;
   return error.message;
 }
+
+const splitSpecialties = (value: string) => [
+  ...new Set(
+    value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ),
+];
 
 export function DirectoryEditor() {
   const { state: auth, refresh } = useAuth();
@@ -37,20 +46,27 @@ export function DirectoryEditor() {
     specialties: [] as string[],
     salonId: '',
     visibility: 'PUBLIC',
+    consultationFee: '0',
   });
   const [specialty, setSpecialty] = useState('');
   const [specialtyError, setSpecialtyError] = useState('');
+  // 서버는 전문 분야를 쉼표로 이어 저장하므로 쉼표로 적은 것은 처음부터 여러 항목으로 나눔
   const addSpecialty = () => {
-    const value = specialty.trim();
-    if (!value) return;
-    if (value.length > 40) return setSpecialtyError('하나에 40자까지 쓸 수 있어요.');
-    if (form.specialties.length >= 10) return setSpecialtyError('10개까지 넣을 수 있어요.');
+    const values = splitSpecialties(specialty).filter((value) => !form.specialties.includes(value));
+    if (!values.length) return setSpecialty('');
+    if (values.some((value) => value.length > 40))
+      return setSpecialtyError('하나에 40자까지 쓸 수 있어요.');
+    if (form.specialties.length + values.length > 10)
+      return setSpecialtyError('10개까지 넣을 수 있어요.');
     setSpecialtyError('');
     setSpecialty('');
-    if (!form.specialties.includes(value))
-      setForm({ ...form, specialties: [...form.specialties, value] });
+    setForm({ ...form, specialties: [...form.specialties, ...values] });
   };
   const [salon, setSalon] = useState({ name: '', region: '', branch: '' });
+  // 새 매장 주소, 그리고 주소 검색을 연 곳(새 매장 칸 또는 고른 매장의 위치 넣기)
+  const [salonAddress, setSalonAddress] = useState<PickedAddress | null>(null);
+  const [searching, setSearching] = useState<'new' | 'selected' | null>(null);
+  const [locationNote, setLocationNote] = useState('');
   const [error, setError] = useState('');
   const [salonError, setSalonError] = useState('');
   const [salonResult, setSalonResult] = useState('');
@@ -81,6 +97,7 @@ export function DirectoryEditor() {
             .filter(Boolean),
           salonId: own.salonId ?? '',
           visibility: own.visibility,
+          consultationFee: String(own.consultationFee ?? 0),
         });
       setReady(true);
     } catch (error) {
@@ -103,13 +120,18 @@ export function DirectoryEditor() {
     const element = event.currentTarget;
     if (busy) return;
     // 칸에 적고 추가를 누르지 않은 분야도 함께 저장함
-    const pending = specialty.trim();
-    const specialties =
-      pending && !form.specialties.includes(pending)
-        ? [...form.specialties, pending]
-        : form.specialties;
+    const specialties = [
+      ...form.specialties,
+      ...splitSpecialties(specialty).filter((value) => !form.specialties.includes(value)),
+    ];
     if (specialties.length > 10 || specialties.some((value) => value.length > 40)) {
       setError('전문 분야는 10개까지, 하나에 40자까지 쓸 수 있어요.');
+      focusFirstError(element);
+      return;
+    }
+    const fee = Number(form.consultationFee || 0);
+    if (!Number.isInteger(fee) || fee < 0 || fee > 100000 || fee % 1000) {
+      setError('상담 요금은 0원부터 100,000원까지 1,000원 단위로 적어 주세요.');
       focusFirstError(element);
       return;
     }
@@ -124,6 +146,7 @@ export function DirectoryEditor() {
           ...form,
           salonId: form.salonId || null,
           specialties,
+          consultationFee: fee,
         },
       );
       setProfile(result);
@@ -135,6 +158,7 @@ export function DirectoryEditor() {
           error,
           '프로필을 저장하지 못했어요.',
           '프로필이 이미 바뀌었어요. 화면을 새로 불러온 뒤 다시 저장해 주세요.',
+          '입력을 확인해 주세요. 고른 소속 매장이 목록에서 사라졌다면 화면을 새로 불러와 다시 골라 주세요.',
         ),
       );
       if (error instanceof ApiFailure && error.status === 401) void refresh();
@@ -143,6 +167,43 @@ export function DirectoryEditor() {
       setBusy(false);
     }
   };
+  const pickNewAddress = useCallback((value: PickedAddress) => {
+    setSalonAddress(value);
+    setSalon((previous) =>
+      previous.region.trim() ? previous : { ...previous, region: value.region },
+    );
+    setSearching(null);
+  }, []);
+  // 위치가 없는 기존 매장은 등록한 회원만 위치를 넣을 수 있음(서버가 남의 매장은 404)
+  const pickSelectedAddress = useCallback(
+    async (value: PickedAddress) => {
+      setSearching(null);
+      setLocationNote('');
+      try {
+        await directoryRequest<Salon>(
+          `/api/salons/${encodeURIComponent(form.salonId)}/location`,
+          'PUT',
+          { address: value.address, latitude: value.latitude, longitude: value.longitude },
+        );
+        setLocationNote('매장 위치를 넣었어요.');
+        await refreshDirectory();
+      } catch (error) {
+        setLocationNote(
+          error instanceof ApiFailure && error.status === 404
+            ? '이 매장은 처음 등록한 회원만 위치를 넣을 수 있어요.'
+            : directoryError(
+                error,
+                '매장 위치를 넣지 못했어요.',
+                '',
+                '주소나 위치를 다시 골라 주세요.',
+              ),
+        );
+        if (error instanceof ApiFailure && error.status === 401) void refresh();
+      }
+    },
+    [form.salonId, refresh],
+  );
+  const selectedSalon = directory.salons.find((value) => value.id === form.salonId);
   // 매장 등록 칸은 프로필 양식 안, 소속 매장 바로 아래에 펼침. 양식 안이라 Enter는 직접 받아 등록함
   const createSalon = async () => {
     if (busy) return;
@@ -154,10 +215,21 @@ export function DirectoryEditor() {
     setSalonError('');
     setSalonResult('');
     try {
-      const result = await directoryRequest<Salon>('/api/salons', 'POST', salon);
+      const location = salonAddress
+        ? {
+            address: salonAddress.address,
+            latitude: salonAddress.latitude,
+            longitude: salonAddress.longitude,
+          }
+        : {};
+      const result = await directoryRequest<Salon>('/api/salons', 'POST', {
+        ...salon,
+        ...location,
+      });
       if (result) {
         setForm((previous) => ({ ...previous, salonId: result.id }));
         setSalon({ name: '', region: '', branch: '' });
+        setSalonAddress(null);
         setAddingSalon(false);
         setSalonResult(
           `‘${salonLabel(result)}’ 매장을 등록하고 골라 뒀어요. 아래 ‘프로필 저장’을 눌러야 프로필에 반영돼요.`,
@@ -170,6 +242,7 @@ export function DirectoryEditor() {
           error,
           '매장을 등록하지 못했어요.',
           '이름, 지역, 지점이 같은 매장이 이미 있어요. 위의 소속 매장 목록에서 골라 주세요.',
+          '매장 이름, 지역, 지점을 다시 확인해 주세요.',
         ),
       );
       if (error instanceof ApiFailure && error.status === 401) void refresh();
@@ -314,6 +387,14 @@ export function DirectoryEditor() {
                   }}
                 >
                   <option value="">소속 없음</option>
+                  {/* 매장 목록을 받기 전이나 받지 못했을 때도 지금 소속이 '소속 없음'으로 보이지 않게 함 */}
+                  {form.salonId && !directory.salons.some((salon) => salon.id === form.salonId) && (
+                    <option value={form.salonId}>
+                      {profile?.salonId === form.salonId && profile.salonName
+                        ? [profile.salonName, profile.branch].filter(Boolean).join(' · ')
+                        : '지금 소속 매장'}
+                    </option>
+                  )}
                   {directory.salons.map((salon) => (
                     <option value={salon.id} key={salon.id}>
                       {salonLabel(salon)}
@@ -326,10 +407,61 @@ export function DirectoryEditor() {
                   {salonResult}
                 </p>
               )}
+              {selectedSalon?.address && (
+                <p className="form-note">매장 주소: {selectedSalon.address}</p>
+              )}
+              {mapAvailable &&
+                selectedSalon &&
+                !selectedSalon.address &&
+                searching !== 'selected' && (
+                  <button
+                    type="button"
+                    className="text-link salon-inline-open"
+                    onClick={() => {
+                      setSearching('selected');
+                      setLocationNote('');
+                    }}
+                  >
+                    이 매장 위치 넣기
+                  </button>
+                )}
+              {searching === 'selected' && (
+                <AddressSearch
+                  onPick={(value) => void pickSelectedAddress(value)}
+                  onCancel={() => setSearching(null)}
+                />
+              )}
+              {locationNote && (
+                <p className="working-notice" role="status">
+                  {locationNote}
+                </p>
+              )}
               {addingSalon ? (
                 <div className="salon-inline" role="group" aria-labelledby="salon-inline-heading">
                   <h3 id="salon-inline-heading">목록에 없는 매장 등록</h3>
                   <p className="form-note">등록한 매장은 다른 사용자도 선택할 수 있어요.</p>
+                  {mapAvailable && (
+                    <div className="salon-address">
+                      <span className="field-label">주소</span>
+                      {searching === 'new' ? (
+                        <AddressSearch
+                          onPick={pickNewAddress}
+                          onCancel={() => setSearching(null)}
+                        />
+                      ) : (
+                        <>
+                          {salonAddress && <p>{salonAddress.address}</p>}
+                          <button
+                            type="button"
+                            className="button"
+                            onClick={() => setSearching('new')}
+                          >
+                            {salonAddress ? '주소 다시 검색' : '주소 검색'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <Field label="매장 이름">
                     <input
                       maxLength={100}
@@ -371,6 +503,8 @@ export function DirectoryEditor() {
                       onClick={() => {
                         setAddingSalon(false);
                         setSalonError('');
+                        setSalonAddress(null);
+                        setSearching(null);
                       }}
                     >
                       닫기
@@ -389,6 +523,21 @@ export function DirectoryEditor() {
                   찾는 매장이 목록에 없나요? 매장 등록
                 </button>
               )}
+              <Field label="상담 요금(원)" hint="1,000원 단위. 0원이면 무료">
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={100000}
+                  step={1000}
+                  value={form.consultationFee}
+                  onChange={(event) => setForm({ ...form, consultationFee: event.target.value })}
+                />
+              </Field>
+              <p className="form-note">
+                요금이 있으면 고객이 결제한 뒤에 상담이 와요. 72시간 안에 첫 답변을 하지 않으면
+                자동으로 취소되고 환불돼요.
+              </p>
               <fieldset className="visibility-choice">
                 <legend>공개 범위</legend>
                 <div className="choice-pills">

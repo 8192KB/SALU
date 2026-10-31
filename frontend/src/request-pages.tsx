@@ -46,7 +46,7 @@ export function RequestList() {
                     <PhotoThumbnail src={photo?.url} alt="준비할 커트 사진" />
                   </div>
                   <span className="request-status">
-                    작성 중 · {designer ? `${designer.name} 디자이너` : '개인 준비'}
+                    {designer ? `${designer.name} 디자이너 상담 작성 중` : '작성 중'}
                   </span>
                   <h3>{cut ? cutTitle(cut.cutDate, cut.service) : '이전 커트의 요청'}</h3>
                   <p>
@@ -76,7 +76,7 @@ export function RequestList() {
                 </div>
                 <span className="request-status">
                   {preview.designer
-                    ? `${preview.designer.name} 디자이너 · 상담 준비`
+                    ? `${preview.designer.name} 디자이너 상담 준비`
                     : '내 커트 준비'}
                 </span>
                 <h3>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h3>
@@ -102,7 +102,7 @@ export function RequestList() {
           <section className="panel empty-request">
             <Icon name="chat" size={28} />
             <h3>다음 커트에서 어떻게 요청할까요?</h3>
-            <p className="muted">내 기록을 보고 유지할 부분과 바꿀 부분, 물어볼 점을 정리해요.</p>
+            <p className="muted">유지할 부분과 바꿀 부분, 물어볼 점을 정리해 보세요.</p>
             <Link
               className="button"
               to={state.cuts.length ? '/requests/materials' : '/records/new'}

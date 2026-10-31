@@ -32,27 +32,30 @@ const subscribe = (listener: () => void) => {
 
 async function load(memberId: string) {
   publish({ memberId, ids: new Set(), ownId: null, loaded: false, error: '' });
-  try {
-    const [favorites, own] = await Promise.all([
-      directoryRequest<{ id: string }[]>('/api/my/favorite-designers'),
-      directoryRequest<{ id: string }>('/api/my/designer-profile'),
-    ]);
-    if (state.memberId !== memberId) return;
-    publish({
-      memberId,
-      ids: new Set((favorites ?? []).map((value) => value.id)),
-      ownId: own?.id ?? null,
-      loaded: true,
-      error: '',
-    });
-  } catch (error) {
-    if (state.memberId === memberId)
-      publish({
-        ...state,
-        loaded: true,
-        error: error instanceof Error ? error.message : '찜한 디자이너를 불러오지 못했어요.',
-      });
-  }
+  // 찜 목록이 실패해도 내 프로필 ID는 따로 받아 내 프로필에 상담 신청이 열리지 않게 함
+  const [favorites, own] = await Promise.allSettled([
+    directoryRequest<{ id: string }[]>('/api/my/favorite-designers'),
+    directoryRequest<{ id: string }>('/api/my/designer-profile'),
+  ]);
+  if (state.memberId !== memberId) return;
+  const failure = [favorites, own].find((value) => value.status === 'rejected');
+  publish({
+    memberId,
+    ids: new Set(
+      favorites.status === 'fulfilled' ? (favorites.value ?? []).map((value) => value.id) : [],
+    ),
+    ownId: own.status === 'fulfilled' ? (own.value?.id ?? null) : null,
+    loaded: true,
+    error: failure
+      ? failure.reason instanceof Error
+        ? failure.reason.message
+        : '찜한 디자이너를 불러오지 못했어요.'
+      : '',
+  });
+}
+
+export function reloadFavorites() {
+  if (state.memberId) void load(state.memberId);
 }
 
 export async function setFavorite(designerId: string, on: boolean) {

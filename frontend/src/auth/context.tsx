@@ -1,7 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { openDB } from 'idb';
-import { fetchMember, login as loginRequest, logout as logoutRequest } from './api';
+import {
+  fetchMember,
+  login as loginRequest,
+  logout as logoutRequest,
+  SESSION_CHANGED,
+} from './api';
+import { clearTabDrafts } from '../tab-draft';
 import type { SessionMember } from './api';
 
 type AuthState =
@@ -127,12 +133,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (Date.now() - lastCheck.current >= 5000) void refresh();
     };
     const onOnline = () => void refresh();
+    // 요청이 세션 만료로 거절되면 바로 다시 확인함. 확인 요청끼리 겹치면 1초 안의 것은 건너뜀
+    const onSessionChanged = () => {
+      if (Date.now() - lastCheck.current >= 1000) void refresh();
+    };
     window.addEventListener('focus', onFocus);
     window.addEventListener('online', onOnline);
+    window.addEventListener(SESSION_CHANGED, onSessionChanged);
     return () => {
       generation.current++;
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('online', onOnline);
+      window.removeEventListener(SESSION_CHANGED, onSessionChanged);
     };
   }, [refresh]);
   useEffect(() => {
@@ -167,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActionError('');
     try {
       await logoutRequest();
+      clearTabDrafts();
       if (generation.current === current) confirm(null);
       return true;
     } catch (error) {

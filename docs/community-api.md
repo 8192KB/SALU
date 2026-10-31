@@ -184,12 +184,15 @@
 | 글 내용과 신고(숨김·삭제 글 포함) | `GET /api/admin/community/posts/{id}` |
 | 글 사진(숨김·삭제 글 포함) | `GET /api/admin/community/posts/{id}/photos/{position}` |
 | 댓글 신고 | `GET /api/admin/community/comments/{id}/reports` |
+| 처리가 끝난 숨김 글·댓글 | `GET /api/admin/community/hidden` |
 | 글 처리 | `POST /api/admin/community/posts/{id}/decision` |
 | 댓글 처리 | `POST /api/admin/community/comments/{id}/decision` |
 | 회원 제재 기록 | `GET /api/admin/members/{memberId}/sanctions` |
 | 제재 | `POST /api/admin/members/{memberId}/sanctions` |
 | 제재 해제 | `POST /api/admin/sanctions/{id}/lift` |
 
+- `hidden`은 신고 목록과 같은 모양(`posts`·`comments`)으로 처리 전 신고가 없는 숨김 글·댓글을 최신순 100개까지 돌려줍니다. 받아들인 뒤에도 다시 보이게 할 수 있도록 찾는 경로입니다. `openCount`는 0, `reasons`는 빈 배열입니다.
+- 숨겼던 글·댓글을 다시 보이게 하거나 제재를 풀면 그때 보낸 숨김·제재 알림을 지웁니다. 같은 글에 그 회원의 다른 숨김 댓글이 남아 있으면 댓글 알림은 유지합니다.
 - 글 내용의 `photoUrls`는 공개 경로가 아니라 이 관리자 사진 경로를 가리킵니다. 공개 경로는 숨김·삭제 글에 `404`이기 때문입니다.
 - 처리할 신고는 대상별로 묶어 `{ "posts": [...], "comments": [...] }`로 돌려줍니다. 항목에는 `openCount`, `reasons`, `latestAt`, 그리고 제재에 쓸 `authorId`가 들어갑니다.
 - 처리 본문은 `{ "action": "HIDE" }` 또는 `{ "action": "KEEP" }`입니다. `HIDE`는 숨기고 열린 신고를 받아들임(`ACCEPTED`), `KEEP`은 다시 보이게 하고 열린 신고와 앞서 받아들인 신고를 모두 기각(`DISMISSED`)합니다. 숨겼던 글을 다시 보이게 하면 신고 목록도 기각으로 바뀌어 실제 상태와 맞습니다. 작성자가 지운 글은 상태를 바꾸지 않고 신고만 정리합니다. 성공은 `204`입니다.

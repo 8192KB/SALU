@@ -37,8 +37,11 @@ public class BackupService {
         if(current==null) { if(mapper.itemCount(owner)>=2000) throw ApiException.invalidRequest(); if(mapper.insert(owner,id,change.mutationId(),encrypted)!=1) throw ApiException.conflict(); }
         else if(mapper.update(owner,id,revision,change.mutationId(),encrypted)!=1) throw ApiException.conflict();
         if(mapper.insertMutation(owner,id,change.mutationId(),revision+1,hash)!=1) throw ApiException.conflict();
+        var previous=mapper.references(owner,id);
         mapper.clearReferences(owner,id);
         for(String photoId:refs) if(mapper.reference(owner,id,photoId)!=1) throw ApiException.conflict();
+        // 기록이나 사진을 지워 아무 항목도 쓰지 않게 된 사진은 바로 지워 계정 사진 용량을 비움
+        for(String photoId:previous) if(!refs.contains(photoId)) mapper.removeUnreferenced(owner,photoId);
         return new Saved(revision+1);
     }
     private void validateTree(JsonNode node, Set<String> photos, int depth) {

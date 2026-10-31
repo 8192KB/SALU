@@ -17,6 +17,14 @@ public interface CommunityAdminMapper {
     @Select("SELECT c.id,c.post_id,c.content,c.author_id,c.author_name,c.status,COUNT(*) AS open_count,GROUP_CONCAT(DISTINCT r.reason ORDER BY r.reason) AS reasons,MAX(r.created_at) AS latest_at "
         + "FROM community_comment_reports r JOIN community_comments c ON c.id=r.comment_id WHERE r.status='OPEN' GROUP BY c.id,c.post_id,c.content,c.author_id,c.author_name,c.status ORDER BY latest_at DESC LIMIT 100")
     List<ReportedComment> reportedComments();
+    // 처리 전 신고가 없는 숨김. 신고 목록에서 빠진 뒤에도 다시 보이게 할 수 있게 찾음
+    @Select("SELECT p.id,p.title,p.author_id,p.author_name,p.status,0 AS open_count,NULL AS reasons,p.updated_at AS latest_at FROM community_posts p "
+        + "WHERE p.status='HIDDEN' AND NOT EXISTS(SELECT 1 FROM community_post_reports r WHERE r.post_id=p.id AND r.status='OPEN') ORDER BY p.updated_at DESC LIMIT 100")
+    List<ReportedPost> hiddenPosts();
+    @Select("SELECT c.id,c.post_id,c.content,c.author_id,c.author_name,c.status,0 AS open_count,NULL AS reasons,c.created_at AS latest_at FROM community_comments c "
+        + "WHERE c.status='HIDDEN' AND NOT EXISTS(SELECT 1 FROM community_comment_reports r WHERE r.comment_id=c.id AND r.status='OPEN') ORDER BY c.created_at DESC LIMIT 100")
+    List<ReportedComment> hiddenComments();
+    @Select("SELECT COUNT(*) FROM community_comments WHERE post_id=#{post} AND author_id=#{author} AND status='HIDDEN'") int hiddenCommentCount(String post, long author);
     @Select("SELECT reason,detail,status,created_at FROM community_post_reports WHERE post_id=#{post} ORDER BY created_at DESC LIMIT 100") List<Report> postReports(String post);
     @Select("SELECT reason,detail,status,created_at FROM community_comment_reports WHERE comment_id=#{comment} ORDER BY created_at DESC LIMIT 100") List<Report> commentReports(long comment);
     @Update("UPDATE community_posts SET status=#{status} WHERE id=#{post} AND status IN ('VISIBLE','HIDDEN')") int setPostStatus(String post, String status);

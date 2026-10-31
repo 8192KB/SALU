@@ -20,6 +20,8 @@ public interface BackupMapper {
     @Select("SELECT COALESCE(SUM(byte_size),0) FROM personal_backup_photos WHERE member_id=#{owner}") long photoBytes(long owner);
     @Select("SELECT COUNT(*) FROM personal_backup_items WHERE member_id=#{owner}") int itemCount(long owner);
     @Insert("INSERT INTO personal_backup_photos(member_id,client_id,content_type,byte_size,key_id,nonce,ciphertext) VALUES(#{owner},#{id},#{type},#{size},#{data.keyId},#{data.nonce},#{data.ciphertext})") int insertPhoto(long owner, String id, String type, int size, BackupCrypto.Encrypted data);
+    @Select("SELECT photo_id FROM personal_backup_item_photos WHERE member_id=#{owner} AND item_id=#{id}") List<String> references(long owner, String id);
+    @Delete("DELETE p FROM personal_backup_photos p WHERE p.member_id=#{owner} AND p.client_id=#{photo} AND NOT EXISTS(SELECT 1 FROM personal_backup_item_photos r WHERE r.member_id=p.member_id AND r.photo_id=p.client_id)") int removeUnreferenced(long owner, String photo);
     @Delete("DELETE FROM personal_backup_item_photos WHERE member_id=#{owner} AND item_id=#{id}") int clearReferences(long owner, String id);
     @Insert("INSERT INTO personal_backup_item_photos(member_id,item_id,photo_id) VALUES(#{owner},#{item},#{photo})") int reference(long owner, String item, String photo);
     @Delete("DELETE p FROM personal_backup_photos p WHERE p.member_id=#{owner} AND p.created_at < UTC_TIMESTAMP() - INTERVAL 7 DAY AND NOT EXISTS(SELECT 1 FROM personal_backup_item_photos r WHERE r.member_id=p.member_id AND r.photo_id=p.client_id)") int cleanupPhotos(long owner);

@@ -16,6 +16,7 @@ public class CommunityAdminController {
     private static ResponseEntity<Void> done() { return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build(); }
 
     @GetMapping("/api/admin/community/reports") ResponseEntity<CommunityAdminService.Reports> reports() { return ok(service.reports()); }
+    @GetMapping("/api/admin/community/hidden") ResponseEntity<CommunityAdminService.Reports> hidden() { return ok(service.hidden()); }
     @GetMapping("/api/admin/community/posts/{id}") ResponseEntity<CommunityAdminService.PostReview> post(@PathVariable String id) { return ok(service.post(id)); }
     @GetMapping("/api/admin/community/posts/{id}/photos/{position}") ResponseEntity<byte[]> photo(@PathVariable String id, @PathVariable int position) {
         var photo = service.photo(id, position);

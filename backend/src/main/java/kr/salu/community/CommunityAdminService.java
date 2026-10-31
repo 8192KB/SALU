@@ -33,6 +33,13 @@ public class CommunityAdminService {
             mapper.reportedComments().stream().map(c -> new ReportedComment(c.id(), c.postId(), c.content(), c.authorId(), c.authorName(), c.status(), c.openCount(), reasons(c.reasons()), Inputs.time(c.latestAt()))).toList());
     }
 
+    @Transactional(readOnly=true)
+    public Reports hidden() {
+        return new Reports(
+            mapper.hiddenPosts().stream().map(p -> new ReportedPost(p.id(), p.title(), p.authorId(), p.authorName(), p.status(), p.openCount(), reasons(p.reasons()), Inputs.time(p.latestAt()))).toList(),
+            mapper.hiddenComments().stream().map(c -> new ReportedComment(c.id(), c.postId(), c.content(), c.authorId(), c.authorName(), c.status(), c.openCount(), reasons(c.reasons()), Inputs.time(c.latestAt()))).toList());
+    }
+
     // 숨김·삭제된 글도 관리자는 내용과 신고를 봄
     @Transactional(readOnly=true)
     public PostReview post(String id) {
@@ -65,6 +72,7 @@ public class CommunityAdminService {
         mapper.closePostReports(id, hide ? "ACCEPTED" : "DISMISSED", admin.id());
         if (!hide) mapper.dismissAcceptedPostReports(id, admin.id());
         if (hide && "VISIBLE".equals(post.status())) notifications.create(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, id, null);
+        if (!hide && "HIDDEN".equals(post.status())) notifications.withdraw(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, id);
     }
 
     @Transactional
@@ -76,6 +84,9 @@ public class CommunityAdminService {
         mapper.closeCommentReports(id, hide ? "ACCEPTED" : "DISMISSED", admin.id());
         if (!hide) mapper.dismissAcceptedCommentReports(id, admin.id());
         if (hide && "VISIBLE".equals(comment.status())) notifications.create(comment.authorId(), NotificationService.COMMUNITY_COMMENT_HIDDEN, comment.postId(), null);
+        // 댓글 알림은 글 ID로 묶이므로 같은 글에 그 회원의 다른 숨김 댓글이 남아 있으면 유지함
+        if (!hide && "HIDDEN".equals(comment.status()) && mapper.hiddenCommentCount(comment.postId(), comment.authorId()) == 0)
+            notifications.withdraw(comment.authorId(), NotificationService.COMMUNITY_COMMENT_HIDDEN, comment.postId());
     }
 
     @Transactional(readOnly=true)
@@ -104,8 +115,10 @@ public class CommunityAdminService {
 
     @Transactional
     public void lift(MemberPrincipal admin, long id) {
-        if (mapper.sanction(id) == null) throw ApiException.notFound();
+        var sanction = mapper.sanction(id);
+        if (sanction == null) throw ApiException.notFound();
         if (mapper.lift(id, admin.id()) != 1) throw ApiException.conflict();
+        notifications.withdraw(sanction.memberId(), NotificationService.COMMUNITY_SUSPENDED, Long.toString(id));
     }
 
     private static String action(Decision decision) {

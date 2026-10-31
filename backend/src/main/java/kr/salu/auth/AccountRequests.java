@@ -13,6 +13,12 @@ public final class AccountRequests {
     public record Rename(@NotBlank @Size(max = 50) String displayName) {
         public Rename { displayName = displayName == null ? null : displayName.strip(); }
     }
+    public record PasswordReset(@NotBlank @Email @Size(max = 254) String email) {
+        public PasswordReset { email = email == null ? null : email.strip().toLowerCase(Locale.ROOT); }
+    }
+    public record PasswordResetConfirm(@NotBlank @Size(max = 100) String token, @NotBlank @Size(min = 8, max = 72) String newPassword) {
+        @Override public String toString() { return "PasswordResetConfirm"; }
+    }
     public record PasswordChange(@NotBlank @Size(max = 72) String currentPassword, @NotBlank @Size(min = 8, max = 72) String newPassword) {
         @Override public String toString() { return "PasswordChange"; }
     }

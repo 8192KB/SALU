@@ -56,7 +56,9 @@ Salon(Spring 5·JSP)의 기능을 가져올 때 아래 방식은 따라 하지 �
 
 - 공개 조회: `GET /api/salons`, `GET /api/designers`, `GET /api/designers/{id}`
 - 미용실 등록: 인증·CSRF 필요한 `POST /api/salons`
-- 본인 프로필: `GET/POST/PUT /api/my/designer-profile`. principal 소유자 기준, 프로필 없음은 GET 204, 생성은 201. 회원당 프로필 하나
+- 미용실 위치: `address`(최대 200자)·`latitude`·`longitude`는 선택이며 셋이 함께 있거나 함께 없음. 좌표는 국내 범위(위도 33~39, 경도 124~132)만 받음. 화면이 주소 검색(Daum 우편번호)과 카카오맵 JS SDK Geocoder로 좌표를 구해 보냄. 등록할 때 함께 보내거나, 등록한 회원이 `PUT /api/salons/{id}/location`으로 바꿈(남이 등록한 미용실은 404). 응답의 미용실·디자이너 소속에 같은 세 칸, 위치 없음은 `null`
+- 지도: 카카오맵 JS 키는 빌드 값 `VITE_KAKAO_MAP_KEY`(공개되는 키라 카카오 앱의 사이트 도메인으로 제한). 키가 없거나 SDK를 불러오지 못하면 주소 글자만 보여 줌
+- 본인 프로필: `GET/POST/PUT /api/my/designer-profile`. principal 소유자 기준, 프로필 없음은 GET 204, 생성은 201. 회원당 프로필 하나. 상담 요금 `consultationFee`(0~100,000원, 1,000원 단위, 빼면 0)는 [결제 API 계약](payment-api.md)
 - 가입만으로 디자이너 목록에 표시하지 않음. ACTIVE 계정의 공개 프로필만 목록/상세에 노출. 프로필 공개와 실제 디자이너 검증/상담 권한을 혼동하지 않음
 - 미용실·담당자는 DB 선택, 이전 기록 재사용, 직접 입력 가능. 자유 입력 이름만으로 실제 프로필 자동 연결 금지
 - 기록 당시 이름·매장 스냅샷과 현재 공개 프로필/소속 분리. 비공개·목록 장애가 과거 기록 읽기/작성 보존을 막지 않음

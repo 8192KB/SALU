@@ -17,6 +17,17 @@ spring:
   sql:
     init:
       mode: never
+  mail:
+    host: ${SALU_MAIL_HOST:}
+    port: ${SALU_MAIL_PORT:587}
+    username: ${SALU_MAIL_USERNAME:}
+    password: ${SALU_MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SALU_MAIL_AUTH:true}
+      mail.smtp.starttls.enable: ${SALU_MAIL_STARTTLS:true}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
   servlet:
     multipart:
       max-file-size: 5MB
@@ -43,6 +54,15 @@ salu:
   backup-key-file: ${SALU_BACKUP_KEY_FILE:}
   backup-key-id: ${SALU_BACKUP_KEY_ID:v1}
   public-origin: ${SALU_PUBLIC_ORIGIN:http://127.0.0.1:5174}
+  mail-from: ${SALU_MAIL_FROM:}
+  payment:
+    client-key: ${SALU_TOSS_CLIENT_KEY:}
+    secret-key: ${SALU_TOSS_SECRET_KEY:}
+  ai:
+    base-url: ${SALU_AI_BASE_URL:}
+    model: ${SALU_AI_MODEL:qwen3:8b}
+    api-key: ${SALU_AI_API_KEY:}
+    reasoning-effort: ${SALU_AI_REASONING_EFFORT:none}
   oauth:
     google-id: ${SALU_GOOGLE_CLIENT_ID:}
     google-secret: ${SALU_GOOGLE_CLIENT_SECRET:}

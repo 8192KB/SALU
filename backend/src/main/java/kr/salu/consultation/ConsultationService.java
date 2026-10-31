@@ -22,7 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 public class ConsultationService {
     public static final int MAX_PHOTOS = 6;
-    public record AttachmentInput(String cutDate, String service, String summary, List<String> photoLabels) {}
+    public record AttachmentInput(String cutDate, String service, String summary, List<String> photoLabels, Boolean linkedDesigner) {}
     public record SendInput(String requestKey, String designerId, String request, AttachmentInput attachment) {}
     public record MessageInput(String clientKey, String content) {}
     public record ReadInput(Long messageId) {}
@@ -30,7 +30,10 @@ public class ConsultationService {
     public record Sent(boolean created, Consultation consultation) {}
     public record Posted(boolean created, Message message) {}
     public record Consultation(String id, String status, DesignerView designer, CustomerView customer, Attachment attachment,
-        String request, String sentAt, Reply reply, boolean canReply, String lastMessageAt, int unreadCount, String reviewId, boolean canReview, String viewerRole) {}
+        String request, String sentAt, Reply reply, boolean canReply, String lastMessageAt, int unreadCount, String reviewId, boolean canReview, String viewerRole,
+        int fee, Payment payment, boolean canCancel) {}
+    // paid: 토스 승인을 받은 적이 있는지. 결제 전에 취소한 주문도 CANCELED라 환불 여부는 이 값으로 가름
+    public record Payment(String orderId, int amount, String orderName, String status, boolean paid) {}
     public record DesignerView(String id, String name, String salonName) {}
     public record CustomerView(String displayName) {}
     public record PhotoView(String url, String label) {}
@@ -41,9 +44,9 @@ public class ConsultationService {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private final ConsultationMapper mapper; private final BackupCrypto crypto; private final ObjectMapper json;
-    private final NotificationService notifications; private final RealtimePublisher realtime;
-    public ConsultationService(ConsultationMapper mapper, BackupCrypto crypto, ObjectMapper json, NotificationService notifications, RealtimePublisher realtime) {
-        this.mapper=mapper; this.crypto=crypto; this.json=json; this.notifications=notifications; this.realtime=realtime;
+    private final NotificationService notifications; private final RealtimePublisher realtime; private final kr.salu.payment.PaymentSettings payments;
+    public ConsultationService(ConsultationMapper mapper, BackupCrypto crypto, ObjectMapper json, NotificationService notifications, RealtimePublisher realtime, kr.salu.payment.PaymentSettings payments) {
+        this.mapper=mapper; this.crypto=crypto; this.json=json; this.notifications=notifications; this.realtime=realtime; this.payments=payments;
     }
     // 첫 사진은 V12 전에 저장한 사진과 같은 값을 써서 예전 사진도 그대로 풀림
     private static String aad(String id, int position) { return "salu:v1:consultation:" + id + ":photo" + (position == 0 ? "" : ":" + position); }
@@ -72,17 +75,25 @@ public class ConsultationService {
             if (!MessageDigest.isEqual(existing.contentHash(), hash)) throw ApiException.conflict();
             return new Sent(false, view(existing, principal.id()));
         }
-        var designer = mapper.publicDesigner(input.designerId());
-        if (designer == null) throw ApiException.notFound();
-        if (designer.memberId() == principal.id()) throw ApiException.invalidRequest();
+        var found = mapper.publicDesigner(input.designerId());
+        if (found == null) throw ApiException.notFound();
+        if (found.memberId() == principal.id()) throw ApiException.invalidRequest();
+        // 담당 디자이너 상담은 무료. 요금이 있으면 결제 전까지 디자이너에게 보이지 않는 상태로 저장(docs/payment-api.md)
+        var designer = Boolean.TRUE.equals(input.attachment().linkedDesigner())
+            ? new ConsultationMapper.Designer(found.id(), found.memberId(), found.name(), found.salonName(), 0) : found;
+        boolean paid = designer.fee() > 0;
+        if (paid && !payments.enabled()) throw ApiException.paymentUnavailable();
         String id = UUID.randomUUID().toString();
-        if (mapper.insert(id, principal.id(), designer, input.requestKey(), hash, customerName, cutDate, service, summary, request) != 1) throw ApiException.conflict();
+        if (mapper.insert(id, principal.id(), designer, input.requestKey(), hash, customerName, cutDate, service, summary, request, paid ? "PAYMENT_PENDING" : "REQUESTED") != 1) throw ApiException.conflict();
+        if (paid && mapper.insertPayment(id, "salu-" + UUID.randomUUID().toString().replace("-", ""), designer.fee()) != 1) throw ApiException.conflict();
         for (int i = 0; i < photos.size(); i++) {
             var photo = photos.get(i);
             if (mapper.insertPhoto(id, i, labels.get(i), photo.contentType(), photo.bytes().length, crypto.encrypt(photo.bytes(), aad(id, i))) != 1) throw ApiException.conflict();
         }
-        notifications.create(designer.memberId(), NotificationService.CONSULTATION_REQUESTED, id, customerName);
-        realtime.send(designer.memberId(), RealtimePublisher.CONSULTATION, id);
+        if (!paid) {
+            notifications.create(designer.memberId(), NotificationService.CONSULTATION_REQUESTED, id, customerName);
+            realtime.send(designer.memberId(), RealtimePublisher.CONSULTATION, id);
+        }
         return new Sent(true, view(mapper.get(id, principal.id()), principal.id()));
     }
 
@@ -147,6 +158,7 @@ public class ConsultationService {
         if (input == null || !Inputs.uuid(input.clientKey())) throw ApiException.invalidRequest();
         String content = Inputs.text(input.content(), 2000);
         var row = lockedParticipant(principal, id);
+        if (!"REQUESTED".equals(row.status()) && !"ANSWERED".equals(row.status())) throw ApiException.conflict();
         // 응답을 못 받아 다시 보낸 같은 메시지는 처음 저장한 것을 돌려줌
         var existing = mapper.messageByKey(id, principal.id(), input.clientKey());
         if (existing != null) {
@@ -185,6 +197,8 @@ public class ConsultationService {
         if (!Inputs.uuid(id)) throw ApiException.notFound();
         var row = mapper.get(id, principal.id());
         if (row == null || (row.customerId() != principal.id() && row.designerMemberId() != principal.id())) throw ApiException.notFound();
+        // 결제 전 상담은 디자이너에게 없는 것으로 봄
+        if (row.customerId() != principal.id() && "PAYMENT_PENDING".equals(row.status())) throw ApiException.notFound();
         return row;
     }
     private ConsultationMapper.Row lockedParticipant(MemberPrincipal principal, String id) {
@@ -202,7 +216,7 @@ public class ConsultationService {
         for (int i = 0; i < labels.length; i++) photos.add(new PhotoView("/api/consultations/" + row.id() + "/photos/" + i, labels[i]));
         return photos;
     }
-    private static Consultation view(ConsultationMapper.Row row, long viewer) {
+    public static Consultation view(ConsultationMapper.Row row, long viewer) {
         boolean answered = "ANSWERED".equals(row.status());
         boolean customer = row.customerId() == viewer;
         var photos = photos(row);
@@ -212,10 +226,13 @@ public class ConsultationService {
             new Attachment(row.cutDate().toString(), row.service(), row.summary(), photos.isEmpty() ? null : photos.get(0).url(), photos),
             row.requestText(), Inputs.time(row.sentAt()),
             answered ? new Reply(row.replyText(), Inputs.time(row.repliedAt())) : null,
-            !answered && row.designerMemberId() == viewer,
+            "REQUESTED".equals(row.status()) && row.designerMemberId() == viewer,
             Inputs.time(row.lastMessageAt() == null ? row.sentAt() : row.lastMessageAt()),
             row.unreadCount(), row.reviewId(),
             customer && answered && row.reviewId() == null,
-            customer ? "CUSTOMER" : "DESIGNER");
+            customer ? "CUSTOMER" : "DESIGNER",
+            row.fee(),
+            customer && row.paymentOrderId() != null ? new Payment(row.paymentOrderId(), row.paymentAmount(), row.designerName() + " 디자이너 상담", row.paymentStatus(), Boolean.TRUE.equals(row.paymentPaid())) : null,
+            customer && ("PAYMENT_PENDING".equals(row.status()) || "REQUESTED".equals(row.status())));
     }
 }

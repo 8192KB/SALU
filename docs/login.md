@@ -15,6 +15,8 @@
 | GET /api/auth/me | 로그인 회원 id/email(nullable)/displayName/storageContext/role, 비로그인 401. displayName은 DB의 현재 이름 |
 | PATCH /api/auth/me | JSON displayName(앞뒤 공백 제거 1~50자) + CSRF; 200 바뀐 회원 정보(GET과 같은 형식) |
 | POST /api/auth/password | JSON currentPassword/newPassword(8자 이상) + CSRF; 204, 세션 ID 교체. 현재 비밀번호가 틀리면 400 `CURRENT_PASSWORD_INVALID`, 비밀번호가 없는 소셜 가입 계정은 409 `PASSWORD_NOT_SET`. 다른 기기의 세션은 끊지 않음 |
+| POST /api/auth/password-reset | JSON email + CSRF; 가입 여부와 상관없이 202(가입한 이메일 수집 방지). ACTIVE이고 비밀번호가 있는 계정이면 재설정 메일 발송. 같은 계정은 1분에 한 번만 보내고, 새로 보내면 이전 링크는 못 씀. 메일 발송이 꺼져 있으면 503 `MAIL_UNAVAILABLE` |
+| POST /api/auth/password-reset/confirm | JSON token/newPassword(8자 이상) + CSRF; 204. 토큰이 없거나 30분이 지났거나 이미 썼으면 400 `RESET_TOKEN_INVALID`. 로그인 상태는 바꾸지 않고, 다른 기기의 세션은 끊지 않음 |
 | POST /api/auth/logout | CSRF 필수, 세션 무효화·SALU_SESSION 삭제, 204; GET으로 로그아웃하지 않음 |
 
 ## 인증 처리
@@ -36,11 +38,18 @@
 ### 입력과 로그인 제한
 
 - 로그인 query string 거부(비밀번호 URL 전송 금지), 중복 파라미터·이메일·BCrypt 72바이트 제한 검사
-- 로그인·가입·이메일 확인·비밀번호 변경은 경로마다 IP당 30회/60초 후 429, 요청 X-Forwarded-For를 신뢰하지 않음
+- 로그인·가입·이메일 확인·비밀번호 변경·비밀번호 찾기는 경로마다 IP당 30회/60초 후 429, 요청 X-Forwarded-For를 신뢰하지 않음
 - 단일 개발 서버 범위의 방어이며 배포 전 프록시·분산 방어는 추가 검증 필요
 - 요청 role/memberId는 권한 부여에 사용하지 않음
 - 회원 역할은 `members.role`의 `USER`·`ADMIN`. 관리자 지정은 DB에서만 하고 `/api/admin/**`은 SecurityConfig에서 ADMIN만 허용. 응답의 `role`은 화면 표시용이며, DB 역할이 세션과 달라지면 다음 요청에서 세션을 끊고 401
 - ACTIVE만 로그인, 존재하지 않음·틀린 비밀번호·비활성 모두 동일 실패
+
+### 비밀번호 찾기 메일
+
+- 서버가 SMTP로 보냄(`spring-boot-starter-mail`). 주소·계정은 환경 값 `SALU_MAIL_HOST`·`SALU_MAIL_PORT`(기본 587, STARTTLS)·`SALU_MAIL_USERNAME`·`SALU_MAIL_PASSWORD`·`SALU_MAIL_FROM`. `SALU_MAIL_HOST`가 비면 발송이 꺼짐. 로컬은 가짜 메일함(Mailpit), 시험 사이트는 Gmail 앱 비밀번호
+- 링크는 `{SALU_PUBLIC_ORIGIN}/password-reset#token=…`. 토큰을 `#` 뒤에 두어 서버·프록시 로그와 Referer에 남지 않게 함. 화면은 읽은 뒤 주소에서 지움
+- 토큰은 무작위 32바이트, DB(`password_reset_tokens`, V15)에는 SHA-256 해시만 저장. 30분, 한 번만
+- 메일은 DB commit 뒤 별도 thread에서 보냄. 발송 실패는 응답을 바꾸지 않고 서버 로그에 종류만 남김(주소·토큰 제외)
 
 ### DB 장애
 

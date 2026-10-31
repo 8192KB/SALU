@@ -14,7 +14,7 @@ import tools.jackson.databind.ObjectMapper;
 public final class LoginGuard extends OncePerRequestFilter {
     private record Window(long started, int count) {}
     // 경로마다 따로 세며, 비밀번호를 받는 로그인만 폼 형식을 이 필터에서 검사함
-    private static final java.util.Set<String> LIMITED = java.util.Set.of("/api/auth/login", "/api/auth/signup", "/api/auth/email-check", "/api/auth/password");
+    private static final java.util.Set<String> LIMITED = java.util.Set.of("/api/auth/login", "/api/auth/signup", "/api/auth/email-check", "/api/auth/password", "/api/auth/password-reset", "/api/auth/password-reset/confirm");
     private final Map<String, Window> windows = new HashMap<>();
     private final ObjectMapper json;
     public LoginGuard(ObjectMapper json) { this.json = json; }

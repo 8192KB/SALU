@@ -85,7 +85,7 @@
 | 필드 | 뜻 |
 |---|---|
 | `id` | 상담 ID. 서버가 만듦 |
-| `status` | `REQUESTED` 답변 전, `ANSWERED` 답변 있음 |
+| `status` | `REQUESTED` 답변 전, `ANSWERED` 답변 있음. 요금이 있는 상담은 결제 전 `PAYMENT_PENDING`, 취소하면 `CANCELED`([결제 API 계약](payment-api.md)) |
 | `designer` | 보낼 때의 디자이너 이름·소속 매장. 소속이 없으면 `salonName`은 `null` |
 | `customer.displayName` | 보낸 회원의 표시 이름. 이메일은 넣지 않음 |
 | `attachment` | 보낼 때의 커트 기록 복사본. 원본 기록을 고쳐도 바뀌지 않음 |
@@ -108,6 +108,8 @@
 |---|---|---|
 | `REQUESTED` | 답변 대기 | 답변 대기 |
 | `ANSWERED` | 답변 도착 | 답변 완료 |
+| `PAYMENT_PENDING` | 결제 대기 | 보이지 않음 |
+| `CANCELED` | 취소됨 | 취소됨 |
 
 TypeScript 타입은 `frontend/src/consultation-api.ts`의 `Consultation`·`ConsultationMessage`입니다.
 
@@ -133,7 +135,8 @@ TypeScript 타입은 `frontend/src/consultation-api.ts`의 `Consultation`·`Cons
     "cutDate": "2026-09-01",
     "service": "커트",
     "summary": "옆머리가 떠요",
-    "photoLabels": ["커트 당일", "경과 D+12"]
+    "photoLabels": ["커트 당일", "경과 D+12"],
+    "linkedDesigner": false
   }
 }
 ```
@@ -147,6 +150,7 @@ TypeScript 타입은 `frontend/src/consultation-api.ts`의 `Consultation`·`Cons
 | `attachment.service` | 1~60자 |
 | `attachment.summary` | 1~2,000자 |
 | `attachment.photoLabels` | 선택. 사진마다 1~30자. 있으면 `photo` 개수와 같아야 함. 없으면 모두 `사진` |
+| `attachment.linkedDesigner` | 선택, 기본 `false`. 고객의 기록 중 하나라도 받는 디자이너를 담당 디자이너로 연결했으면 `true`. `true`면 상담 요금을 받지 않음([결제 API 계약](payment-api.md)) |
 
 브라우저에서는 이렇게 보냅니다.
 
@@ -292,10 +296,10 @@ const response = await fetch('/api/consultations', {
 | `ACCESS_DENIED` | 403 | "이 상담에 답변할 수 없어요." |
 | `INVALID_REQUEST` | 400 | 입력 칸 아래에 원인 표시. 길이·필수 값은 보내기 전에 화면에서 먼저 검사 |
 | `RESOURCE_NOT_FOUND` | 404 | "상담을 찾을 수 없어요." 보낼 때는 "지금은 이 디자이너에게 상담을 보낼 수 없어요." |
-| `RESOURCE_CONFLICT` | 409 | 보낼 때는 "이미 보낸 요청이에요. 새로운 상담 요청을 작성해 주세요." 답변할 때는 상세를 다시 불러옴 |
+| `RESOURCE_CONFLICT` | 409 | 보낼 때는 "이 작성 내용으로 이미 보낸 상담이 있어요. 상담 내역을 확인하고, 지금 내용도 보내려면 다시 눌러 주세요." 다시 누르면 새 `requestKey`로 보냄 답변할 때는 상세를 다시 불러옴 |
 | `STORAGE_CONTEXT_CHANGED` | 409 | "로그인 계정이 바뀌었어요. 화면을 새로고침해 주세요." |
-| `UPLOAD_TOO_LARGE` | 413 | "사진이 너무 커서 보낼 수 없어요. 사진을 줄이거나 몇 장 빼고 보내 주세요." |
-| `UNSUPPORTED_MEDIA_TYPE` | 415 | "JPEG, PNG, WebP 사진만 보낼 수 있어요." |
+| `UPLOAD_TOO_LARGE` | 413 | "사진이 너무 커서 보낼 수 없어요. 준비 고치기에서 사진을 몇 장 빼고 다시 보내 주세요." |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | "보낼 수 없는 형식의 사진이 있어요. 준비 고치기에서 그 사진을 빼고 다시 보내 주세요." |
 | `INTERNAL_ERROR`, `DATABASE_UNAVAILABLE` | 500, 503 | "잠시 후 다시 시도해 주세요." 입력 내용은 지우지 않음 |
 | 연결 실패 | — | 자동으로 다시 보내지 않음. 입력을 유지하고 다시 보내기 안내 |
 
@@ -325,3 +329,7 @@ const response = await fetch('/api/consultations', {
 - 보낸 상담 취소·삭제, 상담 종료 상태
 
 이 기능을 넣을 때도 이 문서를 먼저 고칩니다.
+
+## 취소와 알림
+
+답변 전 취소(고객 취소, 결제 시간 초과, 72시간 무응답)가 되면 디자이너에게 보낸 `CONSULTATION_REQUESTED` 알림을 지웁니다. 상담은 받은 상담 목록에 취소 상태로 남습니다.

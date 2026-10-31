@@ -15,7 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class AuthController {
     private final AccountService accounts;
-    public AuthController(AccountService accounts) { this.accounts = accounts; }
+    private final PasswordResetService resets;
+    public AuthController(AccountService accounts, PasswordResetService resets) { this.accounts = accounts; this.resets = resets; }
     @GetMapping("/api/auth/me")
     ResponseEntity<SessionMember> currentMember(@AuthenticationPrincipal MemberPrincipal principal) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(accounts.current(principal));
@@ -33,6 +34,16 @@ public class AuthController {
         accounts.changePassword(principal, request.currentPassword(), request.newPassword());
         // 비밀번호를 바꾼 세션은 ID를 새로 받음
         http.changeSessionId();
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+    @PostMapping("/api/auth/password-reset")
+    ResponseEntity<Void> requestReset(@Valid @RequestBody AccountRequests.PasswordReset request) {
+        resets.request(request.email());
+        return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).build();
+    }
+    @PostMapping("/api/auth/password-reset/confirm")
+    ResponseEntity<Void> confirmReset(@Valid @RequestBody AccountRequests.PasswordResetConfirm request) {
+        resets.confirm(request.token(), request.newPassword());
         return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
     }
 }

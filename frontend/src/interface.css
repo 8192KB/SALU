@@ -745,9 +745,18 @@ h2 {
   line-height: 1.8;
   margin-bottom: 20px;
 }
+/* 작성 중인 준비가 있으면 글자 링크가 둘 이상이라 한 줄에 붙지 않게 줄마다 둠 */
+.record-next-action .text-link {
+  display: flex;
+  width: fit-content;
+}
 .record-next-action .designer-secondary {
   margin-top: 16px;
   font-size: 13px;
+}
+/* 글자 링크끼리는 누르는 높이 44px가 이미 간격이라 조금만 띄움 */
+.record-next-action .text-link + .text-link {
+  margin-top: 4px;
 }
 .record-hero.no-photo {
   grid-template-columns: 1fr;

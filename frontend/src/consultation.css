@@ -123,6 +123,11 @@
   font-size: 21px;
   font-weight: 700;
 }
+/* 담당 디자이너가 없는 기록에서 오면 글자 링크가 둘이라 한 줄에 붙지 않게 줄마다 둠 */
+.consultation-action .text-link {
+  display: flex;
+  width: fit-content;
+}
 .consultation-choices {
   padding: 0;
   margin: 0;

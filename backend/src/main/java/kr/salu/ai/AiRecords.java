@@ -26,7 +26,7 @@ class AiRecords {
         Picked related() { return new Picked(facts.stream().filter(Fact::related).toList()); }
     }
 
-    // 관련 기록 최대 3개, 최근 기록으로 채워 모두 최대 5개(Salon이 최근 예약 5건을 넣던 것과 같은 수)
+    // 관련 기록 최대 3개, 최근 기록으로 채워 모두 최대 5개
     private static final int ITEMS = 40, RELATED = 3, MAX = 5, FIELD = 120;
     private static final Map<String, String> AREAS = Map.of("FRONT", "앞머리", "SIDE", "옆머리", "TOP", "윗머리", "BACK", "뒤·목선", "ENDS", "머리끝", "WHOLE", "전체");
     // 말끝·흔한 말에서 나온 두 글자는 겹쳐도 관련 있다고 보지 않음

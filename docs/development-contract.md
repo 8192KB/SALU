@@ -15,13 +15,13 @@
 - 기능별 패키지에 controller/service/mapper/DTO 배치
 - DB 객체를 그대로 공개하지 않음
 - 빈 기능 클래스를 미리 만들지 않음
-- 기존 Salon에서 로직을 참고해도 초기 SQL·환경 값·DB·전체 업무 코드를 복사하지 않음
+- 다른 프로젝트에서 로직을 참고해도 초기 SQL·환경 값·DB·전체 업무 코드를 복사하지 않음
 
-## 기존 Salon 참고
+## 피할 구현 방식
 
-Salon(Spring 5·JSP)의 기능을 가져올 때 아래 방식은 따라 하지 않음
+아래 방식은 따라 하지 않음
 
-| Salon에서 보인 방식 | SALU 기준 |
+| 피할 방식 | SALU 기준 |
 |---|---|
 | Controller마다 세션·역할 검사, CSRF 꺼짐, 기본 전체 허용 | URL 규칙은 `SecurityConfig` 한 곳, 기본 로그인 필요, CSRF 전체 적용. 소유권은 Service |
 | Controller가 Mapper 직접 호출, 한 Controller에 여러 기능 | Controller → Service → Mapper. 기능별 패키지 |

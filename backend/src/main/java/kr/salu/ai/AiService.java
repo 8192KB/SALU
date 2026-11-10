@@ -200,7 +200,7 @@ public class AiService {
         }
     }
 
-    // AI 상담(docs/ai-api.md `AI 상담`). Salon AI 상담(ai-service/chat)의 관문·지시·후처리를 SALU 화면에 맞게 옮김
+    // AI 상담(docs/ai-api.md `AI 상담`). 규칙 관문 → 내 기록 고르기 → 지시 → 후처리 순서
     // 갈래와 자료는 코드가 정하고 모델은 받은 자료로만 답함
     private static final String CHAT_PROMPT = """
         너는 SALU 앱의 머리 손질 상담 도우미다. 고객이 남긴 커트 기록과 경과를 보고, 집에서의 손질과 다음 커트 때 디자이너에게 말할 점을 알려 준다.
@@ -220,21 +220,21 @@ public class AiService {
         다룰 수 없는 것: 그 외 모든 주제(일반 상식, 인물, 지명, 날씨, 뉴스, 코딩, 요리 등).
         짧은 맞장구나 후속 발화('네', '그거 말고', '두 번째 거')는 상담이 이어지는 중이므로 Y 다.
         관련 있으면 Y, 없으면 N 한 글자만 출력한다. 설명하지 않는다.""";
-    // 모델에 보내기 전 규칙으로 거르는 질문(Salon intent.OUT_OF_SCOPE_RULES). 차례대로 보고 처음 걸린 사유를 씀
+    // 모델에 보내기 전 규칙으로 거르는 질문. 차례대로 보고 처음 걸린 사유를 씀
     // 기록에 없는 정보라 모델에 보내면 지어낼 수밖에 없음. 각자 화면이 있으니 그쪽으로 안내함
     private record Block(java.util.regex.Pattern rule, String reason, String guide) {}
     private static final List<Block> BLOCKS = List.of(
         new Block(java.util.regex.Pattern.compile("주차|발렛|주차장"), "주차 정보", "디자이너 상세의 매장 위치에서 주소를 보고 매장에 직접 물어봐 주세요."),
         new Block(java.util.regex.Pattern.compile("영업\\s*시간|오픈\\s*시간|몇\\s*시에?\\s*(열|닫|문)|휴무|쉬는\\s*날|정기휴무"), "영업시간", "SALU에는 매장 영업시간이 없어서 매장에 직접 확인해 주세요."),
         new Block(java.util.regex.Pattern.compile("예약\\s*(취소|변경|확인|내역)|취소\\s*하고|환불|결제\\s*취소"), "예약·결제", "상담 요금은 디자이너가 답하기 전에 보낸 상담에서 취소하면 환불돼요."),
-        // "예약하고 싶어"는 상담으로 보내야 하므로 방법을 묻는 형태만 잡음(Salon과 같은 이유)
+        // "예약하고 싶어"는 상담으로 보내야 하므로 방법을 묻는 형태만 잡음
         new Block(java.util.regex.Pattern.compile("예약\\s*(방법|절차|어떻게|어디서|어디에서)|예약\\s*(은|는|을|를)\\s*(어떻게|어디서|어디에서)|예약\\s*하려면|예약\\s*하는\\s*(법|방법)|(어떻게|어디서|어디에서)\\s*\\S{0,4}\\s*예약"), "예약 방법", null),
         new Block(java.util.regex.Pattern.compile("쿠폰|포인트|적립|할인\\s*코드"), "쿠폰·포인트", "SALU에는 쿠폰과 포인트가 없어요."),
         new Block(java.util.regex.Pattern.compile("탈모\\s*(치료|약|병원)|두피\\s*질환|피부염|알레르기|부작용"), "의학적 판단이 필요한 내용", "두피나 피부 상태는 전문의 상담이 필요해요."),
         new Block(java.util.regex.Pattern.compile("회원\\s*가입|탈퇴|비밀번호|로그인"), "계정", "내 계정 화면에서 계정 정보를 관리할 수 있어요."));
-    // 예약은 SALU가 상담으로 대신 하므로 "다루지 않아요"로 떠넘기면 그 자체로 오답(Salon FULL_ANSWERS)
+    // 예약은 SALU가 상담으로 대신 하므로 "다루지 않아요"로 떠넘기면 그 자체로 오답
     private static final String BOOKING_ANSWER = "SALU는 예약 대신 디자이너에게 상담을 보내요. 디자이너 찾기에서 디자이너를 골라 상담 신청을 누르고, 보여 줄 커트 기록과 사진을 고르면 돼요.\n\n어떤 디자이너가 맞을지 고민이면 커트 뒤 불편한 점을 말해 주세요. 기록과 함께 봐 드릴게요.";
-    // 기록을 봐야만 답할 수 있는 질문(Salon intent.needs_history). 기록이 없으면 모델에 보내지 않음
+    // 기록을 봐야만 답할 수 있는 질문. 기록이 없으면 모델에 보내지 않음
     private static final java.util.regex.Pattern NEEDS_RECORDS = java.util.regex.Pattern.compile(
         "(내가|제가|나|저)\\s*(갔던|다녔던|받았던|받은|잘랐던|자른|했던)|(자주|주로)\\s*(가는|가던|다니는)|단골|(저번|지난번|예전|지난)\\s*에?\\s*(받은|간|갔던|자른|잘랐던|커트|기록)|내\\s*기록");
     private static final String NO_RECORDS = "아직 계정에 백업한 커트 기록이 없어서 지난 커트를 볼 수 없어요.\n\n기록 화면에서 커트를 남기고 백업하면 그 기록으로 답해 드릴게요. 지금은 '옆머리가 뜰 때 집에서 어떻게 말려요?'처럼 물어보셔도 돼요.";
@@ -307,7 +307,7 @@ public class AiService {
         return new ChatAnswer(answer, named, picked.basis(), false);
     }
 
-    // 프롬프트로 금지해도 모델이 무시하므로 문자열에서 한 번 더 거름(Salon _strip_markdown·_strip_internal)
+    // 프롬프트로 금지해도 모델이 무시하므로 문자열에서 한 번 더 거름(Markdown 기호·내부 말)
     // 구역 이름·지시를 말한 문장과 바깥 예약 경로를 안내한 문장은 통째로 지움. "전화"는 매장 연락이라 남김
     private static final java.util.regex.Pattern INTERNAL = java.util.regex.Pattern.compile(
         "\\[(고객 기록|디자이너 목록|질문)\\]|지시문|프롬프트|카카오|네이버|인스타|왓츠앱|\\bDM\\b", java.util.regex.Pattern.CASE_INSENSITIVE);

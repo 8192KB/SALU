@@ -61,7 +61,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `realtime/` | WebSocket·STOMP 연결(`WebSocketConfig`)과 commit 뒤 신호 전송(`RealtimePublisher`) |
 | `community/` | 커뮤니티 글·사진·댓글·도움돼요·신고, 관리자 신고 처리·제재(`CommunityAdmin*`) |
 | `payment/` | 상담 요금 결제. 토스 승인·취소 호출(`TossClient`), 승인·취소·환불·자동 취소(`PaymentService`) |
-| `ai/` | AI 도우미. OpenAI 호환 모델 호출(`AiClient`), 요청 글 다듬기·디자이너 찾기·회원당 요청 제한(`AiService`). DB 없음 |
+| `ai/` | AI 도우미. OpenAI 호환 모델 호출(`AiClient`), 요청 글 다듬기·디자이너 찾기·회원당 요청 제한(`AiService`), 디자이너 찾기에 넣을 내 기록 고르기(`AiRecords`, 계정 백업을 읽기만 함). 자체 테이블 없음 |
 | `auth/StorageContext.java` | 다른 탭에서 계정이 바뀐 뒤의 저장 요청을 막는 헤더 검사 |
 | `common/Inputs.java` | 글자 수·UUID·시각 형식 공통 검사 |
 | `common/PhotoCheck.java` | 사진 형식·크기 검사(백업·상담·커뮤니티 공용) |
@@ -92,6 +92,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `consultation-review.tsx` | 상담 후기 쓰기·고치기·지우기, 받은 상담의 후기, 디자이너 프로필의 후기 목록 |
 | `designer-api.ts` | 후기·찜·소속 이력 API 호출 |
 | `designer-favorites.ts`, `designer-parts.tsx` | 찜한 디자이너 상태, 디자이너 상세의 찜 버튼·소속 이력 |
+| `designer-specialties.tsx` | 전문 분야 시술 항목 목록, 고르기 칸, 디자이너 찾기 추천 순서(맞는 항목 수·후기 점수) |
 | `more-page.tsx` | 하단 메뉴 더보기 화면 |
 | `community-pages.tsx`, `community-api.ts` | 커뮤니티 목록·상세·글쓰기·내 글과 API 호출 |
 | `admin-pages.tsx`, `admin-api.ts` | 관리자 신고 처리·회원 제재 화면과 API 호출 |
@@ -100,7 +101,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `consultation-api.ts` | 상담 API 호출 |
 | `realtime.tsx` | 실시간 신호 연결(로그인한 동안 하나)과 신호·재연결 때 화면 자료 다시 불러오기(`useLiveRefresh`) |
 | `directory-page.tsx` | 내 디자이너 프로필·매장 등록 |
-| `ai-assist.tsx` | AI 도우미: 상담 요청 글 다듬기, 디자이너 찾기의 고민으로 찾기 |
+| `ai-assist.tsx` | AI 도우미: 상담 요청 글 다듬기, AI 상담(`/ai`) |
 | `payment.tsx` | 상담 요금 결제: 토스 결제창 열기, 결제 성공·실패 화면, 보낸 상담의 결제·취소 영역 |
 | `salon-map.tsx` | 매장 위치: 주소 검색(Daum 우편번호)·좌표 찾기, 디자이너 상세의 카카오맵 |
 | `directory.ts`, `directory-cache.ts` | 미용실·디자이너 목록 불러오기와 캐시 |

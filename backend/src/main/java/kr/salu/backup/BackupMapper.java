@@ -12,6 +12,7 @@ public interface BackupMapper {
     @Select("SELECT id FROM members WHERE id=#{owner} AND status='ACTIVE' FOR UPDATE") Long lockOwner(long owner);
     @Select("SELECT client_id AS item_id,revision FROM personal_backup_items WHERE member_id=#{owner} ORDER BY client_id") List<Summary> list(long owner);
     @Select("SELECT client_id,revision,mutation_id,key_id,nonce,ciphertext FROM personal_backup_items WHERE member_id=#{owner} AND client_id=#{id}") Item get(long owner, String id);
+    @Select("SELECT client_id,revision,mutation_id,key_id,nonce,ciphertext FROM personal_backup_items WHERE member_id=#{owner} ORDER BY updated_at DESC LIMIT #{limit}") List<Item> recent(long owner, int limit);
     @Select("SELECT revision,payload_hash FROM personal_backup_mutations WHERE member_id=#{owner} AND client_id=#{id} AND mutation_id=#{mutation}") Mutation mutation(long owner, String id, String mutation);
     @Insert("INSERT INTO personal_backup_items(member_id,client_id,revision,mutation_id,key_id,nonce,ciphertext) VALUES(#{owner},#{id},1,#{mutation},#{data.keyId},#{data.nonce},#{data.ciphertext})") int insert(long owner, String id, String mutation, BackupCrypto.Encrypted data);
     @Update("UPDATE personal_backup_items SET revision=revision+1,mutation_id=#{mutation},key_id=#{data.keyId},nonce=#{data.nonce},ciphertext=#{data.ciphertext} WHERE member_id=#{owner} AND client_id=#{id} AND revision=#{revision}") int update(long owner, String id, long revision, String mutation, BackupCrypto.Encrypted data);

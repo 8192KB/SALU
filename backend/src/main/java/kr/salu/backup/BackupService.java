@@ -20,6 +20,12 @@ public class BackupService {
     private String aad(long owner, String kind, String id) { return "salu:v1:" + owner + ":" + kind + ":" + id; }
     @Transactional(readOnly=true) public List<BackupMapper.Summary> list(MemberPrincipal principal, String context) { return mapper.list(owner(principal, context)); }
     @Transactional(readOnly=true) public Content get(MemberPrincipal principal, String context, String id) { id(id); long owner=owner(principal,context); var item=mapper.get(owner,id); if(item==null) throw ApiException.notFound(); return new Content(item.revision(),item.mutationId(),json.readTree(crypto.decrypt(item.keyId(),item.nonce(),item.ciphertext(),aad(owner,"item",id)))); }
+    // AI 도우미가 내 기록을 고를 때 씀(docs/ai-api.md). 요청한 회원 본인 것만, 최근에 바뀐 항목부터
+    @Transactional(readOnly=true) public List<JsonNode> recentPayloads(long owner, int limit) {
+        var payloads=new java.util.ArrayList<JsonNode>();
+        for(var item:mapper.recent(owner,limit)) payloads.add(json.readTree(crypto.decrypt(item.keyId(),item.nonce(),item.ciphertext(),aad(owner,"item",item.clientId()))));
+        return payloads;
+    }
     @Transactional public Saved put(MemberPrincipal principal, String context, String id, Change change) {
         id(id); long owner=owner(principal,context);
         if(change == null || change.expectedRevision()<0 || change.mutationId()==null || !change.mutationId().matches("[A-Za-z0-9_-]{1,100}") || change.payload()==null || !change.payload().isObject() || change.payload().path("version").asInt()!=1 || change.photoIds()==null || change.photoIds().size()>1000) throw ApiException.invalidRequest();

@@ -285,7 +285,8 @@ main {
   color: var(--teal);
   margin-bottom: 16px;
 }
-.empty-state h1 {
+.empty-state h1,
+.empty-state h2 {
   font-size: 25px;
 }
 .avatar {
@@ -796,7 +797,8 @@ legend {
 }
 .designer-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 띄어쓰기 없는 긴 이름이 칸을 넓히지 않게 최소 폭 0 */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
 .designer-card {
@@ -1434,7 +1436,7 @@ legend {
     padding: 20px;
   }
   .designer-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .profile-banner {
     gap: 18px;

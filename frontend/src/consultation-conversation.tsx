@@ -8,7 +8,7 @@ import { listMessages, markRead, sendMessage } from './consultation-api';
 import type { ConsultationMessage } from './consultation-api';
 import { newId } from './prototype/ids';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
-import { sentTime } from './prototype/dates';
+import { sentTime, shortTime } from './prototype/dates';
 import { useTabDraftText } from './tab-draft';
 
 function merge(current: ConsultationMessage[], next: ConsultationMessage[]) {
@@ -54,6 +54,13 @@ export function ConsultationConversation({
   const cursor = useRef<number | undefined>(undefined);
   const marked = useRef(0);
   const input = useRef<HTMLTextAreaElement>(null);
+  // 보내는 동안 칸과 버튼을 잠가 초점이 빠지므로, 잠금이 풀린 뒤 입력칸으로 되돌려 이어 쓰게 함
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (busy || !refocus.current) return;
+    refocus.current = false;
+    input.current?.focus();
+  }, [busy]);
 
   const load = useCallback(async () => {
     try {
@@ -123,6 +130,7 @@ export function ConsultationConversation({
       );
     } finally {
       lock.current = false;
+      refocus.current = true;
       setBusy(false);
     }
   }
@@ -151,7 +159,9 @@ export function ConsultationConversation({
             <li key={message.id} className={message.mine ? 'mine' : 'theirs'}>
               <span className="sr-only">{message.mine ? '나' : partner}</span>
               <p>{message.content}</p>
-              <time dateTime={message.sentAt}>{sentTime(message.sentAt)}</time>
+              <time dateTime={message.sentAt} title={sentTime(message.sentAt)}>
+                {shortTime(message.sentAt)}
+              </time>
             </li>
           ))}
         </ol>

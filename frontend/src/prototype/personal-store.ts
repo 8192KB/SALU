@@ -869,9 +869,20 @@ export class PersonalStore {
       errorSource: null,
     });
   }
-  markSyncError(error = '계정에 저장하지 못했어요. 잠시 후 자동으로 다시 저장해요.') {
+  markSyncError(error?: string) {
     if (this.view.errorSource === 'local') return;
-    this.setView({ status: 'error', error, errorSource: 'cloud' });
+    // 보낼 기록이 없을 때 연결만 끊겼으면 저장 실패처럼 알리지 않음
+    const pending =
+      this.pendingDrafts || Object.values(this.document.items).some((item) => item.dirty);
+    this.setView({
+      status: 'error',
+      error:
+        error ??
+        (pending
+          ? '계정에 저장하지 못했어요. 잠시 후 자동으로 다시 저장해요.'
+          : '계정과 연결하지 못했어요. 연결되면 자동으로 다시 맞춰요.'),
+      errorSource: 'cloud',
+    });
   }
   async acknowledge(id: string, mutationId: string, revision: number) {
     await this.enqueue(async () => {

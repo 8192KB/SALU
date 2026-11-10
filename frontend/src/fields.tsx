@@ -5,7 +5,7 @@ import { AREAS } from './prototype/types';
 import type { Area, PhotoDraft, RecordPhoto } from './prototype/types';
 import { Icon } from './components';
 import { usePrototype } from './prototype/context';
-import { photoOrigin, visibleCaption } from './prototype/request-flow';
+import { photoNote, photoOrigin, visibleCaption } from './prototype/request-flow';
 import { displayDate } from './prototype/dates';
 import { PhotoButton } from './photo-viewer';
 export { PhotoButton } from './photo-viewer';
@@ -30,6 +30,7 @@ export function Field({
         ...(children.props['aria-label'] || children.props['aria-labelledby']
           ? {}
           : { 'aria-labelledby': labelId }),
+        ...(children.type === PasswordInput ? { fieldName: label } : {}),
         'aria-describedby':
           [children.props['aria-describedby'], description].filter(Boolean).join(' ') || undefined,
         'aria-invalid': Boolean(error) || children.props['aria-invalid'] || undefined,
@@ -47,15 +48,22 @@ export function Field({
 }
 
 // 비밀번호 칸. Field가 넘기는 aria 속성은 input에 붙고, 옆 버튼으로 입력한 글자를 보여 줌
-export function PasswordInput({ ref, disabled, ...props }: ComponentProps<'input'>) {
+export function PasswordInput({
+  ref,
+  disabled,
+  fieldName = '비밀번호',
+  ...props
+}: ComponentProps<'input'> & { fieldName?: string }) {
   const [shown, setShown] = useState(false);
+  // 칸이 둘(비밀번호·비밀번호 확인)이어도 구분되게 Field가 넘긴 칸 이름 뒤에 `보기`를 붙임. 켜짐은 aria-pressed로 알림.
+  // aria-labelledby로 칸 이름을 같이 가리키면 버튼도 그 이름표의 대상으로 잡혀 이름을 따로 받음
   return (
     <span className="password-input">
       <input {...props} ref={ref} disabled={disabled} type={shown ? 'text' : 'password'} />
       <button
         type="button"
         className="password-toggle"
-        aria-label={shown ? '비밀번호 숨기기' : '비밀번호 보기'}
+        aria-label={`${fieldName} 보기`}
         aria-pressed={shown}
         disabled={disabled}
         onClick={() => setShown((value) => !value)}
@@ -150,7 +158,9 @@ export function PhotoList({
                   {photoOrigin(photo, cutDate)} {displayDate(photo.date)}
                 </strong>
               )}
-              {visibleCaption(photo.caption)}
+              {cutDate && 'date' in photo
+                ? photoNote(photo, cutDate)
+                : visibleCaption(photo.caption)}
             </figcaption>
           )}
           {onRemove && (

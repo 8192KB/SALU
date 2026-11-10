@@ -54,6 +54,11 @@ export function stepsBackTo(to: string) {
   }
   return 0;
 }
+// 방문 기록에서 바로 앞 주소. 모르면 undefined
+export function previousEntry() {
+  const index = historyIndex();
+  return index === undefined ? undefined : entries.get(index - 1);
+}
 export function useReturnTo() {
   const navigate = useNavigate();
   const mode = useWorkspace();

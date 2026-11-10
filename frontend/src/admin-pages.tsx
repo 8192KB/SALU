@@ -13,6 +13,7 @@ import {
 } from './components';
 import type { LoadProblem } from './components';
 import { Dialog } from './dialog';
+import { Field } from './fields';
 import { useFeedback } from './feedback';
 import { Link } from './workspace';
 import { useAuth } from './auth/context';
@@ -64,14 +65,15 @@ function AdminOnly({
         <Loading>로그인 상태를 확인하고 있어요.</Loading>
       ) : state.status === 'authenticated' ? (
         <ErrorState
+          nested
           kind="denied"
           title="관리자만 볼 수 있어요"
           message="이 계정에는 신고를 처리할 권한이 없어요."
         />
       ) : state.status === 'unavailable' ? (
-        <ErrorState kind="offline" message={state.message} />
+        <ErrorState nested kind="offline" message={state.message} />
       ) : (
-        <ErrorState kind="login" message="관리자 계정으로 로그인해 주세요." />
+        <ErrorState nested kind="login" message="관리자 계정으로 로그인해 주세요." />
       )}
     </div>
   );
@@ -153,9 +155,10 @@ function DecisionButtons({
         ) : (
           <>
             {(status === 'VISIBLE' || open > 0) && (
+              // 숨기기만 강조하면 결정이 그쪽으로 기울어서 유지와 같은 모양으로 둠. 빨간 버튼은 확인 창에만
               <button
                 type="button"
-                className="button coral"
+                className="button"
                 disabled={busy}
                 onClick={() => setConfirming(true)}
               >
@@ -243,10 +246,11 @@ function ReportList({ reports }: { reports: Report[] }) {
       {reports.map((report, index) => (
         <li key={`${report.createdAt}-${index}`}>
           <strong>{REPORT_REASONS[report.reason] ?? report.reason}</strong>
-          {report.detail && <span> · {report.detail}</span>}
-          <small>
-            {REPORT_STATUS[report.status] ?? report.status} · {sentTime(report.createdAt)}
-          </small>
+          {report.detail && <p>{report.detail}</p>}
+          <p className="community-meta">
+            <span>{REPORT_STATUS[report.status] ?? report.status}</span>
+            <time dateTime={report.createdAt}>{sentTime(report.createdAt)}</time>
+          </p>
         </li>
       ))}
     </ul>
@@ -255,13 +259,16 @@ function ReportList({ reports }: { reports: Report[] }) {
 
 function CommentItem({ item, onDone }: { item: ReportedComment; onDone: () => unknown }) {
   const [reports, setReports] = useState<Report[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   return (
     <li className="admin-item">
       <p className="admin-quote">{item.content}</p>
       <p className="community-meta">
-        {item.authorName} · 신고 {item.openCount}건 · {reasonList(item.reasons)} ·{' '}
-        {POST_STATUS[item.status] ?? item.status}
+        <span>{item.authorName}</span>
+        <span>신고 {item.openCount}건</span>
+        <span>{reasonList(item.reasons)}</span>
+        <span>{POST_STATUS[item.status] ?? item.status}</span>
       </p>
       <div className="admin-links">
         <Link className="text-link" to={`/admin/posts/${item.postId}`}>
@@ -273,21 +280,27 @@ function CommentItem({ item, onDone }: { item: ReportedComment; onDone: () => un
         >
           작성자 제재 기록
         </Link>
-        {!reports && (
-          <button
-            type="button"
-            className="text-link"
-            onClick={() =>
-              fetchCommentReports(item.id).then(setReports, (failure: unknown) =>
-                setError(errorText(failure, '신고 내용을 불러오지 못했어요.')),
-              )
-            }
-          >
-            신고 내용 보기
-          </button>
-        )}
+        {/* 버튼을 없애면 초점이 갈 곳이 사라지므로 펼친 뒤에는 접기로 바꿈 */}
+        <button
+          type="button"
+          className="text-link"
+          aria-expanded={open}
+          onClick={() => {
+            if (open) return setOpen(false);
+            if (reports) return setOpen(true);
+            fetchCommentReports(item.id).then(
+              (value) => {
+                setReports(value);
+                setOpen(true);
+              },
+              (failure: unknown) => setError(errorText(failure, '신고 내용을 불러오지 못했어요.')),
+            );
+          }}
+        >
+          {open ? '신고 내용 접기' : '신고 내용 보기'}
+        </button>
       </div>
-      {reports && <ReportList reports={reports} />}
+      {open && reports && <ReportList reports={reports} />}
       <Alert message={error} />
       <DecisionButtons
         target={{ comment: item.id }}
@@ -353,8 +366,11 @@ export function AdminReports() {
                         <strong>{item.title}</strong>
                       </Link>
                       <p className="community-meta">
-                        {item.authorName} · 신고 {item.openCount}건 · {reasonList(item.reasons)} ·{' '}
-                        {POST_STATUS[item.status] ?? item.status} · {sentTime(item.latestAt)}
+                        <span>{item.authorName}</span>
+                        <span>신고 {item.openCount}건</span>
+                        <span>{reasonList(item.reasons)}</span>
+                        <span>{POST_STATUS[item.status] ?? item.status}</span>
+                        <time dateTime={item.latestAt}>{sentTime(item.latestAt)}</time>
                       </p>
                     </li>
                   ))}
@@ -385,7 +401,8 @@ export function AdminReports() {
                         <strong>{item.title}</strong>
                       </Link>
                       <p className="community-meta">
-                        {item.authorName} · {sentTime(item.latestAt)}
+                        <span>{item.authorName}</span>
+                        <time dateTime={item.latestAt}>{sentTime(item.latestAt)}</time>
                       </p>
                     </li>
                   ))}
@@ -433,6 +450,7 @@ export function AdminPost() {
         {error && review && <Alert message={error.message} />}
         {!review && error && (
           <LoadFailure
+            nested
             problem={error}
             title="신고된 글을 찾을 수 없어요"
             onRetry={() => void load()}
@@ -444,15 +462,18 @@ export function AdminPost() {
             <section className="consultation-soft-panel">
               <p className="community-meta">
                 <span className="community-category">{CATEGORY_LABELS[review.post.category]}</span>
-                {review.post.author.displayName} · {sentTime(review.post.createdAt)} ·{' '}
-                {POST_STATUS[review.post.status] ?? review.post.status}
+                <span>{review.post.author.displayName}</span>
+                <time dateTime={review.post.createdAt}>{sentTime(review.post.createdAt)}</time>
+                <span>{POST_STATUS[review.post.status] ?? review.post.status}</span>
               </p>
               <h2>{review.post.title}</h2>
               {review.post.cut && (
-                <p className="community-cut">
-                  {cutTitle(review.post.cut.cutDate, review.post.cut.service)} ·{' '}
-                  {review.post.cut.summary}
-                </p>
+                <>
+                  <p className="community-cut">
+                    {cutTitle(review.post.cut.cutDate, review.post.cut.service)}
+                  </p>
+                  <p>{review.post.cut.summary}</p>
+                </>
               )}
               <p className="community-content">{review.post.content}</p>
               {review.post.photoUrls.length > 0 && (
@@ -503,6 +524,7 @@ export function AdminMember() {
   const [days, setDays] = useState<number | null>(7);
   const [reason, setReason] = useState('');
   const [confirm, setConfirm] = useState(false);
+  const [reasonError, setReasonError] = useState('');
   const [lifting, setLifting] = useState<Sanction | null>(null);
   const [busy, setBusy] = useState(false);
   const notify = useFeedback();
@@ -558,7 +580,12 @@ export function AdminMember() {
   }
   const title = name ? `${name}님 제재 기록` : '회원 제재 기록';
   const back = <BackLink to="/admin/reports">신고 처리</BackLink>;
-  if (!Number.isSafeInteger(memberId)) return <Missing title="회원을 찾을 수 없어요" />;
+  if (!Number.isSafeInteger(memberId))
+    return (
+      <AdminOnly title={title} back={back}>
+        <Missing title="회원을 찾을 수 없어요" />
+      </AdminOnly>
+    );
   return (
     <AdminOnly title={title} back={back}>
       <div className="community-screen">
@@ -578,9 +605,12 @@ export function AdminMember() {
                 <li key={item.id} className="admin-item">
                   <strong>{item.reason}</strong>
                   <p className="community-meta">
-                    {sentTime(item.createdAt)} ~ {item.endsAt ? sentTime(item.endsAt) : '기간 없음'}
-                    {item.liftedAt && ` · ${sentTime(item.liftedAt)} 해제`}
-                    {item.active && ' · 제재 중'}
+                    <span>
+                      {sentTime(item.createdAt)} ~{' '}
+                      {item.endsAt ? sentTime(item.endsAt) : '기간 없음'}
+                    </span>
+                    {item.liftedAt && <span>{sentTime(item.liftedAt)} 해제</span>}
+                    {item.active && <span>제재 중</span>}
                   </p>
                   {item.active && (
                     <button
@@ -618,7 +648,10 @@ export function AdminMember() {
               onSubmit={(event: FormEvent<HTMLFormElement>) => {
                 event.preventDefault();
                 if (!reason.trim()) {
-                  setError('제재 이유를 적어 주세요.');
+                  setReasonError('제재 이유를 적어 주세요.');
+                  event.currentTarget
+                    .querySelector<HTMLInputElement>('input[type=text], input:not([type])')
+                    ?.focus();
                   return;
                 }
                 setError('');
@@ -641,21 +674,23 @@ export function AdminMember() {
                   </label>
                 ))}
               </fieldset>
-              <label className="consultation-request-field">
-                <span>이유</span>
+              {/* 오류는 페이지 위가 아니라 이유 칸 아래에 보임(Field 공통 모양) */}
+              <Field
+                label="이유"
+                hint="회원이 글쓰기·내 글 화면에서 그대로 봐요"
+                error={reasonError}
+              >
                 <input
-                  className="admin-input"
                   maxLength={200}
                   value={reason}
                   disabled={busy}
                   placeholder="예: 반복 광고"
-                  aria-describedby="sanction-reason-hint"
-                  onChange={(event) => setReason(event.target.value)}
+                  onChange={(event) => {
+                    setReason(event.target.value);
+                    setReasonError('');
+                  }}
                 />
-              </label>
-              <p id="sanction-reason-hint" className="consultation-privacy">
-                이유는 회원이 글쓰기·내 글 화면에서 그대로 봐요.
-              </p>
+              </Field>
               <button type="submit" className="button coral" disabled={busy}>
                 제재
               </button>
@@ -664,7 +699,7 @@ export function AdminMember() {
         )}
         <Dialog
           open={confirm}
-          title="이 회원을 제재할까요?"
+          title={name ? `${name}님을 제재할까요?` : '이 회원을 제재할까요?'}
           onClose={() => !busy && setConfirm(false)}
         >
           <p>
@@ -693,7 +728,7 @@ export function AdminMember() {
         </Dialog>
         <Dialog
           open={lifting !== null}
-          title="제재를 풀까요?"
+          title={name ? `${name}님의 제재를 풀까요?` : '제재를 풀까요?'}
           onClose={() => !busy && setLifting(null)}
         >
           <p>

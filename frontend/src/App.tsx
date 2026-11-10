@@ -39,6 +39,7 @@ import { ConsultationProvider, useConsultations } from './consultation-store';
 import { RealtimeProvider } from './realtime';
 import { NotificationButton, NotificationList } from './notifications';
 import { MorePage } from './more-page';
+import { AiChatPage } from './ai-assist';
 import { PaymentFail, PaymentSuccess } from './payment';
 import {
   DesignerDetail,
@@ -421,6 +422,7 @@ function PageRoutes({
           />
           <Route path="notifications" element={<NotificationList />} />
           <Route path="more" element={<MorePage />} />
+          <Route path="ai" element={<AiChatPage />} />
           <Route path="community" element={<CommunityList />} />
           <Route path="community/mine" element={<MyPosts />} />
           <Route path="community/new" element={<CommunityWrite />} />

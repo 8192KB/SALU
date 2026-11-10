@@ -225,20 +225,24 @@ export function ConsultationPaymentPanel({ thread }: { thread: ConsultationThrea
       setBusy('');
     }
   };
+  // 무료 상담도 취소 버튼만 두지 않고 언제까지 취소할 수 있는지 함께 알림.
+  // 결제한 상담은 72시간 무응답 자동 취소일 수도 있어 `취소한`이 아니라 `취소된`이라고 씀
   const status =
     thread.status === 'PAYMENT_PENDING'
       ? `상담 요금 ${won(fee)}을 결제하면 디자이너에게 요청이 가요. 30분 안에 결제하지 않으면 요청이 취소돼요.`
       : thread.status === 'CANCELED'
         ? payment?.status === 'REFUND_PENDING'
-          ? `취소한 상담이에요. 상담 요금 ${won(fee)}을 환불하고 있어요.`
+          ? `취소된 상담이에요. 상담 요금 ${won(fee)}을 환불하고 있어요.`
           : payment?.status === 'CANCELED' && payment.paid
-            ? `취소한 상담이에요. 상담 요금 ${won(fee)}을 환불했어요.`
+            ? `취소된 상담이에요. 상담 요금 ${won(fee)}을 환불했어요.`
             : payment?.status === 'EXPIRED'
               ? '30분 안에 결제하지 않아 취소된 상담이에요.'
               : '취소한 상담이에요.'
         : payment?.status === 'PAID'
           ? `상담 요금 ${won(fee)}을 결제했어요. 72시간 안에 답변이 없으면 자동으로 취소되고 환불돼요.`
-          : '';
+          : thread.canCancel
+            ? '디자이너가 답변하기 전에는 취소할 수 있어요.'
+            : '';
   if (!status && !thread.canCancel) return null;
   return (
     <section className="consultation-soft-panel consultation-payment">

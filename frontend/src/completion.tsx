@@ -9,6 +9,34 @@ import { usePrototype } from './prototype/context';
 import { useDirectory } from './directory';
 import { cutTitle, displayDate } from './prototype/dates';
 
+// 완료 화면 아래 무엇을 남겼는지 보여 주는 카드. 사진이 없으면 빈 사진 자리
+export function CompletedSummary({
+  photo,
+  photoAlt,
+  title,
+  text,
+  meta,
+}: {
+  photo?: string | null;
+  photoAlt: string;
+  title: string;
+  text: string;
+  meta?: string;
+}) {
+  return (
+    <div className="completed-summary">
+      <div className="prepared-cut-photo">
+        {photo ? <img src={photo} alt={photoAlt} /> : <PhotoPlaceholder />}
+      </div>
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
+        {meta && <span>{meta}</span>}
+      </div>
+    </div>
+  );
+}
+
 export function Completion({
   title,
   children,
@@ -130,10 +158,8 @@ export function RecordComplete() {
               ? progress.discomfort || progress.styling || progress.question
               : cut.goodNote || '커트한 날의 기록'}
           </p>
-          <span>
-            {displayDate(progress?.observedOn ?? cut.cutDate, true)} ·{' '}
-            {progress ? '경과 기록' : '커트 기록'}
-          </span>
+          {/* 커트 날짜는 제목에 있으므로 경과일 때만 관찰한 날을 따로 적음 */}
+          {progress && <span>{displayDate(progress.observedOn)} 경과</span>}
         </div>
       </div>
     </Completion>

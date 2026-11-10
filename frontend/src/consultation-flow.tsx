@@ -28,7 +28,7 @@ import type {
 } from './consultation-store';
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
-import { cutTitle, daysAfter, sentTime } from './prototype/dates';
+import { cutTitle, daysAfter, displayDate, sentTime } from './prototype/dates';
 import { photoOrigin, previewUrl } from './prototype/request-flow';
 import { MAX_CONSULTATION_PHOTOS } from './consultation-api';
 import { useAuth } from './auth/context';
@@ -105,7 +105,7 @@ function previewSummary(preview: RequestPreview) {
         entry.styling && `손질 ${entry.styling}`,
         entry.question && `질문 ${entry.question}`,
       ].filter(Boolean);
-      return `경과 D+${daysAfter(preview.cut.cutDate, entry.observedOn)}${areas ? ` · ${areas}` : ''}: ${notes.join(' / ') || '사진만 남김'}`;
+      return `경과 D+${daysAfter(preview.cut.cutDate, entry.observedOn)}${areas ? `(${areas})` : ''}: ${notes.join(' / ') || '사진만 남김'}`;
     }),
   ];
   return (lines.join('\n') || '커트한 날의 기록').slice(0, 2000);
@@ -247,7 +247,7 @@ export function ConsultationDesignerProfile({
             <BackLink
               to={record ? `/designers?record=${encodeURIComponent(record)}` : '/designers'}
             >
-              디자이너 목록
+              디자이너 찾기
             </BackLink>
           )
         }
@@ -291,7 +291,7 @@ export function ConsultationDesignerProfile({
                   <Icon name="user" size={22} />
                 </span>
                 <p>{review.content}</p>
-                <time dateTime={review.date}>{review.date.replaceAll('-', '.')}</time>
+                <time dateTime={review.date}>{displayDate(review.date, true)}</time>
               </article>
             ))
           ) : (
@@ -467,6 +467,20 @@ function ConsultationForm({
     setInitial((current) => (current.id === next.id ? current : next));
   }, [active, repository, designer.id, record, preview?.id, base]);
   const draft = consultations.drafts[initial.id] ?? initial;
+  // 새로고침 뒤에는 보낸 상담을 아직 안 받았으므로 이 준비로 보낸 적이 있으면 받아 옴(준비 내용 화면과 같음)
+  const sentBefore = Boolean(preview && consultations.sentFrom?.[preview.id]?.length);
+  useEffect(() => {
+    if (sentBefore && consultations.loaded === false) void repository.refresh?.();
+  }, [sentBefore, consultations.loaded, repository]);
+  // 같은 준비 내용으로 이 디자이너에게 이미 보냈으면 알려 줌. 다시 보낼 수는 있음
+  const alreadySent = preview
+    ? consultations.threads.find(
+        (thread) =>
+          consultations.sentFrom?.[preview.id]?.includes(thread.id) &&
+          thread.designer.id === designer.id &&
+          thread.status !== 'CANCELED',
+      )
+    : undefined;
   const lock = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -521,6 +535,25 @@ function ConsultationForm({
     }
   }
   const prepared = preview && attachmentFor(state, preview.cut.id, designer.id, preview);
+  // 주소로 바로 왔는데 이 디자이너가 맡은 기록이 없으면 고를 것이 없으므로 자료 고르기로 안내함
+  if (!prepared && !state.cuts.some((cut) => cut.designerProfileId === designer.id))
+    return (
+      <div className="consultation-screen">
+        <PageHeading
+          title={`${designer.name} 디자이너가 맡은 커트 기록이 없어요`}
+          back={<BackLink to={`/designers/${designer.id}`}>디자이너 프로필</BackLink>}
+        />
+        <section className="consultation-soft-panel">
+          <p>다른 커트 기록과 경과를 골라 상담할 내용을 준비해 주세요.</p>
+          <Link
+            className="button primary"
+            to={`/consultations/materials?${new URLSearchParams({ designer: designer.id })}`}
+          >
+            기록 골라 상담 신청
+          </Link>
+        </section>
+      </div>
+    );
   return (
     <div className="consultation-screen consultation-compose">
       <PageHeading
@@ -538,6 +571,12 @@ function ConsultationForm({
           )
         }
       />
+      {alreadySent && (
+        <p className="working-notice" role="status">
+          이 준비 내용은 이미 {designer.name} 디자이너에게 보냈어요.{' '}
+          <Link to={`/consultations/${alreadySent.id}`}>보낸 상담 보기</Link>
+        </p>
+      )}
       <form onSubmit={submit} noValidate>
         {prepared ? (
           // 준비 내용으로 왔으면 그 내용만 첨부하고 커트를 다시 고르게 하지 않음
@@ -644,6 +683,7 @@ function useThread(id: string) {
 export function ConsultationComplete() {
   const { id = '' } = useParams();
   const { thread, error, server, reload } = useThread(id);
+  const example = useWorkspace() === 'example';
   if (!thread)
     return server && !error ? (
       <Loading>상담 요청을 불러오고 있어요.</Loading>
@@ -656,14 +696,17 @@ export function ConsultationComplete() {
     );
   const { attachment } = thread;
   // 기록 저장 완료와 같은 완료 화면을 써서 체크·문구·버튼 배치를 통일
+  // 예시 체험은 디자이너에게 실제로 가지 않고 알림 메뉴도 없어 답변 알림을 약속하지 않음
   return (
     <div className="consultation-sent">
       <Completion
         title={`${thread.designer.name} 디자이너에게 전달했어요`}
         description={
-          thread.payment?.status === 'PAID'
-            ? `상담 요금 ${won(thread.fee ?? 0)}을 결제했어요. 답변이 오면 알림이 와요.`
-            : '답변이 오면 알림이 와요.'
+          example
+            ? '예시 체험이라 실제 디자이너에게는 가지 않아요.'
+            : thread.payment?.status === 'PAID'
+              ? `상담 요금 ${won(thread.fee ?? 0)}을 결제했어요. 답변이 오면 알림이 와요.`
+              : '답변이 오면 알림이 와요.'
         }
         primary="보낸 상담 보기"
         to={`/consultations/${thread.id}`}
@@ -767,7 +810,7 @@ export function ConsultationList() {
               </div>
               <p>{thread.request}</p>
               <AttachmentCard attachment={thread.attachment} compact />
-              <time dateTime={thread.sentAt}>{sentTime(thread.sentAt)}</time>
+              <LatestTime sentAt={thread.sentAt} lastMessageAt={thread.lastMessageAt} />
             </Link>
           ))}
         </div>
@@ -795,8 +838,11 @@ export function ConsultationList() {
           <button
             type="button"
             className="text-link"
-            disabled={state.loading}
-            onClick={() => void repository.refresh?.()}
+            // 잠그면 누른 버튼에서 초점이 빠지므로 불러오는 중임만 알리고 두 번 누름은 무시함
+            aria-busy={state.loading}
+            onClick={() => {
+              if (!state.loading) void repository.refresh?.();
+            }}
           >
             {state.loading ? '불러오는 중' : '목록 새로고침'}
           </button>
@@ -821,6 +867,7 @@ function ConsultationStatus({ status }: { status: ConsultationThread['status'] }
   );
 }
 export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
+  const example = useWorkspace() === 'example';
   return (
     <section className="consultation-soft-panel consultation-reply">
       <h2>{reply ? '디자이너 답변' : '답변 대기'}</h2>
@@ -830,7 +877,9 @@ export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
           <time dateTime={reply.repliedAt}>{sentTime(reply.repliedAt)}</time>
         </>
       ) : (
-        <p>디자이너의 답변이 오면 여기에 떠요.</p>
+        <p>
+          {example ? '예시 체험이라 답변은 오지 않아요.' : '디자이너의 답변이 오면 여기에 떠요.'}
+        </p>
       )}
     </section>
   );
@@ -842,6 +891,16 @@ export function UnreadBadge({ count }: { count?: number }) {
       {count > 99 ? '99+' : count}
     </span>
   ) : null;
+}
+// 목록 카드 시각. 정렬(byLatest)과 같은 기준이라 보낸 뒤 메시지가 오갔으면 그 시각을 보여 줌
+export function LatestTime({ sentAt, lastMessageAt }: { sentAt: string; lastMessageAt?: string }) {
+  const latest = lastMessageAt ?? sentAt;
+  return (
+    <time dateTime={latest}>
+      {latest !== sentAt && '마지막 메시지 '}
+      {sentTime(latest)}
+    </time>
+  );
 }
 // 마지막 메시지가 최근인 상담부터. 예시 상담은 메시지가 없어 보낸 시각으로 정렬
 export const byLatest = <T extends { sentAt: string; lastMessageAt?: string }>(items: T[]) =>
@@ -875,7 +934,7 @@ export function ConsultationDetail() {
     ) : (
       <LoadFailure
         problem={error ?? { kind: 'missing', message: '' }}
-        title="상담 내역을 찾을 수 없어요"
+        title="상담을 찾을 수 없어요"
         onRetry={() => void reload()}
       />
     );
@@ -909,7 +968,7 @@ export function ConsultationDetail() {
           placeholder="예: 다음 주 토요일에 방문할게요."
           emptyMessage={
             thread.reply
-              ? undefined
+              ? '답변을 보고 더 묻고 싶은 점이 있으면 메시지로 보내 주세요.'
               : '디자이너가 답변하면 화면 맨 위에 보여요. 그 전에도 더 전할 내용을 보낼 수 있어요.'
           }
           answerAt={thread.reply?.repliedAt}

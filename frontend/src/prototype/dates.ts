@@ -29,6 +29,28 @@ const sentFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeStyle: 'short',
 });
 export const sentTime = (date: string) => sentFormatter.format(new Date(date));
+const clockFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  timeStyle: 'short',
+});
+// 말풍선·알림처럼 시각이 줄줄이 반복되는 곳. 오늘이면 시각만, 올해면 월·일과 시각, 그 밖은 전체
+export function shortTime(date: string) {
+  const value = new Date(date);
+  if (Number.isNaN(value.getTime())) return date;
+  const parts = seoulDateFormatter.formatToParts(value);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  const day = `${get('year')}-${get('month')}-${get('day')}`;
+  const now = today();
+  if (day === now) return clockFormatter.format(value);
+  if (day.slice(0, 4) === now.slice(0, 4))
+    return `${Number(get('month'))}월 ${Number(get('day'))}일 ${clockFormatter.format(value)}`;
+  return sentFormatter.format(value);
+}
+// 기록 이름(cutTitle)에 월·일이 이미 있어 카드 위 작은 줄은 올해가 아닐 때 연도만 보여 줌
+export function otherYear(date: string) {
+  const year = date.slice(0, 4);
+  return validDate(date) && year !== today().slice(0, 4) ? `${year}년` : '';
+}
 export function cutTitle(date: string, service: string) {
   const [, month, day] = date.split('-');
   return `${Number(month)}월 ${Number(day)}일 ${service}`;

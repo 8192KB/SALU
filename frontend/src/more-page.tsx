@@ -6,6 +6,7 @@ import { useAuth } from './auth/context';
 import { directoryRequest } from './auth/api';
 import { useLoginPath } from './auth/pages';
 import { useOnReactivate } from './realtime';
+import { useAiEnabled } from './ai-assist';
 
 function Item({ to, title, note }: { to: string; title: string; note?: string }) {
   return (
@@ -43,6 +44,7 @@ export function MorePage() {
   const loginPath = useLoginPath();
   const member = state.status === 'authenticated';
   const memberId = state.status === 'authenticated' ? state.member.id : null;
+  const aiEnabled = useAiEnabled();
   const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
   // 받은 상담은 디자이너 프로필이 있는 회원에게만 보여 줌. 확인하지 못하면(null) 숨기지 않음
   const [designer, setDesigner] = useState<boolean | null>(null);
@@ -82,6 +84,11 @@ export function MorePage() {
         <Item to="/designers" title="디자이너 찾기" />
         {member && <Item to="/designers?favorites=1" title="찜한 디자이너" />}
       </Group>
+      {aiEnabled && (
+        <Group title="AI 도우미">
+          <Item to="/ai" title="AI 상담" note="내 기록을 보고 손질 방법을 알려 줘요" />
+        </Group>
+      )}
       {member && (
         <Group title="디자이너 활동" designer>
           {designer !== false && <Item to="/consultations/received" title="받은 상담" />}

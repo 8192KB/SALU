@@ -14,7 +14,7 @@ import {
   Loading,
 } from './components';
 import type { LoadProblem } from './components';
-import { Completion } from './completion';
+import { CompletedSummary, Completion } from './completion';
 import { Dialog } from './dialog';
 import { useFeedback } from './feedback';
 import { Link, useNavigate } from './workspace';
@@ -30,7 +30,7 @@ import {
   saveReview,
 } from './designer-api';
 import type { DesignerReview, DesignerReviews } from './designer-api';
-import { sentTime } from './prototype/dates';
+import { cutTitle, sentTime } from './prototype/dates';
 import { useLocalSignal, useOnReactivate } from './realtime';
 import { readTabDraft, writeTabDraft } from './tab-draft';
 
@@ -43,7 +43,9 @@ function useMember(): SessionMember | null {
 
 export function Stars({ rating }: { rating: number }) {
   return (
-    <span className="review-stars" aria-label={`별점 ${rating}점`}>
+    // role 없는 span의 aria-label은 낭독기가 읽지 않아서 숨긴 글자로 점수를 읽힘
+    <span className="review-stars">
+      <span className="sr-only">별점 {rating}점</span>
       <span aria-hidden="true">
         {'★'.repeat(rating)}
         <span className="review-stars-empty">{'★'.repeat(5 - rating)}</span>
@@ -345,7 +347,7 @@ export function ReviewWrite() {
     return (
       <div className="consultation-screen">
         <PageHeading title="후기 남기기" back={back} />
-        <ErrorState kind="login" message="로그인하면 보낸 상담에 후기를 남길 수 있어요." />
+        <ErrorState nested kind="login" message="로그인하면 보낸 상담에 후기를 남길 수 있어요." />
       </div>
     );
   if (!consultation)
@@ -363,6 +365,7 @@ export function ReviewWrite() {
           back={<BackLink to={`/consultations/received/${id}`}>받은 상담</BackLink>}
         />
         <ErrorState
+          nested
           kind="denied"
           title="상담을 보낸 회원만 후기를 남길 수 있어요"
           message="받은 상담에서 고객이 남긴 후기를 볼 수 있어요."
@@ -494,6 +497,9 @@ export function ReviewComplete() {
   const member = useMember();
   const edited = Boolean((useLocation().state as { edited?: boolean } | null)?.edited);
   const [designerId, setDesignerId] = useState('');
+  const [summary, setSummary] = useState<{ item: Consultation; review: DesignerReview } | null>(
+    null,
+  );
   const directory = useSyncExternalStore(subscribeDirectory, directorySnapshot);
   // 그 뒤 비공개로 바뀐 디자이너는 프로필을 열 수 없으므로 링크를 숨김. 목록을 아직 못 받았으면 그대로 보여 줌
   const designerOpen =
@@ -502,7 +508,14 @@ export function ReviewComplete() {
   useEffect(() => {
     if (!member) return;
     getConsultation(member, id).then(
-      (value) => setDesignerId(value.designer.id),
+      (value) => {
+        setDesignerId(value.designer.id);
+        // 요약을 못 받아도 완료 안내와 버튼은 그대로 보임
+        fetchConsultationReview(member, id).then(
+          (review) => setSummary({ item: value, review }),
+          () => {},
+        );
+      },
       () => {},
     );
   }, [member?.id, id]);
@@ -520,7 +533,15 @@ export function ReviewComplete() {
         secondary={designerOpen ? '디자이너 프로필 보기' : undefined}
         secondaryTo={`/designers/${designerId}`}
       >
-        {null}
+        {summary && (
+          <CompletedSummary
+            photo={summary.item.attachment.photos?.[0]?.url ?? summary.item.attachment.photoUrl}
+            photoAlt={`${cutTitle(summary.item.attachment.cutDate, summary.item.attachment.service)} 사진`}
+            title={`${summary.item.designer.name} 디자이너`}
+            text={summary.review.content.split('\n')[0]}
+            meta={`별점 ${summary.review.rating}점`}
+          />
+        )}
       </Completion>
     </div>
   );

@@ -13,7 +13,7 @@
 - 파일·HTTP·STOMP는 DB 롤백으로 되돌아가지 않음. 실시간 신호는 `RealtimePublisher`(commit 뒤 전송), 알림은 `NotificationService.create`(업무 transaction 안)로만 보냄
 - 실제 MySQL 커밋/롤백 검증은 테스트 전용 salu_test·fixture 사용. 테스트 메서드 자체에 @Transactional을 붙여 Service의 커밋 여부를 가리지 않음
 - 테스트 API·테이블·보안 완화는 src/test에만 배치. 일반 실행 jar/API에 포함 금지
-- .env·비밀번호·원문 요청·SQL 오류를 응답/로그/Git에 넣지 않음. 적용한 Flyway migration 수정·기존 Salon/DB 초기화 금지
+- .env·비밀번호·원문 요청·SQL 오류를 응답/로그/Git에 넣지 않음. 적용한 Flyway migration 수정·다른 프로젝트·기존 DB 초기화 금지
 - 변경한 공통 동작은 빌드뿐 아니라 실제 서버/API·DB·브라우저에서 확인. 테스트 결과로 구현되지 않은 기능을 완료 처리하지 않음
 
 ## 함께 작업할 때
@@ -22,7 +22,7 @@
 - 새 화면·이동은 `docs/screen-flow.md`를 코드보다 먼저 고치고 PR에서 흐름 확인. 제목·뒤로 링크·완료 화면은 `PageHeading`·`BackLink`·`completion.tsx` 공통 부품 사용
 - 화면을 만들거나 고칠 때는 `DESIGN.md`(색·배치·공통 패턴·문구)와 `PRODUCT.md`(제품 맥락) 적용. 새 색·글꼴·스타일 체계를 만들지 않고 `frontend/src/theme.css` 토큰 사용. 디자인 skill도 이 기준 안에서만 적용
 - `backend/`·DB migration·`docs/`·작업 지침은 CODEOWNERS 승인 필요. 서버 API가 더 필요하면 계약 문서 변경을 먼저 PR로 올림. 화면 작업에서 서버 코드를 함께 고치지 않음
-- 기존 Salon 코드는 로직만 참고하고 복사하지 않음. 피할 점은 docs/development-contract.md의 `기존 Salon 참고`
+- 다른 프로젝트 코드는 로직만 참고하고 복사하지 않음. 피할 점은 docs/development-contract.md의 `피할 구현 방식`
 
 - 로그인 변경 전 docs/login.md 확인. 로컬 docs/salon-security-audit.md가 있으면 참고. 요청 role/memberId 사용 금지, ACTIVE 상태·전체 CSRF·세션 교체·JSON 실패 계약 유지
 - 서버 API 구현·호출 전 해당 docs/*-api.md 확인(상담·알림·디자이너·커뮤니티). 경로·필드·오류를 바꿀 때는 코드보다 문서를 먼저 갱신

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PhotoDraft, RecordPhoto } from './prototype/types';
-import { photoOrigin, visibleCaption } from './prototype/request-flow';
+import { photoNote, photoOrigin, visibleCaption } from './prototype/request-flow';
 import { displayDate } from './prototype/dates';
 import { PhotoPlaceholder } from './components';
 import { Dialog } from './dialog';
@@ -19,6 +19,8 @@ export function PhotoButton({
   const label = photo.caption.trim() || '커트 사진';
   const moment =
     cutDate && 'date' in photo ? `${photoOrigin(photo, cutDate)} ${displayDate(photo.date)}` : '';
+  const note =
+    cutDate && 'date' in photo ? photoNote(photo, cutDate) : visibleCaption(photo.caption);
   return (
     <>
       <button
@@ -54,7 +56,7 @@ export function PhotoButton({
               <br />
             </strong>
           )}
-          {visibleCaption(photo.caption)}
+          {note}
         </p>
       </Dialog>
     </>

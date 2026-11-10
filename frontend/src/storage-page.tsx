@@ -358,8 +358,11 @@ function PersonalBackupPage({
                   navigate('/records/new');
                 }}
               >
-                {validDate(draft.cutDate) ? displayDate(draft.cutDate) : '날짜 미정'} ·{' '}
-                {draft.service || '커트 기록'} 이어 작성
+                {/* 기록 이름(`11월 6일 커트`)과 같은 모양. 날짜가 없으면 시술 이름만 */}
+                {validDate(draft.cutDate)
+                  ? `${displayDate(draft.cutDate)} ${draft.service || '커트'}`
+                  : draft.service || '커트 기록'}{' '}
+                이어 작성
               </button>
               <button type="button" className="button" onClick={() => setRemoveDraft(i)}>
                 지우기

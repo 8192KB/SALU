@@ -19,8 +19,10 @@ export function FavoriteButton({ designer }: { designer: DesignerProfile }) {
         type="button"
         className="button favorite-button"
         aria-pressed={on}
-        disabled={busy}
+        // disabled로 잠그면 누른 버튼에서 초점이 빠지므로 저장 중임만 알리고 두 번 누름은 무시함
+        aria-busy={busy}
         onClick={async () => {
+          if (busy) return;
           setBusy(true);
           setError('');
           try {
@@ -33,7 +35,8 @@ export function FavoriteButton({ designer }: { designer: DesignerProfile }) {
         }}
       >
         <Icon name="heart" size={18} />
-        {on ? '찜한 디자이너' : '찜하기'}
+        {/* 이름은 그대로 두고 눌린 상태(aria-pressed·채운 하트)로 찜 여부를 알림. 이름까지 바꾸면 낭독기가 두 번 말함 */}
+        찜하기
       </button>
       <Alert message={error} />
     </div>

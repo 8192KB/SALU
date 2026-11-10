@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { Alert, BackLink, FieldFeedback, Icon, PageHeading } from '../components';
+import { Alert, BackLink, FieldFeedback, focusFirstError, Icon, PageHeading } from '../components';
 import { isTaskPath } from '../main-navigation';
 import { Field, PasswordInput } from '../fields';
 import { Dialog } from '../dialog';
@@ -395,6 +395,11 @@ export function PasswordResetPage() {
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
   const [expired, setExpired] = useState(false);
+  // 바꾸는 동안 칸을 잠가 초점이 빠지므로, 링크가 만료됐으면 다음 행동인 새 링크 받기로 옮김
+  const newLink = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (expired) newLink.current?.focus();
+  }, [expired]);
   const match = passwordMatch(password, confirm);
   const fail = (failure: unknown) =>
     setError(failure instanceof Error ? failure.message : '요청하지 못했어요. 다시 시도해 주세요.');
@@ -465,6 +470,7 @@ export function PasswordResetPage() {
           {/* 링크가 만료됐거나 이미 쓴 경우 이 화면에서 바로 새 링크를 요청함 */}
           {expired && (
             <button
+              ref={newLink}
               type="button"
               className="text-link"
               onClick={() => {
@@ -928,9 +934,9 @@ export function AccountPage() {
   if (state.status !== 'authenticated')
     return (
       <div className="login-page">
-        <PageHeading back={<BackLink to="/">홈으로</BackLink>} title="내 계정" />
+        <PageHeading back={<BackLink to="/">홈</BackLink>} title="내 계정" />
         <SessionNotice />
-        <section className="panel">
+        <section className="panel account-guest">
           <Link className="button primary full" to={loginPath}>
             로그인
           </Link>
@@ -947,7 +953,7 @@ export function AccountPage() {
     );
   return (
     <div className="login-page">
-      <PageHeading back={<BackLink to="/">홈으로</BackLink>} title="내 계정" />
+      <PageHeading back={<BackLink to="/">홈</BackLink>} title="내 계정" />
       <SessionNotice />
       {linkedNotice && (
         <p className="working-notice" role="status">
@@ -1019,11 +1025,13 @@ function RenameForm({ member }: { member: SessionMember }) {
   return (
     <form
       className="account-edit"
+      noValidate
       onSubmit={async (event) => {
         event.preventDefault();
         const value = name.trim();
         if (!value) {
           setError('이름을 입력해 주세요.');
+          event.currentTarget.querySelector('input')?.focus();
           return;
         }
         if (value === member.displayName) {
@@ -1106,6 +1114,7 @@ function PasswordForm() {
           return;
         }
         if (next !== confirm) return;
+        const form = event.currentTarget;
         setBusy(true);
         try {
           await changePassword(current, next);
@@ -1117,6 +1126,8 @@ function PasswordForm() {
           if (failure instanceof ApiFailure && failure.code === 'CURRENT_PASSWORD_INVALID')
             setCurrentError(message);
           else setError(message);
+          // 저장 중 잠갔던 칸이 풀리면 틀린 칸(없으면 오류 안내)으로 초점을 옮김
+          focusFirstError(form);
         } finally {
           setCurrent('');
           setBusy(false);

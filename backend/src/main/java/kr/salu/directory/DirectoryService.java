@@ -13,10 +13,12 @@ public class DirectoryService {
         @Size(max=200) String address, @DecimalMin("33") @DecimalMax("39") Double latitude, @DecimalMin("124") @DecimalMax("132") Double longitude) {}
     public record LocationInput(@NotBlank @Size(max=200) String address, @NotNull @DecimalMin("33") @DecimalMax("39") Double latitude, @NotNull @DecimalMin("124") @DecimalMax("132") Double longitude) {}
     public record ProfileInput(@NotBlank @Size(max=100) String name, @NotBlank @Size(max=2000) String introduction,
-        @NotNull @Size(max=10) List<@NotBlank @Size(max=40) String> specialties,
+        @NotNull @Size(max=5) List<@NotBlank @Size(max=40) String> specialties,
         @NotNull @Pattern(regexp="PUBLIC|PRIVATE") String visibility,
         @Pattern(regexp="[a-f0-9-]{36}") String salonId,
         @Min(0) @Max(100000) Integer consultationFee) {}
+    // 전문 분야는 정해진 시술 항목에서만 고름(docs/development-contract.md). 화면 frontend/src/designer-specialties.tsx와 같은 목록
+    public static final List<String> SPECIALTIES=List.of("남성 커트","여성 커트","레이어드 커트","숏컷","앞머리","곱슬 커트","펌","다운펌","매직·스트레이트","염색","탈색","클리닉","두피 케어");
     private final DirectoryMapper mapper;
     public DirectoryService(DirectoryMapper mapper) { this.mapper=mapper; }
     @Transactional(readOnly=true) public List<DirectoryMapper.Salon> salons() { return mapper.salons(); }
@@ -44,7 +46,9 @@ public class DirectoryService {
         if(!create && previous==null) throw ApiException.notFound();
         if(input.salonId()!=null && mapper.salon(input.salonId())==null) throw ApiException.invalidRequest();
         String id=previous==null?UUID.randomUUID().toString():previous.id();
-        String specialties=String.join(",",input.specialties().stream().map(String::trim).distinct().toList());
+        var picked=input.specialties().stream().map(String::trim).distinct().toList();
+        if(!SPECIALTIES.containsAll(picked)) throw ApiException.invalidRequest();
+        String specialties=String.join(",",picked);
         // 상담 요금은 천원 단위. 보내지 않으면 무료(docs/payment-api.md)
         int fee=input.consultationFee()==null?0:input.consultationFee();
         if(fee%1000!=0) throw ApiException.invalidRequest();

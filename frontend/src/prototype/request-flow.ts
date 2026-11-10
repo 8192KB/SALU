@@ -15,7 +15,8 @@ import type {
 export function newRequest(area: Area = 'SIDE', intent: Intent = 'ASK', content = ''): RequestItem {
   return { id: newId(), area, intent, content };
 }
-export function newRequestDraft(cutId: string, designerId?: string): RequestDraft {
+// 첫 요청 부위는 커트 기록의 첫 부위. 없으면 옆머리
+export function newRequestDraft(cutId: string, designerId?: string, area?: Area): RequestDraft {
   const designer = getPublicDesigner(designerId);
   return {
     id: newId(),
@@ -31,7 +32,7 @@ export function newRequestDraft(cutId: string, designerId?: string): RequestDraf
     includeGoodNote: false,
     progressIds: [],
     photoIds: [],
-    requests: [newRequest()],
+    requests: [newRequest(area)],
     homeStyling: '',
     additionalQuestion: '',
   };
@@ -118,6 +119,15 @@ export function selectedCount(draft: RequestDraft) {
 }
 export function photoOrigin(photo: RecordPhoto, cutDate: string) {
   return photo.progressId ? `경과 D+${daysAfter(cutDate, photo.date)}` : '커트 당일';
+}
+// 사진 설명이 출처 이름(커트 당일·경과 D+N)과 같으면 같은 말을 두 번 보이지 않게 비움
+export function photoNote(photo: RecordPhoto, cutDate: string) {
+  const caption = visibleCaption(photo.caption).trim();
+  return caption === photoOrigin(photo, cutDate) ? '' : caption;
+}
+// 계정에서 다시 받은 준비는 저장한 순서가 아니므로 만든 시각으로 최신순 정렬
+export function newestPreviews(previews: RequestPreview[]) {
+  return [...previews].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 export function hasDraftContent(draft: RequestDraft) {
   return Boolean(

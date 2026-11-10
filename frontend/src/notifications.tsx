@@ -6,7 +6,7 @@ import { listSentConsultations } from './consultation-api';
 import { Alert, BackLink, Icon, PageHeading, Loading } from './components';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import { useLoginPath } from './auth/pages';
-import { sentTime } from './prototype/dates';
+import { sentTime, shortTime } from './prototype/dates';
 import { useLiveRefresh, useLocalSignal } from './realtime';
 import { useActivePage } from './main-navigation';
 import type { RealtimeEvent } from './realtime';
@@ -238,6 +238,8 @@ export function NotificationList() {
           },
       );
       signal({ type: 'NOTIFICATION', id: 'read-all' });
+      // 누른 버튼이 사라지므로 초점을 화면 제목으로 옮김
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('main h1')?.focus());
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : '모두 읽음으로 바꾸지 못했어요.');
     } finally {
@@ -336,10 +338,16 @@ export function NotificationList() {
                   <span className="notification-dot" aria-hidden="true" />
                   <span className="notification-text">
                     {!item.read && <span className="sr-only">읽지 않음. </span>}
-                    {designer && <span className="notification-role">디자이너</span>}
+                    {designer && (
+                      <span className="notification-role">
+                        디자이너<span className="sr-only"> 활동 알림. </span>
+                      </span>
+                    )}
                     {text}
                   </span>
-                  <time dateTime={item.createdAt}>{sentTime(item.createdAt)}</time>
+                  <time dateTime={item.createdAt} title={sentTime(item.createdAt)}>
+                    {shortTime(item.createdAt)}
+                  </time>
                 </a>
               </li>
             );

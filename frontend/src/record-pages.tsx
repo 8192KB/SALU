@@ -34,10 +34,11 @@ import {
 } from './prototype/context';
 import { AREAS } from './prototype/types';
 import type { Area, CutRecord, RecordPhoto, ProgressEntry } from './prototype/types';
-import { cutTitle, daysAfter, displayDate, today } from './prototype/dates';
+import { cutTitle, daysAfter, displayDate, otherYear, today } from './prototype/dates';
 import { InputError, isBlankCutDraft, newCutDraft } from './prototype/memory-repository';
 import {
   materialUrl,
+  newestPreviews,
   newRequestDraft,
   previewUrl,
   unfinishedDrafts,
@@ -104,7 +105,9 @@ export function RecordList() {
               <Link to={`/records/${cut.id}`} className="journal-entry with-photo" key={cut.id}>
                 <Cover photo={photo} />
                 <div className="card-content">
-                  <time dateTime={cut.cutDate}>{displayDate(cut.cutDate)}</time>
+                  {otherYear(cut.cutDate) && (
+                    <time dateTime={cut.cutDate}>{otherYear(cut.cutDate)}</time>
+                  )}
                   <h3>{cutTitle(cut.cutDate, cut.service)}</h3>
                   <AreaChips areas={cut.areas} />
                   <p className="card-note">
@@ -132,9 +135,12 @@ export function RecordList() {
         )}
         {/* 두 링크가 한 줄에 붙어 하나로 읽히지 않게 따로 줄을 나눔 */}
         <div className="journal-links">
-          <Link className="journal-next text-link" to="/requests">
-            커트 준비 목록 보기 <Icon name="arrow" size={16} />
-          </Link>
+          {/* 기록이 없으면 준비할 커트도 없어 첫 기록 남기기만 보이게 함. 백업은 복원도 해서 남김 */}
+          {cuts.length > 0 && (
+            <Link className="journal-next text-link" to="/requests">
+              커트 준비 목록 보기 <Icon name="arrow" size={16} />
+            </Link>
+          )}
           {mode !== 'example' && (
             <Link className="journal-next text-link" to="/backup">
               기록 백업 <Icon name="arrow" size={16} />
@@ -196,7 +202,7 @@ export function CutForm() {
         isBlankCutDraft(previous) ? { ...previous, cutDate: today() } : previous,
       );
   }, [staleDate, setCutDraft]);
-  if (id && !original) return <Missing />;
+  if (id && !original) return <Missing title="커트 기록을 찾을 수 없어요" />;
   const form = id
     ? edit
     : {
@@ -227,7 +233,7 @@ function CutFormBody({
   repository: ReturnType<typeof usePrototype>['repository'];
   resumed: boolean;
 }) {
-  const { state } = usePrototype();
+  const { state, storage } = usePrototype();
   const directory = useDirectory(state);
   const mode = useWorkspace();
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -348,7 +354,7 @@ function CutFormBody({
   return (
     <div className="form-layout">
       <PageHeading
-        back={<BackLink to={returnUrl}>{editingId ? '커트 기록으로' : '기록 목록으로'}</BackLink>}
+        back={<BackLink to={returnUrl}>{editingId ? '커트 기록으로' : '내 기록으로'}</BackLink>}
         title={editingId ? '커트 기록 수정' : '커트 기록 남기기'}
       />
       {resumed && <ResumedNotice />}
@@ -433,7 +439,6 @@ function CutFormBody({
                   )}
                   cutDate={draft.cutDate}
                 />
-                <p className="form-note">저장한 사진은 바꿀 수 없고 지울 수 있어요.</p>
               </>
             ) : (
               <PhotoPicker
@@ -560,7 +565,7 @@ function CutFormBody({
                           <option key={designer.id} value={`profile/${designer.id}`}>
                             {designer.name} ·{' '}
                             {designer.affiliations.find((value) => value.current)?.salonName ||
-                              '소속 없음'}
+                              '소속 미등록'}
                           </option>
                         ))}
                       </optgroup>
@@ -640,11 +645,16 @@ function CutFormBody({
         >
           작성 내용 지우기
         </button>
-        <p className="form-note">
-          {editingId
-            ? '기록을 수정해도 이미 정리한 커트 준비 내용은 그대로 남아요.'
-            : '기기에 저장해 로그인 없이도 이어서 사용할 수 있어요.'}
-        </p>
+        {/* 저장 위치 안내는 완료 화면(completion.tsx)과 같은 기준. 예시 체험은 위 안내 띠가 이미 알림 */}
+        {(editingId || mode !== 'example') && (
+          <p className="form-note">
+            {editingId
+              ? '기록을 수정해도 이미 정리한 커트 준비 내용은 그대로 남아요.'
+              : storage && storage.scope !== 'guest'
+                ? '계정에 자동으로 저장돼 다른 기기에서 로그인해도 볼 수 있어요.'
+                : '기기에 저장해 로그인 없이도 이어서 사용할 수 있어요.'}
+          </p>
+        )}
       </form>
     </div>
   );
@@ -753,22 +763,27 @@ function DeleteAction({
 }
 
 // 수정 화면의 저장한 사진. 사진마다 지울 수 있음
+// 수정 화면은 저장한 사진을 지우기만 함. 사진이 없으면 빈 목록 대신 지금 올릴 수 없다는 것만 알림
 function SavedPhotos({ photos, cutDate }: { photos: RecordPhoto[]; cutDate: string }) {
   const { repository } = usePrototype();
+  if (!photos.length) return <p className="form-note">사진은 처음 저장할 때만 올릴 수 있어요.</p>;
   return (
-    <ul className="saved-photo-list">
-      {photos.map((photo) => (
-        <li key={photo.id}>
-          <PhotoList photos={[photo]} cutDate={cutDate} />
-          <DeleteAction
-            label="사진 지우기"
-            title="이 사진을 지울까요?"
-            message="기록과 이 기록으로 만든 준비 내용에서 빠지고 되돌릴 수 없어요. 이미 보낸 상담과 올린 글의 사진은 그대로예요."
-            onDelete={() => repository.deletePhoto(photo.id)}
-          />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="saved-photo-list">
+        {photos.map((photo) => (
+          <li key={photo.id}>
+            <PhotoList photos={[photo]} cutDate={cutDate} />
+            <DeleteAction
+              label="사진 지우기"
+              title="이 사진을 지울까요?"
+              message="기록과 이 기록으로 만든 준비 내용에서 빠지고 되돌릴 수 없어요. 이미 보낸 상담과 올린 글의 사진은 그대로예요."
+              onDelete={() => repository.deletePhoto(photo.id)}
+            />
+          </li>
+        ))}
+      </ul>
+      <p className="form-note">저장한 사진은 바꿀 수 없고 지울 수 있어요.</p>
+    </>
   );
 }
 
@@ -785,7 +800,7 @@ export function RecordDetail() {
   const preview = state.previews.find(
     (value) => value.id === search.get('preview') && value.cut.id === id,
   );
-  if (!cut) return deleting.current ? null : <Missing />;
+  if (!cut) return deleting.current ? null : <Missing title="커트 기록을 찾을 수 없어요" />;
   const recordedDesigner = directory.designers.find(
     (designer) => designer.id === cut.designerProfileId,
   );
@@ -800,9 +815,9 @@ export function RecordDetail() {
   const consultName =
     directory.designers.find((value) => value.id === consultDraft?.designerId)?.name ??
     consultDraft?.designerSnapshot?.name;
-  const previews = state.previews.filter((value) => value.cut.id === id).reverse();
+  const previews = newestPreviews(state.previews.filter((value) => value.cut.id === id));
   const startPersonalRequest = () => {
-    const draft = newRequestDraft(cut.id);
+    const draft = newRequestDraft(cut.id, undefined, cut.areas[0]);
     setRequestDraft(draft);
     navigate(materialUrl(draft));
   };
@@ -814,10 +829,7 @@ export function RecordDetail() {
           준비 내용으로 돌아가기 <Icon name="arrow" size={17} />
         </Link>
       )}
-      <PageHeading
-        back={<BackLink to="/records">기록 목록으로</BackLink>}
-        title="커트 기록과 경과"
-      />
+      <PageHeading back={<BackLink to="/records">내 기록으로</BackLink>} title="커트 기록과 경과" />
       <div className="two-column">
         <section>
           {/* 커트와 그 뒤 경과를 한 카드로 묶어 같은 기록임을 보여 줌 */}
@@ -831,12 +843,17 @@ export function RecordDetail() {
                 cutDate={cut.cutDate}
               />
               <div className="record-hero-content">
-                <time className="record-date" dateTime={cut.cutDate}>
-                  {displayDate(cut.cutDate)}
-                </time>
+                {otherYear(cut.cutDate) && (
+                  <time className="record-date" dateTime={cut.cutDate}>
+                    {displayDate(cut.cutDate)}
+                  </time>
+                )}
                 <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
                 <AreaChips areas={cut.areas} />
-                <p className="card-note">{cut.goodNote || '커트 당일 메모를 남겨 보세요.'}</p>
+                {/* 비었을 때 안내는 적은 내용과 헷갈리지 않게 흐린 글자 */}
+                <p className={cut.goodNote ? 'card-note' : 'card-note muted'}>
+                  {cut.goodNote || '커트 당일 메모를 남겨 보세요.'}
+                </p>
                 <div className="detail-values">
                   {cut.salonName && <span>{cut.salonName}</span>}
                   {cut.designerName && <span>{cut.designerName} 디자이너</span>}
@@ -928,9 +945,13 @@ export function RecordDetail() {
               <p className="muted">기록에 연결한 디자이너</p>
               <h2>{recordedDesigner.name} 디자이너</h2>
               <p className="muted">
-                현재 소속 ·{' '}
-                {recordedDesigner.affiliations.find((value) => value.current)?.salonName ??
-                  '등록 전'}
+                {(() => {
+                  const salon = recordedDesigner.affiliations.find(
+                    (value) => value.current,
+                  )?.salonName;
+                  // 디자이너 목록과 같은 표기
+                  return salon ? `현재 소속 ${salon}` : '소속 미등록';
+                })()}
               </p>
               {/* 주 버튼은 다음 커트 준비 하나. 준비 내용에서 상담해야 고른 자료가 함께 첨부됨 */}
               <Link
@@ -1017,7 +1038,8 @@ export function ProgressForm() {
   const [resumed] = useState(() =>
     Boolean(progressId ? progressEdits[progressId] : progressDrafts[id]),
   );
-  if (!cut || (progressId && !original)) return <Missing />;
+  if (!cut || (progressId && !original))
+    return <Missing title="커트 기록이나 경과를 찾을 수 없어요" />;
   return (
     <ProgressFormBody
       key={progressId ?? `new-${id}`}
@@ -1081,7 +1103,7 @@ function ProgressFormBody({
     <div className="form-layout">
       <PageHeading
         back={<BackLink to={`/records/${cut.id}`}>커트 기록으로</BackLink>}
-        title={editingId ? '경과 기록 수정' : '시간이 지난 뒤 남기기'}
+        title={editingId ? '경과 기록 수정' : '경과 남기기'}
         description={`${displayDate(cut.cutDate)} 커트에서 이어지는 기록`}
       />
       {resumed && <ResumedNotice />}
@@ -1162,7 +1184,6 @@ function ProgressFormBody({
                   photos={state.photos.filter((photo) => photo.progressId === editingId)}
                   cutDate={cut.cutDate}
                 />
-                <p className="form-note">저장한 사진은 바꿀 수 없고 지울 수 있어요.</p>
               </>
             ) : (
               <PhotoPicker

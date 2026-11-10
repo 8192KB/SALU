@@ -5,6 +5,7 @@ import {
   Alert,
   BackLink,
   ErrorState,
+  FieldFeedback,
   Icon,
   LoadFailure,
   loadProblem,
@@ -13,7 +14,7 @@ import {
   Loading,
 } from './components';
 import type { LoadProblem } from './components';
-import { Completion } from './completion';
+import { CompletedSummary, Completion } from './completion';
 import { Dialog } from './dialog';
 import { useFeedback } from './feedback';
 import { Link, useNavigate, useWorkspace } from './workspace';
@@ -280,8 +281,11 @@ export function CommunityList() {
         <button
           type="button"
           className="button full"
-          disabled={busy}
-          onClick={() => void load(items.at(-1)?.id)}
+          // 잠그면 초점이 빠지므로 불러오는 중임만 알리고 두 번 누름은 무시함
+          aria-busy={busy}
+          onClick={() => {
+            if (!busy) void load(items.at(-1)?.id);
+          }}
         >
           {busy ? '불러오는 중' : '더 보기'}
         </button>
@@ -292,9 +296,12 @@ export function CommunityList() {
 
 function ReportDialog({
   target,
+  label,
   onClose,
 }: {
   target: { post: string } | { comment: number } | null;
+  // 창 제목에 넣을 신고 대상. 예: `서윤님 댓글`, `이 글`
+  label: string;
   onClose: () => void;
 }) {
   const member = useMember();
@@ -316,6 +323,9 @@ function ReportDialog({
     if (!member || !target) return;
     if (!reason || (reason === 'OTHER' && !detail.trim())) {
       setError(!reason ? '신고 이유를 골라 주세요.' : '기타 이유를 적어 주세요.');
+      event.currentTarget
+        .querySelector<HTMLElement>(!reason ? 'input[type=radio]' : 'textarea')
+        ?.focus();
       return;
     }
     setBusy(true);
@@ -332,7 +342,7 @@ function ReportDialog({
   return (
     <Dialog
       open={target !== null}
-      title={done ? '신고했어요' : '신고할까요?'}
+      title={done ? '신고했어요' : `${label}을 신고할까요?`}
       onClose={() => !busy && onClose()}
     >
       {done ? (
@@ -418,10 +428,20 @@ function Comments({
   );
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [reportTarget, setReportTarget] = useState<{ comment: number } | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ comment: number; author: string } | null>(
+    null,
+  );
   const [removing, setRemoving] = useState<CommunityComment | null>(null);
   // 응답을 못 받은 댓글을 같은 내용으로 다시 보낼 때 한 번만 저장되게 같은 키를 씀
   const pending = useRef<{ key: string; content: string } | null>(null);
+  // 보내는 동안 칸과 버튼을 잠가 초점이 빠지므로, 잠금이 풀린 뒤 댓글 칸으로 되돌림
+  const commentInput = useRef<HTMLTextAreaElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (busy || !refocus.current) return;
+    refocus.current = false;
+    commentInput.current?.focus();
+  }, [busy]);
   // 댓글 알림으로 들어오면 알림 시각 뒤에 달린 남의 댓글을 새 댓글로 표시하고 첫 댓글로 스크롤함
   const location = useLocation();
   const since = Date.parse(
@@ -437,7 +457,11 @@ function Comments({
     if (first)
       document
         .getElementById(`comment-${first.id}`)
-        ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        // 움직임 줄이기를 켠 사용자는 바로 이동
+        ?.scrollIntoView({
+          block: 'center',
+          behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        });
   }, [comments]);
   const loadComments = useCallback(
     () =>
@@ -457,6 +481,7 @@ function Comments({
     const content = draft.trim();
     if (!content) {
       setError('댓글을 적어 주세요.');
+      commentInput.current?.focus();
       return;
     }
     if (pending.current?.content !== content) pending.current = { key: newId(), content };
@@ -475,6 +500,7 @@ function Comments({
       if (suspendedError(failure)) void refresh();
       setError(errorText(failure, '댓글을 보내지 못했어요. 적은 내용은 그대로 있어요.'));
     } finally {
+      refocus.current = true;
       setBusy(false);
     }
   }
@@ -527,7 +553,10 @@ function Comments({
                     <button
                       type="button"
                       className="text-link"
-                      onClick={() => setReportTarget({ comment: comment.id })}
+                      aria-label={`${comment.author.displayName}님 댓글 신고`}
+                      onClick={() =>
+                        setReportTarget({ comment: comment.id, author: comment.author.displayName })
+                      }
                     >
                       신고
                     </button>
@@ -557,6 +586,7 @@ function Comments({
           <label className="consultation-request-field">
             <span className="sr-only">댓글</span>
             <textarea
+              ref={commentInput}
               aria-label="댓글"
               maxLength={1000}
               rows={2}
@@ -579,7 +609,11 @@ function Comments({
           <Link to={loginPath}>로그인</Link>하면 댓글을 남길 수 있어요.
         </p>
       )}
-      <ReportDialog target={reportTarget} onClose={() => setReportTarget(null)} />
+      <ReportDialog
+        target={reportTarget && { comment: reportTarget.comment }}
+        label={`${reportTarget?.author ?? ''}님 댓글`}
+        onClose={() => setReportTarget(null)}
+      />
       <Dialog
         open={removing !== null}
         title="댓글을 지울까요?"
@@ -652,6 +686,7 @@ export function CommunityDetail() {
       <div className="community-screen">
         <PageHeading title="커뮤니티 글" back={back} />
         <LoadFailure
+          nested
           problem={loadError}
           title="글을 찾을 수 없어요"
           missingMessage="글쓴이가 지웠거나 운영 기준에 따라 숨겨진 글일 수 있어요."
@@ -721,7 +756,7 @@ export function CommunityDetail() {
             className="text-link"
             to={`/community?service=${encodeURIComponent(post.cut.service)}`}
           >
-            {post.cut.service} 글 더 보기 <Icon name="arrow" size={16} />
+            ‘{post.cut.service}’ 시술 글 모아 보기 <Icon name="arrow" size={16} />
           </Link>
         </section>
       )}
@@ -739,7 +774,8 @@ export function CommunityDetail() {
             type="button"
             className="button community-reaction"
             aria-pressed={post.reacted}
-            disabled={busy}
+            // 잠그면 초점이 빠지므로 저장 중임만 알림. 두 번 누름은 react()가 무시함
+            aria-busy={busy}
             onClick={() => void react()}
           >
             <Icon name="heart" size={18} /> 도움돼요 {post.reactionCount}
@@ -763,7 +799,12 @@ export function CommunityDetail() {
           </>
         ) : (
           member && (
-            <button type="button" className="text-link" onClick={() => setReporting(true)}>
+            <button
+              type="button"
+              className="text-link"
+              aria-label="이 글 신고"
+              onClick={() => setReporting(true)}
+            >
               신고
             </button>
           )
@@ -777,6 +818,7 @@ export function CommunityDetail() {
       />
       <ReportDialog
         target={reporting ? { post: post.id } : null}
+        label="이 글"
         onClose={() => setReporting(false)}
       />
       <Dialog open={removing} title="글을 지울까요?" onClose={() => !busy && setRemoving(false)}>
@@ -863,6 +905,10 @@ export function CommunityWrite() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  // 입력 오류는 칸마다 그 아래에 보임. 서버 오류만 폼 아래 Alert
+  const [invalid, setInvalid] = useState<Partial<Record<WriteField, string>>>({});
+  const clearInvalid = (field: WriteField) =>
+    setInvalid((value) => (value[field] ? { ...value, [field]: undefined } : value));
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState<LoadProblem | null>(null);
   const [notMine, setNotMine] = useState(false);
@@ -962,7 +1008,7 @@ export function CommunityWrite() {
     return (
       <div className="community-screen">
         {heading}
-        <ErrorState kind="offline" message={auth.message} />
+        <ErrorState nested kind="offline" message={auth.message} />
       </div>
     );
   if (!member || (!checked && !suspended))
@@ -979,6 +1025,7 @@ export function CommunityWrite() {
       <div className="community-screen">
         {heading}
         <ErrorState
+          nested
           kind="denied"
           title="글을 고칠 수 없어요"
           message="내가 쓴 글만 고칠 수 있어요."
@@ -990,6 +1037,7 @@ export function CommunityWrite() {
       <div className="community-screen">
         {heading}
         <LoadFailure
+          nested
           problem={loadError}
           title="고칠 글을 찾을 수 없어요"
           missingMessage="이미 지웠거나 운영 기준에 따라 숨겨진 글이에요."
@@ -1002,16 +1050,17 @@ export function CommunityWrite() {
     event.preventDefault();
     if (busy || !member) return;
     const values = { title: title.trim(), content: content.trim() };
-    if (!values.title || !values.content) {
-      setError(!values.title ? '제목을 적어 주세요.' : '내용을 적어 주세요.');
-      return;
-    }
-    if (!editing && category === 'CASE' && !cut) {
-      setError('사례로 올릴 커트 기록을 골라 주세요.');
-      return;
-    }
-    if (!editing && cut && !summary.trim()) {
-      setError('커트 설명을 적어 주세요.');
+    // 빠진 칸을 한 번에 모두 알리고, 화면 위쪽의 첫 칸으로 초점을 옮김
+    const missing: Partial<Record<WriteField, string>> = {};
+    if (!editing && category === 'CASE' && !cut)
+      missing.record = '사례로 올릴 커트 기록을 골라 주세요.';
+    if (!editing && cut && !summary.trim()) missing.summary = '커트 설명을 적어 주세요.';
+    if (!values.title) missing.title = '제목을 적어 주세요.';
+    if (!values.content) missing.content = '내용을 적어 주세요.';
+    setInvalid(missing);
+    const first = WRITE_FIELDS.find((field) => missing[field]);
+    if (first) {
+      document.getElementById(`community-${first}`)?.focus();
       return;
     }
     setBusy(true);
@@ -1071,13 +1120,21 @@ export function CommunityWrite() {
                     onChange={() => {
                       setCategory(value);
                       setError('');
+                      clearInvalid('record');
                     }}
                   />
                   {CATEGORY_LABELS[value]}
                 </label>
               ))}
             </fieldset>
-            <fieldset className="consultation-choices community-records" disabled={busy}>
+            <fieldset
+              id="community-record"
+              tabIndex={-1}
+              className="consultation-choices community-records"
+              disabled={busy}
+              aria-invalid={Boolean(invalid.record) || undefined}
+              aria-describedby={invalid.record ? 'community-record-error' : undefined}
+            >
               <legend>
                 {category === 'CASE' ? '사례로 올릴 커트 기록' : '함께 보여 줄 커트 기록(선택)'}
               </legend>
@@ -1108,6 +1165,7 @@ export function CommunityWrite() {
                       onChange={() => {
                         setCutId(value.id);
                         setError('');
+                        clearInvalid('record');
                       }}
                     />
                     <span>
@@ -1128,17 +1186,29 @@ export function CommunityWrite() {
                 </p>
               )}
             </fieldset>
+            {invalid.record && (
+              <FieldFeedback id="community-record-error" message={invalid.record} />
+            )}
             {cut && (
               <>
                 <label className="consultation-request-field">
                   <span>커트 설명</span>
                   <textarea
+                    id="community-summary"
                     maxLength={2000}
                     rows={2}
                     value={summary}
                     disabled={busy}
-                    onChange={(event) => setSummary(event.target.value)}
+                    aria-invalid={Boolean(invalid.summary) || undefined}
+                    aria-describedby={invalid.summary ? 'community-summary-error' : undefined}
+                    onChange={(event) => {
+                      setSummary(event.target.value);
+                      clearInvalid('summary');
+                    }}
                   />
+                  {invalid.summary && (
+                    <FieldFeedback id="community-summary-error" message={invalid.summary} />
+                  )}
                 </label>
                 {photos.length > 0 && (
                   <fieldset className="community-photo-choices" disabled={busy}>
@@ -1182,29 +1252,41 @@ export function CommunityWrite() {
         <label className="consultation-request-field">
           <span>제목</span>
           <input
+            id="community-title"
             maxLength={100}
             value={title}
             disabled={busy}
             placeholder="예: 옆머리 숱 정리 후기"
+            aria-invalid={Boolean(invalid.title) || undefined}
+            aria-describedby={invalid.title ? 'community-title-error' : undefined}
             onChange={(event) => {
               setTitle(event.target.value);
               setError('');
+              clearInvalid('title');
             }}
           />
+          {invalid.title && <FieldFeedback id="community-title-error" message={invalid.title} />}
         </label>
         <label className="consultation-request-field">
           <span>내용</span>
           <textarea
+            id="community-content"
             maxLength={5000}
             rows={6}
             value={content}
             disabled={busy}
             placeholder="예: 옆머리가 뜨는 분들 참고하세요. 드라이할 때 아래로 눌러 말리니 덜 떠요."
+            aria-invalid={Boolean(invalid.content) || undefined}
+            aria-describedby={invalid.content ? 'community-content-error' : undefined}
             onChange={(event) => {
               setContent(event.target.value);
               setError('');
+              clearInvalid('content');
             }}
           />
+          {invalid.content && (
+            <FieldFeedback id="community-content-error" message={invalid.content} />
+          )}
         </label>
         <Alert message={error} />
         <div className="consultation-action">
@@ -1227,8 +1309,17 @@ export function CommunityWrite() {
   );
 }
 
+// 글쓰기 입력 칸. 화면 위에서 아래 순서
+const WRITE_FIELDS = ['record', 'summary', 'title', 'content'] as const;
+type WriteField = (typeof WRITE_FIELDS)[number];
+
 export function CommunityComplete() {
   const { id = '' } = useParams();
+  const [post, setPost] = useState<CommunityPost | null>(null);
+  useEffect(() => {
+    // 요약을 못 받아도 완료 안내와 버튼은 그대로 보임
+    getPost(id).then(setPost, () => {});
+  }, [id]);
   return (
     <div className="consultation-sent">
       <Completion
@@ -1239,7 +1330,15 @@ export function CommunityComplete() {
         secondary="커뮤니티로"
         secondaryTo="/community"
       >
-        {null}
+        {post && (
+          <CompletedSummary
+            photo={post.photoUrls[0]}
+            photoAlt="올린 글 첫 사진"
+            title={post.title}
+            text={post.content.split('\n')[0]}
+            meta={CATEGORY_LABELS[post.category]}
+          />
+        )}
       </Completion>
     </div>
   );

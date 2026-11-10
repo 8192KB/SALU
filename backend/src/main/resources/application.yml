@@ -63,6 +63,7 @@ salu:
     model: ${SALU_AI_MODEL:qwen3:8b}
     api-key: ${SALU_AI_API_KEY:}
     reasoning-effort: ${SALU_AI_REASONING_EFFORT:none}
+    temperature: ${SALU_AI_TEMPERATURE:0}
   oauth:
     google-id: ${SALU_GOOGLE_CLIENT_ID:}
     google-secret: ${SALU_GOOGLE_CLIENT_SECRET:}

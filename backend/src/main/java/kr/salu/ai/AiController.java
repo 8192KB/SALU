@@ -14,5 +14,6 @@ public class AiController {
     public AiController(AiService service) { this.service = service; }
     @GetMapping("/api/ai/status") ResponseEntity<Map<String, Boolean>> status() { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(Map.of("enabled", service.enabled())); }
     @PostMapping("/api/ai/request-draft") ResponseEntity<AiService.Draft> draft(@AuthenticationPrincipal MemberPrincipal member, @Valid @RequestBody AiService.DraftInput input) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.draft(member.id(), input)); }
+    @PostMapping("/api/ai/chat") ResponseEntity<AiService.ChatAnswer> chat(@AuthenticationPrincipal MemberPrincipal member, @Valid @RequestBody AiService.ChatInput input) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.chat(member.id(), input)); }
     @PostMapping("/api/ai/designer-match") ResponseEntity<AiService.Matches> match(@AuthenticationPrincipal MemberPrincipal member, @Valid @RequestBody AiService.MatchInput input) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.match(member.id(), input)); }
 }

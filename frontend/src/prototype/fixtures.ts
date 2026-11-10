@@ -87,7 +87,7 @@ export function fixtures(): PrototypeState {
         avatarUrl: '/images/jiu-profile.png',
         introduction:
           '얼굴형과 모발 상태에 맞는 자연스럽고 손질하기 쉬운 스타일을 제안해드려요. 편하게 고민을 말씀해주세요.',
-        specialties: ['커트', '스타일 상담'],
+        specialties: ['여성 커트', '앞머리'],
         affiliations: [
           { salonName: '그린 헤어', period: '2026. 03 – 현재', current: true },
           { salonName: '온 헤어', period: '2022. 03 – 2026. 02', current: false },
@@ -111,7 +111,7 @@ export function fixtures(): PrototypeState {
         name: '서윤',
         introduction:
           '손상된 모발도 부담 없이 할 수 있는 펌과 관리법을 알려드려요. 평소 손질 습관부터 같이 봐요.',
-        specialties: ['펌', '손상모 관리'],
+        specialties: ['펌', '클리닉'],
         affiliations: [{ salonName: '바람 헤어', period: '2023. 05 – 현재', current: true }],
         reviewExamples: [
           {
@@ -126,7 +126,7 @@ export function fixtures(): PrototypeState {
         name: '도현',
         introduction:
           '남성 커트와 짧은 머리를 주로 해요. 옆머리 뜨는 고민, 다듬는 주기를 같이 정해 드려요.',
-        specialties: ['남성 커트', '투블럭'],
+        specialties: ['남성 커트', '다운펌'],
         affiliations: [
           { salonName: '온 헤어', period: '2024. 01 – 현재', current: true },
           { salonName: '그린 헤어', period: '2020. 06 – 2023. 12', current: false },

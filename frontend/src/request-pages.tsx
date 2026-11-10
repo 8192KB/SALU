@@ -3,14 +3,14 @@ import { useDirectory } from './directory';
 import { Link } from './workspace';
 import { Icon, PageHeading, PhotoThumbnail } from './components';
 import { usePrototype } from './prototype/context';
-import { cutTitle } from './prototype/dates';
-import { previewUrl, unfinishedDrafts } from './prototype/request-flow';
+import { cutTitle, sentTime } from './prototype/dates';
+import { newestPreviews, previewUrl, unfinishedDrafts } from './prototype/request-flow';
 
 export function RequestList() {
   const { state, requestDrafts, resumeUrl } = usePrototype();
   const directory = useDirectory(state);
   const drafts = unfinishedDrafts(state, requestDrafts);
-  const previews = [...state.previews].reverse();
+  const previews = newestPreviews(state.previews);
   return (
     <>
       <PageHeading
@@ -82,15 +82,7 @@ export function RequestList() {
                 <h3>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h3>
                 <p>{preview.requests[0]?.content}</p>
                 <div className="card-bottom">
-                  <time dateTime={preview.createdAt}>
-                    {new Date(preview.createdAt).toLocaleString('ko-KR', {
-                      timeZone: 'Asia/Seoul',
-                      month: 'numeric',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </time>
+                  <time dateTime={preview.createdAt}>{sentTime(preview.createdAt)}</time>
                   <span className="card-action">
                     내용 보기 <Icon name="arrow" size={16} />
                   </span>

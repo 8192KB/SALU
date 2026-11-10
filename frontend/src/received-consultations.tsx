@@ -6,22 +6,29 @@ import {
   Alert,
   Avatar,
   BackLink,
+  FieldFeedback,
   LoadFailure,
   loadProblem,
   PageHeading,
   Loading,
 } from './components';
 import type { LoadProblem } from './components';
-import { Completion } from './completion';
+import { CompletedSummary, Completion } from './completion';
 import { useAuth } from './auth/context';
 import { ApiFailure, directoryRequest } from './auth/api';
 import { getConsultation, listReceivedConsultations, replyConsultation } from './consultation-api';
 import type { Consultation } from './consultation-api';
 import { threadFrom } from './consultation-store';
-import { AttachmentCard, byLatest, UnreadBadge, useConsultationAccess } from './consultation-flow';
+import {
+  AttachmentCard,
+  byLatest,
+  LatestTime,
+  UnreadBadge,
+  useConsultationAccess,
+} from './consultation-flow';
 import { ConsultationConversation } from './consultation-conversation';
 import { ReceivedReview } from './consultation-review';
-import { sentTime } from './prototype/dates';
+import { cutTitle, sentTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
 import { useReadNotifications } from './notifications';
 import { readTabDraft, writeTabDraft } from './tab-draft';
@@ -44,7 +51,10 @@ function Status({ item }: { item: Consultation }) {
 function ExampleNotice() {
   return (
     <div className="consultation-screen">
-      <PageHeading title="받은 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
+      <PageHeading
+        title="받은 상담 내역"
+        back={<BackLink to="/consultations">상담 내역</BackLink>}
+      />
       <section className="consultation-soft-panel">
         <h2>예시 체험에서는 받은 상담을 볼 수 없어요</h2>
         <p>디자이너 프로필을 등록한 계정으로 로그인하면 받은 상담을 확인할 수 있어요.</p>
@@ -84,7 +94,10 @@ export function ReceivedList() {
   if (example) return <ExampleNotice />;
   return (
     <div className="consultation-screen">
-      <PageHeading title="받은 상담" back={<BackLink to="/consultations">상담 내역</BackLink>} />
+      <PageHeading
+        title="받은 상담 내역"
+        back={<BackLink to="/consultations">상담 내역</BackLink>}
+      />
       {access ??
         (error ? (
           <section className="consultation-soft-panel">
@@ -97,7 +110,7 @@ export function ReceivedList() {
           <Loading>받은 상담을 불러오고 있어요.</Loading>
         ) : items.length ? (
           <div className="consultation-history">
-            {byLatest(items).map((item) => (
+            {waitingFirst(items).map((item) => (
               <Link
                 className="consultation-history-card"
                 key={item.id}
@@ -111,7 +124,7 @@ export function ReceivedList() {
                 </div>
                 <p>{item.request}</p>
                 <AttachmentCard attachment={threadFrom(item).attachment} compact />
-                <time dateTime={item.sentAt}>{sentTime(item.sentAt)}</time>
+                <LatestTime sentAt={item.sentAt} lastMessageAt={item.lastMessageAt} />
               </Link>
             ))}
           </div>
@@ -142,8 +155,11 @@ export function ReceivedList() {
           <button
             type="button"
             className="text-link"
-            disabled={loading}
-            onClick={() => void load()}
+            // 잠그면 누른 버튼에서 초점이 빠지므로 불러오는 중임만 알리고 두 번 누름은 무시함
+            aria-busy={loading}
+            onClick={() => {
+              if (!loading) void load();
+            }}
           >
             {loading ? '불러오는 중' : '목록 새로고침'}
           </button>
@@ -164,6 +180,7 @@ export function ReceivedDetail() {
   const [loadError, setLoadError] = useState<LoadProblem | null>(null);
   const [content, setContent] = useState('');
   const [error, setError] = useState('');
+  const [empty, setEmpty] = useState(false);
   // 다른 탭에서 먼저 답변해 이 탭의 답변 입력칸이 사라질 때 대신 보여 줄 안내
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -203,7 +220,7 @@ export function ReceivedDetail() {
   const heading = (
     <PageHeading
       title="받은 상담"
-      back={<BackLink to="/consultations/received">받은 상담 목록</BackLink>}
+      back={<BackLink to="/consultations/received">받은 상담 내역</BackLink>}
     />
   );
   if (access)
@@ -227,7 +244,9 @@ export function ReceivedDetail() {
     if (lock.current || !member) return;
     const text = content.trim();
     if (!text) {
-      setError('답변을 적어 주세요.');
+      // 다른 작성 양식처럼 빈 칸 아래에 알리고 그 칸으로 초점을 옮김
+      setEmpty(true);
+      document.getElementById('received-reply')?.focus();
       return;
     }
     lock.current = true;
@@ -306,7 +325,10 @@ export function ReceivedDetail() {
           <label className="consultation-request-field">
             <span>답변</span>
             <textarea
+              id="received-reply"
               aria-label="답변"
+              aria-invalid={empty || undefined}
+              aria-describedby={empty ? 'received-reply-error' : undefined}
               maxLength={2000}
               rows={4}
               placeholder="예: 드라이할 때 옆머리를 아래로 눌러 말리면 덜 떠요."
@@ -315,8 +337,10 @@ export function ReceivedDetail() {
               onChange={(event) => {
                 setContent(event.target.value);
                 setError('');
+                setEmpty(false);
               }}
             />
+            {empty && <FieldFeedback id="received-reply-error" message="답변을 적어 주세요." />}
           </label>
           <Alert message={error} />
           <div className="consultation-action">
@@ -337,18 +361,40 @@ export function ReceivedDetail() {
 
 export function ReceivedComplete() {
   const { id = '' } = useParams();
+  const member = useMember();
+  const [item, setItem] = useState<Consultation | null>(null);
+  useEffect(() => {
+    if (!member) return;
+    // 요약을 못 받아도 완료 안내와 버튼은 그대로 보임
+    getConsultation(member, id).then(setItem, () => {});
+  }, [member?.id, id]);
   return (
     <div className="consultation-sent">
       <Completion
         title="답변을 보냈어요"
         description="고객에게 답변 알림이 가요."
-        primary="받은 상담 목록"
+        primary="받은 상담 내역"
         to="/consultations/received"
         secondary="보낸 답변 보기"
         secondaryTo={`/consultations/received/${id}`}
       >
-        {null}
+        {item?.reply && (
+          <CompletedSummary
+            photo={item.attachment.photos?.[0]?.url ?? item.attachment.photoUrl}
+            photoAlt={`${cutTitle(item.attachment.cutDate, item.attachment.service)} 사진`}
+            title={`${item.customer.displayName}님 상담`}
+            text={item.reply.content.split('\n')[0]}
+            meta={cutTitle(item.attachment.cutDate, item.attachment.service)}
+          />
+        )}
       </Completion>
     </div>
+  );
+}
+
+// 답할 상담을 놓치지 않게 답변 대기를 위로 모음. 같은 묶음 안은 최근 순(정렬은 안정적이라 순서가 유지됨)
+function waitingFirst(items: Consultation[]) {
+  return [...byLatest(items)].sort(
+    (a, b) => Number(b.status === 'REQUESTED') - Number(a.status === 'REQUESTED'),
   );
 }

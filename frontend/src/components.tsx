@@ -317,12 +317,13 @@ function sectionHome(pathname: string, example: boolean): [string, string] {
   const path = pathname.replace(/^\/examples/, '') || '/';
   if (path.startsWith('/community')) return ['/community', '커뮤니티로'];
   if (path.startsWith('/consultations/received'))
-    return ['/consultations/received', '받은 상담으로'];
+    return ['/consultations/received', '받은 상담 내역으로'];
   if (path.startsWith('/consultations')) return ['/consultations', '상담 내역으로'];
   if (path.startsWith('/requests')) return ['/requests', '커트 준비로'];
   if (path.startsWith('/designers')) return ['/designers', '디자이너 찾기로'];
   if (path.startsWith('/records') || example) return ['/records', '내 기록으로'];
-  if (path.startsWith('/admin') || path.startsWith('/notifications')) return ['/more', '더보기로'];
+  if (path.startsWith('/admin') || path.startsWith('/notifications') || path === '/ai')
+    return ['/more', '더보기로'];
   return ['/', '홈으로'];
 }
 
@@ -334,6 +335,7 @@ export function ErrorState({
   onRetry,
   retryLabel = '다시 시도',
   home = true,
+  nested = false,
   children,
 }: {
   kind: ErrorKind;
@@ -342,6 +344,8 @@ export function ErrorState({
   onRetry?: () => void;
   retryLabel?: string;
   home?: boolean;
+  // 화면 제목(PageHeading) 아래에 놓이면 제목이 겹치지 않게 h2로 둠
+  nested?: boolean;
   children?: ReactNode;
 }) {
   const location = useLocation();
@@ -358,7 +362,7 @@ export function ErrorState({
       <span className="empty-symbol">
         <Icon name={copy.icon} size={30} />
       </span>
-      <h1 tabIndex={-1}>{title ?? copy.title}</h1>
+      {nested ? <h2>{title ?? copy.title}</h2> : <h1 tabIndex={-1}>{title ?? copy.title}</h1>}
       <p>{message || copy.message}</p>
       <div className="error-actions">
         {kind === 'login' && (
@@ -422,9 +426,11 @@ export function LoadFailure({
   title,
   missingMessage,
   onRetry,
+  nested,
 }: {
   problem: LoadProblem;
   title: string;
+  nested?: boolean;
   // 대상이 없을 때 그 메뉴에 맞게 바꿀 설명
   missingMessage?: string;
   onRetry?: () => void;
@@ -436,6 +442,7 @@ export function LoadFailure({
       title={missing ? title : undefined}
       message={missing ? missingMessage : problem.message}
       onRetry={problem.kind === 'offline' ? onRetry : undefined}
+      nested={nested}
     />
   );
 }
@@ -461,7 +468,7 @@ export function Missing({
       message={
         guest
           ? '계정에 저장한 자료라면 로그인하면 볼 수 있어요.'
-          : (message ?? (record ? '내 기록에서 자료를 다시 선택해 주세요.' : undefined))
+          : (message ?? (record ? '내 기록에서 다시 골라 주세요.' : undefined))
       }
     >
       {guest && (
@@ -528,11 +535,15 @@ export function PhotoPlaceholder({ failed = false }: { failed?: boolean }) {
     </span>
   );
 }
-export function focusFirstError(form: HTMLFormElement) {
+// 저장 실패 직후에는 오류 표시가 아직 그려지지 않았거나 저장 중 잠근 칸(disabled)이 남아 있을 수 있어
+// 칸이 나타나고 풀릴 때까지 몇 번 더 기다렸다가 초점을 옮김
+export function focusFirstError(form: HTMLFormElement, tries = 10) {
   requestAnimationFrame(() => {
     const target = form.querySelector<HTMLElement>(
       '[aria-invalid="true"], .invalid input, .invalid textarea, .field-error, .form-error',
     );
+    if ((!target || target.matches(':disabled')) && tries > 1)
+      return focusFirstError(form, tries - 1);
     target?.scrollIntoView({ block: 'center', behavior: 'instant' });
     target?.focus({ preventScroll: true });
   });

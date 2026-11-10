@@ -123,6 +123,11 @@
   font-size: 21px;
   font-weight: 700;
 }
+/* 담당 디자이너가 없는 기록에서 오면 글자 링크가 둘이라 한 줄에 붙지 않게 줄마다 둠 */
+.consultation-action .text-link {
+  display: flex;
+  width: fit-content;
+}
 .consultation-choices {
   padding: 0;
   margin: 0;
@@ -433,6 +438,12 @@
   }
   .task-focused .consultation-compose .consultation-action {
     bottom: 0;
+  }
+  /* 화면이 낮으면 고정 영역이 입력칸을 덮으므로 본문 끝에 둠(next-fixes 2순위) */
+  @media (max-height: 560px) {
+    .consultation-screen .consultation-action {
+      position: static;
+    }
   }
   .example-notice > .example-notice-inner {
     padding: 0 16px;
@@ -980,12 +991,11 @@
   min-height: 0;
   padding: 0;
 }
+/* 보여 주기만 하는 표시라 둥근 테두리 없이 글자색·굵기로 구분(DESIGN.md) */
 .community-mine {
-  font-size: 12px;
-  color: var(--muted);
-  padding: 1px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--teal);
 }
 .community-new {
   font-size: 13px;
@@ -1153,17 +1163,8 @@
   display: grid;
   gap: 8px;
 }
-.admin-reports small {
-  display: block;
-  font-size: 13px;
-  color: var(--muted);
-}
-.admin-input {
-  width: 100%;
-  min-height: 48px;
-  padding: 0 14px;
-  border-radius: 14px;
-  font: inherit;
+.admin-reports p {
+  margin: 2px 0 0;
 }
 /* 브라우저 기본 inset 테두리가 입력 중처럼 보이지 않도록 공통 입력칸과 같은 테두리를 씀 */
 .consultation-request-field input,
@@ -1276,12 +1277,8 @@
 }
 /* 설명 글·입력칸 바로 아래 버튼이 붙지 않게 함. 제목 아래는 제목 여백을 그대로 씀 */
 .consultation-soft-panel > :is(p, ul, ol, div, label, .form-error) + :is(.button, .text-link),
-.admin-section .consultation-request-field + .button,
-.admin-section .consultation-privacy + .button {
+.admin-section .field + .button {
   margin-top: 16px;
-}
-.admin-section .consultation-privacy {
-  margin-top: 8px;
 }
 .community-filter + .community-mine-link {
   margin-left: 12px;
@@ -1315,6 +1312,15 @@
 .review-rating + .field-error,
 .consultation-request-field + .field-error {
   margin-top: 8px;
+}
+/* 칸 이름(label 안 span) 글꼴을 물려받지 않게 오류 글자 크기를 정해 둠 */
+.consultation-request-field > .field-error,
+.community-form .field-error {
+  font-size: 14px;
+  font-weight: 600;
+}
+.consultation-request-field :is(input, textarea)[aria-invalid='true'] {
+  border-color: var(--error);
 }
 .review-form-error .form-error {
   margin: 16px 0 0;
@@ -1451,56 +1457,63 @@
   border-radius: 14px;
   background: var(--surface-subtle);
 }
-.ai-suggestion > p:first-child {
+.ai-helper-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+/* 말투 고르기. 누르는 칩이라 둥근 배경을 씀(DESIGN.md) */
+.ai-helper .ai-tone {
   margin: 0;
+}
+.ai-helper .ai-tone button {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.ai-helper-start .form-note {
+  margin: 0;
+}
+.ai-suggestion .form-note {
+  margin: 0;
+}
+/* 지금 글과 다듬은 글을 위아래로. 바뀐 단어는 굵은 강조색 글자로만 */
+.ai-compare {
+  display: grid;
+  gap: 4px;
+}
+.ai-compare-label {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.ai-compare-label:not(:first-child) {
+  margin-top: 10px;
+}
+.ai-before,
+.ai-after {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-before {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.ai-after {
   font-size: 17px;
   line-height: 1.7;
-  white-space: pre-wrap;
+}
+.ai-after strong {
+  color: var(--teal);
 }
 .ai-suggestion-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-}
-.ai-match {
-  display: grid;
-  gap: 12px;
-  margin-bottom: 24px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--surface);
-}
-.ai-match h2 {
-  margin: 0;
-  font-size: 18px;
-}
-.ai-match form {
-  display: grid;
-  gap: 10px;
-  justify-items: start;
-}
-.ai-match textarea {
-  width: 100%;
-  font: inherit;
-  padding: 12px 14px;
-  border-radius: 12px;
-}
-.ai-match ul {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-  display: grid;
-  gap: 12px;
-}
-.ai-match li a {
-  font-weight: 700;
-  color: var(--teal);
-}
-.ai-match li p,
-.ai-match [role='status'] > p {
-  margin: 4px 0 0;
 }
 /* 보낸 상담의 결제 안내와 결제하기·취소 */
 .consultation-payment {
@@ -1533,4 +1546,111 @@
   font-size: 20px;
   font-weight: 800;
   color: var(--text);
+}
+
+/* 목록 카드의 찜 표시. 보여 주기만 하므로 배경 없이 글자색과 채운 하트 */
+.designer-top .designer-card-favorite {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--teal);
+  font-weight: 700;
+}
+.designer-card-favorite svg {
+  fill: currentColor;
+}
+/* 원하는 시술로 찾기. 고른 시술과 맞는 항목은 배지 없이 글자색·굵기로만 */
+.designer-pick {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}
+.designer-card-match {
+  color: var(--teal);
+  font-weight: 700;
+}
+
+/* 사용자가 적은 이름·제목이 띄어쓰기 없이 길어도 화면 밖으로 밀지 않게 함(320px 확인) */
+.consultation-history > *,
+.consultation-history-heading h2,
+.designer-top > div,
+.consultation-profile-identity > div,
+.review-actions .button {
+  min-width: 0;
+}
+.consultation-history-heading h2,
+.consultation-profile-identity h2,
+.designer-top h2,
+.review-actions .button {
+  overflow-wrap: anywhere;
+}
+.review-actions .button {
+  white-space: normal;
+}
+.selected-designer > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.community-byline {
+  grid-template-columns: minmax(0, 1fr);
+}
+.community-byline strong,
+.community-comment-head strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* AI 상담. 말풍선은 상담 대화와 같은 모양을 씀 */
+.ai-chat-screen {
+  display: grid;
+  gap: 20px;
+}
+.ai-chat-notice {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.ai-chat-examples h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.ai-chat-examples ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.ai-chat-examples .button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+.ai-chat-thread .ai-basis {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--teal);
+}
+.ai-chat-designers {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.consultation-thread .ai-chat-designers li {
+  max-width: none;
+  padding: 0;
+  background: none;
+}
+.ai-chat-designers a {
+  font-weight: 700;
+  color: var(--teal);
+}
+.ai-chat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }

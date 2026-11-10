@@ -1,17 +1,18 @@
 :root {
   color: var(--text);
   background: var(--page);
-  --page: #f7f9f8;
+  /* 프로젝터에서도 구분되게 진하게(10주차 피드백). 연한 배경·선은 흰 판과 차이가 보이는 정도로 */
+  --page: #d4e7dc;
   --surface: #ffffff;
-  --surface-subtle: #f1f5f3;
-  --text: #163b3d;
-  --teal: #14615b;
-  --dark: #133d40;
-  --muted: #526d69;
-  --line: #dfe9e5;
-  --strong-line: #8baea4;
-  --soft: #eaf3ef;
-  --success-bg: #e2f2eb;
+  --surface-subtle: #f0f6f3;
+  --text: #0f2e30;
+  --teal: #0b4f49;
+  --dark: #0e3336;
+  --muted: #3a5450;
+  --line: #b4c8c0;
+  --strong-line: #5d8579;
+  --soft: #b6d6c7;
+  --success-bg: #bfe0d0;
   --coral: #cf3a2c;
   --error: #ad2a1b;
   --error-bg: #fdf1f1;
@@ -26,12 +27,13 @@
   --shadow: #183c3c14;
   --overlay-solid: #183c3cf2;
   --overlay: #0b242699;
-  --focus-fill: #14615b18;
-  --designer: #2d4f8c;
-  --designer-soft: #ebf0f8;
-  --designer-success-bg: #e3eaf6;
-  --designer-focus: #2d4f8c18;
-  --designer-page: #f3f6fa;
+  --focus-fill: #0b4f4930;
+  --designer: #1b3a73;
+  --designer-soft: #aec1e4;
+  --designer-success-bg: #b9cbea;
+  --designer-focus: #1b3a7330;
+  --designer-page: #cad7ee;
+  --designer-subtle: #eff3fa;
 }
 :root[data-theme='dark'] {
   --page: #121a19;
@@ -62,11 +64,14 @@
   --designer-success-bg: #2b3a58;
   --designer-focus: #a9c3f222;
   --designer-page: #12171f;
+  --designer-subtle: #222a38;
 }
 /* 디자이너로 활동하는 화면은 강조색을 바꿈. 화면 전체(html)일 때만 배경도 바꿈.
+   연한 판도 화면 배경과 같은 파란빛으로 맞춤.
    :root 쪽 선택자는 어두운 화면 토큰보다 뒤에 있어야 덮어씀 */
 :root[data-area='designer'] {
   --page: var(--designer-page);
+  --surface-subtle: var(--designer-subtle);
 }
 :root[data-area='designer'],
 [data-area='designer'] {
@@ -378,7 +383,11 @@ textarea::placeholder {
   .record-hero {
     border: 1px solid var(--line);
     border-radius: 16px;
-    padding: 16px;
+    padding: 20px;
+  }
+  /* 커트 카드와 아래 경과 구역의 글 시작선을 맞춤 */
+  .record-progress {
+    padding: 20px;
   }
   .record-next-action {
     padding: 24px 20px;
@@ -493,6 +502,13 @@ textarea::placeholder {
 }
 .task-focused .steps {
   font-size: 14px;
+}
+/* 14px 단계 이름 세 개가 한 줄에 들어가지 않는 폭에서는 다음 줄로 넘김 */
+@media (max-width: 359px) {
+  .task-focused .steps {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
 }
 .reference-record-choice h2 {
   font-size: 22px;

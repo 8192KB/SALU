@@ -51,6 +51,21 @@ const isCompletionPath = (pathname: string) =>
   /^\/(?:records\/[^/]+(?:\/progress\/[^/]+)?\/complete|requests\/complete\/[^/]+|consultations\/(?:received\/)?[^/]+(?:\/review)?\/complete|community\/[^/]+\/complete)$/.test(
     pathname.replace(/^\/examples(?=\/|$)/, '') || '/',
   );
+// 다시 그린 화면에서 같은 버튼·칸을 알아보는 이름.
+// 글자 입력 칸은 초점을 받은 뒤 값이 바뀌므로 값을 빼고, 값이 고정된 선택지(radio 등)만 값으로 구분함
+function focusId(element: HTMLElement) {
+  const typed =
+    element instanceof HTMLTextAreaElement ||
+    (element instanceof HTMLInputElement &&
+      !['radio', 'checkbox', 'button', 'submit', 'reset'].includes(element.type));
+  return [
+    element.tagName,
+    element.getAttribute('name'),
+    element.getAttribute('aria-label'),
+    typed ? '' : element.getAttribute('value'),
+    element.textContent?.trim(),
+  ].join('|');
+}
 function pageKey(pathname: string, section = sectionOf(pathname)) {
   return section ? `${section}${isTaskPath(pathname) ? '-task' : ''}` : undefined;
 }
@@ -77,6 +92,9 @@ export function useMainNavigation(ready: boolean) {
   const positions = useRef(new Map<string, number>());
   const currentAddress = useRef(address(location));
   const returning = useRef(false);
+  const shownPath = useRef<string | null>(null);
+  // 본문에서 마지막으로 초점을 받은 요소. 분류·필터를 바꾸면 화면을 새로 그리므로 같은 버튼을 찾아 초점을 되돌림
+  const lastFocus = useRef<string | null>(null);
   const activePageKey = section ? pageKey(location.pathname, section) : undefined;
   const pages = activePageKey ? { ...visited, [activePageKey]: location } : visited;
 
@@ -97,6 +115,15 @@ export function useMainNavigation(ready: boolean) {
   }, [activePageKey, location, candidate]);
 
   useEffect(() => {
+    const remember = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('main'))
+        lastFocus.current = focusId(event.target);
+    };
+    document.addEventListener('focusin', remember);
+    return () => document.removeEventListener('focusin', remember);
+  }, []);
+
+  useEffect(() => {
     const previousRestoration = window.history.scrollRestoration;
     window.history.scrollRestoration = 'manual';
     const savePosition = () => positions.current.set(currentAddress.current, window.scrollY);
@@ -107,9 +134,48 @@ export function useMainNavigation(ready: boolean) {
     };
   }, []);
 
+  // 탭 제목을 화면 제목(main h1)에 맞춤. 방문 기록·탭에서 화면을 구분하고 화면 읽기 도구가 이동을 알림
+  useEffect(() => {
+    const base = document.title;
+    const sync = () => {
+      const h1 = document.querySelector('main h1');
+      // 줄바꿈(<br>)으로 나눈 제목도 띄어 씀
+      const copy = h1?.cloneNode(true) as HTMLElement | undefined;
+      copy?.querySelectorAll('br').forEach((br) => br.replaceWith(' '));
+      const heading = copy?.textContent?.replace(/\s+/g, ' ').trim();
+      const next = heading ? `${heading} | SALU` : base;
+      if (document.title !== next) document.title = next;
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+      document.title = base;
+    };
+  }, []);
+
   useLayoutEffect(() => {
     if (!ready) return;
+    // 같은 화면에서 분류·필터처럼 주소 뒤 조건만 바꾸면 화면 이동이 아니므로 제목 대신 누른 버튼에 초점을 둠
+    const samePage = shownPath.current === location.pathname && navigationType !== 'POP';
+    shownPath.current = location.pathname;
     currentAddress.current = address(location);
+    if (samePage) {
+      returning.current = false;
+      const frame = requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active !== document.body) return;
+        const same = [
+          ...document.querySelectorAll<HTMLElement>('main :is(button, a, input, select, textarea)'),
+        ].find(
+          (element) =>
+            element.getClientRects().length > 0 && focusId(element) === lastFocus.current,
+        );
+        (same ?? document.querySelector<HTMLElement>('main h1'))?.focus({ preventScroll: true });
+      });
+      return () => cancelAnimationFrame(frame);
+    }
     // 뒤로 가기·메뉴 복귀·뒤로 링크·나가기로 돌아온 화면은 보던 위치로 되돌림
     const y =
       returning.current ||
@@ -122,8 +188,26 @@ export function useMainNavigation(ready: boolean) {
     // 페이지를 연결해 높이가 확정된 뒤 스크롤 복원
     let observer: MutationObserver | undefined;
     let stop: ReturnType<typeof setTimeout> | undefined;
+    // 돌아온 뒤 목록을 서버에서 다시 받는 화면은 높이가 늦게 늘어 처음 복원이 위쪽에서 잘림.
+    // 높이가 늘 때마다 다시 맞추고, 닿았거나 사용자가 먼저 움직이거나 3초가 지나면 멈춤
+    let resize: ResizeObserver | undefined;
+    const userMoves = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
+    const stopRestore = () => {
+      resize?.disconnect();
+      resize = undefined;
+      userMoves.forEach((type) => window.removeEventListener(type, stopRestore));
+    };
     const frame = requestAnimationFrame(() => {
       window.scrollTo(0, y);
+      if (y > 0 && Math.abs(window.scrollY - y) > 1) {
+        resize = new ResizeObserver(() => {
+          window.scrollTo(0, y);
+          if (Math.abs(window.scrollY - y) <= 1) stopRestore();
+        });
+        resize.observe(document.body);
+        userMoves.forEach((type) => window.addEventListener(type, stopRestore, { passive: true }));
+        setTimeout(stopRestore, 3000);
+      }
       const heading = document.querySelector<HTMLElement>('main h1');
       if (heading) {
         heading.focus({ preventScroll: true });
@@ -148,6 +232,7 @@ export function useMainNavigation(ready: boolean) {
       cancelAnimationFrame(frame);
       observer?.disconnect();
       clearTimeout(stop);
+      stopRestore();
     };
   }, [location, navigationType, ready]);
 

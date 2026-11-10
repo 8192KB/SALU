@@ -6,8 +6,8 @@ import { Completion } from './completion';
 import { useActivePage } from './main-navigation';
 import { reloadFavorites, useFavorites } from './designer-favorites';
 import type { FormEvent } from 'react';
-import { useLocation, useParams, useSearchParams } from 'react-router';
-import { useBackTrail } from './back-trail';
+import { useLocation, useNavigationType, useParams, useSearchParams } from 'react-router';
+import { previousEntry, useBackTrail } from './back-trail';
 import { Link, useNavigate, useWorkspace } from './workspace';
 import {
   Alert,
@@ -28,9 +28,17 @@ import { AreaChips, ProgressBlock } from './record-pages';
 import { usePrototype } from './prototype/context';
 import { prepareRequest } from './prototype/memory-repository';
 import { AREAS, INTENTS } from './prototype/types';
-import type { Area, RequestDraft, DesignerProfile, Intent, RequestItem } from './prototype/types';
-import { cutTitle, daysAfter, displayDate } from './prototype/dates';
-import { DesignerMatch } from './ai-assist';
+import type {
+  Area,
+  CutRecord,
+  RequestDraft,
+  DesignerProfile,
+  Intent,
+  RequestItem,
+} from './prototype/types';
+import { cutTitle, daysAfter, displayDate, otherYear } from './prototype/dates';
+import { RequestDraftHelper, useAiEnabled } from './ai-assist';
+import { SpecialtyChoices, isSpecialty, recommend } from './designer-specialties';
 import { chargedFee, won } from './payment';
 import {
   completeUrl,
@@ -42,11 +50,11 @@ import {
   materialUrl,
   newRequest,
   newRequestDraft,
+  photoNote,
   photoOrigin,
   previewUrl,
   requestUrl,
   selectedCount,
-  visibleCaption,
 } from './prototype/request-flow';
 
 const ConsultationDesignerProfile = lazy(() =>
@@ -221,7 +229,7 @@ function SelectedMaterials({
                 <figcaption>
                   <strong>{photoOrigin(photo, cut.cutDate)}</strong>
                   <span>{displayDate(photo.date)}</span>
-                  {visibleCaption(photo.caption) && <p>{visibleCaption(photo.caption)}</p>}
+                  {photoNote(photo, cut.cutDate) && <p>{photoNote(photo, cut.cutDate)}</p>}
                 </figcaption>
               </figure>
             ))}
@@ -237,7 +245,7 @@ export function DesignerList() {
   const { state } = usePrototype();
   const directory = useDirectory(state);
   const mode = useWorkspace();
-  const [search] = useSearchParams();
+  const [search, setSearch] = useSearchParams();
   const location = useLocation();
   const previous = useBackTrail(location);
   const previewId = search.get('preview');
@@ -250,7 +258,24 @@ export function DesignerList() {
   const favorites = useFavorites();
   // 더보기의 찜한 디자이너에서 오면 찜한 디자이너만 보여 줌
   const [favoriteOnly, setFavoriteOnly] = useState(() => search.get('favorites') === '1');
+  // 켜고 끈 상태를 주소에도 남겨 프로필을 보고 돌아와도 같은 목록을 보여 줌
+  const showFavoriteOnly = (on: boolean) => {
+    setFavoriteOnly(on);
+    const next = new URLSearchParams(search);
+    if (on) next.set('favorites', '1');
+    else next.delete('favorites');
+    setSearch(next, { replace: true });
+  };
   const showFavorites = mode !== 'example' && Boolean(favorites?.loaded) && favoriteOnly;
+  // 원하는 시술로 찾기(docs/development-contract.md `디자이너 추천`). 고른 항목은 주소에 남겨 프로필을 보고 돌아와도 유지
+  const picked = (search.get('tags') ?? '').split(',').filter(isSpecialty);
+  const pick = (values: string[]) => {
+    const next = new URLSearchParams(search);
+    if (values.length) next.set('tags', values.join(','));
+    else next.delete('tags');
+    setSearch(next, { replace: true });
+  };
+  const aiEnabled = useAiEnabled();
   const active = useActivePage();
   useEffect(() => {
     if (!active || mode === 'example' || import.meta.env.VITE_SALU_AUTH_MODE === 'prototype')
@@ -269,7 +294,7 @@ export function DesignerList() {
     (value) => value !== recorded && !(sourcePreview && value.id === favorites?.ownId),
   );
   // 준비 내용에서 왔으면 디자이너를 고르는 즉시 그 준비 내용으로 상담을 작성함
-  const card = (designer: DesignerProfile) => (
+  const card = (designer: DesignerProfile, matched?: string[]) => (
     <Link
       className="panel designer-card"
       to={
@@ -284,20 +309,36 @@ export function DesignerList() {
         <div>
           <h2>{designer.name} 디자이너</h2>
           <p>{currentSalon(designer)}</p>
+          {mode !== 'example' && favorites?.ids.has(designer.id) && (
+            <p className="designer-card-favorite">
+              <Icon name="heart" size={14} />
+              찜한 디자이너
+            </p>
+          )}
         </div>
       </div>
-      <div className="chip-row">
-        {designer.specialties.map((value) => (
-          <span className="chip" key={value}>
-            {value}
-          </span>
-        ))}
-      </div>
+      {designer.specialties.length > 0 && (
+        <div className="chip-row">
+          {designer.specialties.map((value) => (
+            <span className="chip" key={value}>
+              {value}
+            </span>
+          ))}
+        </div>
+      )}
+      {matched && (
+        <p className="designer-card-match">
+          고른 시술 {matched.length}개 맞음: {matched.join(', ')}
+        </p>
+      )}
       <p>{designer.introduction.split('\n')[0]}</p>
       <div className="card-bottom">
         <span>
+          {/* 예시 후기에는 별점이 없어 개수만, 없으면 실제 디자이너와 같은 안내 */}
           {mode === 'example'
-            ? `상담 후기 ${designer.reviewExamples.length}개`
+            ? designer.reviewExamples.length
+              ? `후기 ${designer.reviewExamples.length}개`
+              : '아직 후기가 없어요'
             : designer.rating?.count
               ? `★ ${designer.rating.average?.toFixed(1)} (후기 ${designer.rating.count}개)`
               : '아직 후기가 없어요'}
@@ -311,7 +352,7 @@ export function DesignerList() {
   return (
     <div className="designer-list-screen">
       <PageHeading
-        title="디자이너 찾기"
+        title={showFavorites ? '찜한 디자이너' : '디자이너 찾기'}
         back={
           sourcePreview ? (
             <BackLink to={previewUrl(sourcePreview)}>준비 내용으로</BackLink>
@@ -323,19 +364,28 @@ export function DesignerList() {
         }
         description={sourcePreview ? '준비한 내용을 보낼 디자이너를 골라 주세요.' : undefined}
       />
-      <DesignerMatch
-        profileUrl={(id) =>
-          sourcePreview
-            ? `/consultations/new?${new URLSearchParams({ designer: id, preview: sourcePreview.id })}`
-            : profileUrl(id, record, previewId)
-        }
-      />
+      {/* 찜한 디자이너만 볼 때는 시술 고르기를 숨김(찜 목록 밖의 사람을 추천하므로) */}
+      {!showFavorites && (
+        <section className="panel designer-pick" aria-label="원하는 시술로 찾기">
+          <SpecialtyChoices
+            legend="원하는 시술로 찾기"
+            hint="고르면 그 시술을 하는 디자이너를 후기 점수 순으로 보여 줘요."
+            values={picked}
+            onChange={pick}
+          />
+          {aiEnabled && (
+            <Link className="text-link" to="/ai">
+              손질 방법이 궁금하면 AI 상담
+            </Link>
+          )}
+        </section>
+      )}
       {mode !== 'example' && favorites?.loaded && (
         <button
           type="button"
           className="button favorite-filter"
           aria-pressed={favoriteOnly}
-          onClick={() => setFavoriteOnly((value) => !value)}
+          onClick={() => showFavoriteOnly(!favoriteOnly)}
         >
           <Icon name="heart" size={16} />
           찜한 디자이너만 보기
@@ -352,17 +402,47 @@ export function DesignerList() {
             </section>
           ) : directory.designers.some((value) => favorites!.ids.has(value.id)) ? (
             <div className="designer-grid">
-              {directory.designers.filter((value) => favorites!.ids.has(value.id)).map(card)}
+              {directory.designers
+                .filter((value) => favorites!.ids.has(value.id))
+                .map((value) => card(value))}
             </div>
           ) : (
             <section className="empty-state">
               <h2>찜한 디자이너가 없어요</h2>
               <p>디자이너 프로필에서 찜하면 여기에 모여요.</p>
-              <button type="button" className="button" onClick={() => setFavoriteOnly(false)}>
+              <button type="button" className="button" onClick={() => showFavoriteOnly(false)}>
                 전체 디자이너 보기
               </button>
             </section>
           )}
+        </section>
+      ) : picked.length ? (
+        <section aria-labelledby="designer-picked-heading">
+          {(() => {
+            const items = recommend(
+              directory.designers.filter(
+                (value) => !(sourcePreview && value.id === favorites?.ownId),
+              ),
+              picked,
+            );
+            return items.length ? (
+              <>
+                <h2 className="designer-others-heading" id="designer-picked-heading">
+                  추천 디자이너 {items.length}명
+                </h2>
+                <div className="designer-grid">
+                  {items.map((item) => card(item.designer, item.matched))}
+                </div>
+              </>
+            ) : (
+              <section className="empty-state">
+                <h2 id="designer-picked-heading">고른 시술을 하는 디자이너가 아직 없어요</h2>
+                <button type="button" className="button" onClick={() => pick([])}>
+                  고른 시술 지우기
+                </button>
+              </section>
+            );
+          })()}
         </section>
       ) : (
         <>
@@ -383,7 +463,7 @@ export function DesignerList() {
               {recorded && others.length > 0 && (
                 <h2 className="designer-others-heading">다른 디자이너</h2>
               )}
-              <div className="designer-grid">{others.map(card)}</div>
+              <div className="designer-grid">{others.map((value) => card(value))}</div>
             </section>
           )}
         </>
@@ -452,7 +532,11 @@ export function DesignerDetail() {
     (record && !state.cuts.some((cut) => cut.id === record)) ||
     (previewId && (!sourcePreview || sourcePreview.cut.id !== record))
   )
-    return <Missing title="프로필 또는 선택한 기록을 찾을 수 없어요" />;
+    return (
+      <Missing
+        title={designer ? '선택한 커트 기록을 찾을 수 없어요' : '디자이너를 찾을 수 없어요'}
+      />
+    );
   // 예시와 실제 공간이 같은 상담 동선을 씀. 실제 공간은 로그인한 회원의 서버 상담으로 보냄
   return (
     <Suspense fallback={<Loading>프로필을 불러오고 있어요.</Loading>}>
@@ -467,13 +551,26 @@ export function DesignerDetail() {
 function useSavedDraftRedirect(draft: RequestDraft | null | undefined, active: boolean) {
   const { state } = usePrototype();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
   const saved =
     draft && !isEditDraft(state, draft)
       ? state.previews.find((value) => JSON.stringify(value.sourceDraft) === JSON.stringify(draft))
       : undefined;
+  const draftId = draft?.id;
+  // 개발 모드에서 효과가 두 번 돌아도 한 번만 뒤로 가게 이 기록 위치에서 처리했는지 기억함
+  const { key } = useLocation();
+  const handled = useRef('');
   useEffect(() => {
-    if (active && saved) navigate(previewUrl(saved), { replace: true });
-  }, [active, saved, navigate]);
+    if (!active || !saved || handled.current === key) return;
+    handled.current = key;
+    // 저장한 뒤 브라우저 뒤로 가기로 왔고 바로 앞 기록도 같은 초안의 단계면 한 칸 더 뒤로 감.
+    // 단계마다 준비 내용으로 바꾸면 뒤로 가기에 같은 준비 내용이 여러 번 쌓임
+    const before = previousEntry();
+    const beforeDraft =
+      before && new URLSearchParams(before.split('?')[1]?.split('#')[0]).get('draft');
+    if (navigationType === 'POP' && beforeDraft === draftId) navigate(-1);
+    else navigate(previewUrl(saved), { replace: true });
+  }, [active, saved, navigate, navigationType, draftId, key]);
   return Boolean(saved);
 }
 
@@ -521,7 +618,7 @@ export function MaterialsPage() {
     if (draftId) {
       if (explicitDraft) setRequestDraft(explicitDraft);
     } else if (record && (!designerId || designer)) {
-      resumeRequestDraft(newRequestDraft(record.id, designerId));
+      resumeRequestDraft(newRequestDraft(record.id, designerId, record.areas[0]));
     }
     setError('');
   }, [
@@ -561,9 +658,11 @@ export function MaterialsPage() {
           title="참고할 지난 커트를 골라 주세요"
         />
         <Steps current={0} consult={Boolean(designer)} />
+        {/* 디자이너 상세에서 시작하면 누구에게 얼마로 보내는지 첫 단계부터 보여 줌 */}
+        {designer && <SelectedDesigner designer={designer} />}
         {state.cuts.length ? (
           <div className="reference-record-list">
-            {state.cuts.map((cut) => (
+            {newestCuts(state.cuts).map((cut) => (
               <Link
                 className="panel reference-record-choice"
                 key={cut.id}
@@ -578,7 +677,9 @@ export function MaterialsPage() {
                   />
                 </div>
                 <div>
-                  <time>{displayDate(cut.cutDate)}</time>
+                  {otherYear(cut.cutDate) && (
+                    <time dateTime={cut.cutDate}>{otherYear(cut.cutDate)}</time>
+                  )}
                   <h2>{cutTitle(cut.cutDate, cut.service)}</h2>
                   <p>{cut.goodNote || '당일 기록과 경과를 참고할 수 있어요.'}</p>
                 </div>
@@ -695,7 +796,7 @@ export function MaterialsPage() {
                   });
                 }}
               >
-                {state.cuts.map((value) => (
+                {newestCuts(state.cuts).map((value) => (
                   <option key={value.id} value={value.id}>
                     {cutTitle(value.cutDate, value.service)}
                   </option>
@@ -729,7 +830,7 @@ export function MaterialsPage() {
                 key={photo.id}
                 name={`사진 ${index + 1} 선택`}
                 title={photoOrigin(photo, cut.cutDate)}
-                summary={visibleCaption(photo.caption) || displayDate(photo.date)}
+                summary={photoNote(photo, cut.cutDate) || displayDate(photo.date)}
                 checked={draft.photoIds.includes(photo.id)}
                 onChange={() => toggle('photoIds', photo.id)}
                 image={<PhotoButton photo={photo} cutDate={cut.cutDate} />}
@@ -769,7 +870,7 @@ export function MaterialsPage() {
             {progress.map((entry) => (
               <MaterialChoice
                 key={entry.id}
-                name={`경과 ${entry.observedOn} 선택`}
+                name={`${displayDate(entry.observedOn)} 경과 선택`}
                 title={
                   <>
                     {displayDate(entry.observedOn)}{' '}
@@ -872,7 +973,7 @@ export function RequestPage() {
     return (
       <Missing
         title="작성 중인 요청을 찾을 수 없어요"
-        message="준비할 기록과 작성 중인 내용을 찾을 수 없어요. 내 기록에서 다시 선택해 주세요."
+        message="이미 저장했거나 지운 내용일 수 있어요. 커트 준비에서 다시 골라 주세요."
       />
     );
   const hasMaterials = Boolean(
@@ -909,6 +1010,16 @@ export function RequestPage() {
     update({
       requests: draft.requests.map((value) => (value.id === id ? { ...value, ...input } : value)),
     });
+  // AI 다듬기에 보낼 칸. 한 칸이 한 줄이 되도록 줄바꿈 없는 칸만 보냄(줄 순서대로 되돌려 넣음)
+  const draftLines = [
+    ...draft.requests.map((item) => ({
+      key: item.id,
+      label: `${AREAS[item.area]}(${INTENTS[item.intent]})`,
+      value: item.content.trim(),
+    })),
+    { key: 'homeStyling', label: '집에서 손질', value: draft.homeStyling.trim() },
+    { key: 'additionalQuestion', label: '추가 질문', value: draft.additionalQuestion.trim() },
+  ].filter((line) => line.value && !line.value.includes('\n'));
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
@@ -925,7 +1036,7 @@ export function RequestPage() {
       <PageHeading
         back={
           <BackLink to={materialUrl(draft)} trail={false}>
-            자료 선택
+            자료 고르기
           </BackLink>
         }
         title={
@@ -1067,6 +1178,34 @@ export function RequestPage() {
               </Field>
             </div>
           </AnimatedDetails>
+          <RequestDraftHelper
+            text={draftLines.map((line) => `${line.label}: ${line.value}`).join('\n')}
+            label="적은 내용 AI로 다듬기"
+            onApply={(value) => {
+              // 서버가 줄 수·줄 앞 표시를 지킨 답만 주므로 줄 순서대로 칸에 되돌림(docs/ai-api.md)
+              const rows = value.split('\n');
+              if (rows.length !== draftLines.length) return;
+              const next = { ...draft, requests: [...draft.requests] };
+              rows.forEach((row, index) => {
+                const line = draftLines[index];
+                const prefix = `${line.label}:`;
+                const content = row.startsWith(prefix)
+                  ? row.slice(prefix.length).trim()
+                  : row.trim();
+                if (line.key === 'homeStyling') next.homeStyling = content;
+                else if (line.key === 'additionalQuestion') next.additionalQuestion = content;
+                else
+                  next.requests = next.requests.map((item) =>
+                    item.id === line.key ? { ...item, content } : item,
+                  );
+              });
+              update({
+                requests: next.requests,
+                homeStyling: next.homeStyling,
+                additionalQuestion: next.additionalQuestion,
+              });
+            }}
+          />
           {designer && (
             <p className="request-designer-context">
               <Icon name="user" size={18} />
@@ -1124,10 +1263,18 @@ export function PreviewPage() {
   const sent = consultations.threads.filter((thread) =>
     consultations.sentFrom?.[preview.id]?.includes(thread.id),
   );
+  // 같은 디자이너에게 여러 번 보냈으면 이름은 한 번만. 취소한 상담은 보낸 것으로 세지 않음(모두 취소했으면 그대로 보여 줌)
+  const live = sent.filter((thread) => thread.status !== 'CANCELED');
+  const sentNames = [...new Set((live.length ? live : sent).map((thread) => thread.designer.name))];
+  const sentToTarget = target
+    ? [...sent]
+        .reverse()
+        .find((thread) => thread.designer.id === target.id && thread.status !== 'CANCELED')
+    : undefined;
   return (
     <>
       <PageHeading
-        back={<BackLink to="/requests">준비 목록으로</BackLink>}
+        back={<BackLink to="/requests">커트 준비로</BackLink>}
         title={preview.designer ? '디자이너에게 보여 줄 내용' : '다음 커트 준비 내용'}
       />
       <div className="two-column">
@@ -1166,14 +1313,17 @@ export function PreviewPage() {
                 <Avatar name={preview.designer.name} />
                 <div>
                   <strong>{preview.designer.name} 디자이너와 상담할 내용</strong>
-                  <p>{preview.designer.salonName}</p>
+                  {preview.designer.salonName && <p>{preview.designer.salonName}</p>}
                 </div>
               </div>
             ) : (
               <p className="personal-label">개인 커트 준비</p>
             )}
             <h2>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h2>
-            <p className="muted">{displayDate(preview.cut.cutDate)}</p>
+            {/* 제목에 월·일이 있어 올해가 아닌 기록만 연도까지 붙인 날짜를 더 보여 줌 */}
+            {otherYear(preview.cut.cutDate) && (
+              <p className="muted">{displayDate(preview.cut.cutDate)}</p>
+            )}
             <AreaChips areas={preview.cut.areas} />
             {preview.goodNote && (
               <dl>
@@ -1210,12 +1360,20 @@ export function PreviewPage() {
             <p className="muted">고르지 않은 기록과 사진은 포함하지 않았어요.</p>
             {sent.length > 0 && (
               <p className="working-notice" role="status">
-                {sent.map((thread) => thread.designer.name).join(', ')} 디자이너에게 보냈어요.{' '}
-                <Link to={`/consultations/${sent.at(-1)!.id}`}>보낸 상담 보기</Link>
+                {sentNames.join(', ')} 디자이너에게 보냈어요.{' '}
+                {/* 주 버튼이 이미 보낸 상담이면 같은 링크를 겹쳐 두지 않음 */}
+                {!sentToTarget && (
+                  <Link to={`/consultations/${sent.at(-1)!.id}`}>보낸 상담 보기</Link>
+                )}
               </p>
             )}
-            {/* 준비를 마친 다음 할 일은 대개 디자이너에게 상담 요청이라 가장 먼저 둠 */}
-            {target ? (
+            {/* 준비를 마친 다음 할 일은 대개 디자이너에게 상담 요청이라 가장 먼저 둠.
+                같은 디자이너에게 이미 보냈으면 다시 보내지 않게 보낸 상담으로 안내함 */}
+            {sentToTarget ? (
+              <Link className="button primary full" to={`/consultations/${sentToTarget.id}`}>
+                {sentToTarget.designer.name} 디자이너에게 보낸 상담 보기 <Icon name="arrow" />
+              </Link>
+            ) : target ? (
               <Link className="button primary full" to={consultUrl(target.id)}>
                 {target.name} 디자이너에게 상담 신청 <Icon name="arrow" />
               </Link>
@@ -1394,7 +1552,7 @@ export function ReviewPage() {
       <PageHeading
         back={
           <BackLink to={requestUrl(draft)} trail={false}>
-            요청 작성으로
+            {consult ? '상담 내용 적기' : '원하는 점 적기'}
           </BackLink>
         }
         title={
@@ -1413,7 +1571,7 @@ export function ReviewPage() {
           자료 수정
         </Link>
         <Link className="text-link" to={requestUrl(draft)}>
-          요청 수정
+          {consult ? '상담 내용 수정' : '원하는 점 수정'}
         </Link>
       </div>
       <div className="task-primary-actions">
@@ -1480,4 +1638,9 @@ export function CompletePage() {
       </div>
     </Completion>
   );
+}
+
+// 기록 목록(`/records`)과 같은 최신 커트 먼저 순서
+function newestCuts(cuts: readonly CutRecord[]) {
+  return [...cuts].sort((a, b) => b.cutDate.localeCompare(a.cutDate));
 }

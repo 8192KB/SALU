@@ -22,6 +22,52 @@
 
 폴더·파일별 용도는 [파일 안내](docs/files.md)에 있습니다.
 
+## 구조와 흐름
+
+코드를 처음 볼 때는 요청 하나가 어디를 거쳐 가는지부터 보면 됩니다.
+
+```
+화면(frontend/src) → /api 요청 → Controller → Service → Mapper → MySQL
+```
+
+서버 코드는 `backend/src/main/java/kr/salu/` 아래에 기능별 폴더(`consultation`, `ai`, `payment` 등)로 나뉘어 있고, 폴더 안에서 세 파일이 일을 나눕니다.
+
+| 파일 | 하는 일 |
+|---|---|
+| `…Controller` | 요청을 받고 응답을 돌려줌 |
+| `…Service` | 권한 확인과 업무 규칙. DB를 여러 번 바꾸는 작업은 여기서 하나로 묶어, 중간에 실패하면 전부 취소 |
+| `…Mapper` | SQL. 쿼리는 Mapper 파일 안에 바로 적혀 있음 |
+
+로그인 여부와 관리자 권한은 `config/SecurityConfig` 한 곳에서 검사하고, 오류 응답은 `common/error/GlobalExceptionHandler`가 같은 모양으로 만듭니다. 테이블은 `backend/src/main/resources/db/migration`의 SQL 파일에 번호 순서로 있고, 서버를 켤 때 자동으로 적용됩니다.
+
+상담 답변이나 메시지처럼 상대가 바로 봐야 하는 변경은 DB 저장이 끝난 뒤 `realtime/RealtimePublisher`가 WebSocket으로 신호를 보내고, 신호를 받은 화면이 목록을 다시 불러옵니다.
+
+### 기능별로 볼 곳
+
+**커트 기록·경과**
+
+기록은 먼저 브라우저 저장소(IndexedDB)에 들어갑니다. 화면은 `record-pages.tsx`, 저장은 `prototype/personal-store.ts`입니다. 로그인하면 `prototype/cloud-sync.tsx`가 서버로 백업하고, 서버의 `backup/BackupService`가 암호화해서 `personal_backup_items`에 넣습니다.
+
+**상담 신청**
+
+`consultation-flow.tsx`에서 보낸 요청을 `consultation/ConsultationService`가 받습니다. 상담 내용, 첨부 사진, 디자이너에게 갈 알림을 한 번에 저장하고 하나라도 실패하면 모두 취소합니다.
+
+**디자이너 답변·메시지**
+
+디자이너가 받은 목록은 `received-consultations.tsx`, 대화 화면은 `consultation-conversation.tsx`입니다. 서버는 같은 `ConsultationService`에서 상담 당사자인지 확인한 뒤 저장합니다.
+
+**시술로 디자이너 찾기**
+
+서버가 아니라 화면에서 계산합니다. `designer-specialties.tsx`의 `recommend`가 고객이 고른 시술과 맞는 항목 수, 그다음 후기 점수 순으로 디자이너를 정렬합니다.
+
+**AI 상담**
+
+화면은 `ai-assist.tsx`, 서버는 `ai` 폴더입니다. `AiService`가 질문을 먼저 거르고, `AiRecords`가 내 백업에서 질문과 관련된 기록과 최근 기록을 합쳐 5개까지 고르면 `AiClient`가 모델에 보냅니다. 대화 내용은 저장하지 않습니다.
+
+**상담 요금 결제**
+
+`payment.tsx`가 토스 결제창을 열고, 결제가 끝나면 서버의 `payment/PaymentService`가 토스에 승인을 요청합니다. 취소·환불도 같은 서비스에서 처리합니다.
+
 ## 개발 환경
 
 - 프론트엔드: React·TypeScript·Vite, Node 22.22+ 또는 24+

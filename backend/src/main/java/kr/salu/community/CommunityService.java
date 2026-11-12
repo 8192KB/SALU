@@ -44,16 +44,23 @@ public class CommunityService {
     public record PhotoFile(String contentType, byte[] bytes) {}
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
-    private final CommunityMapper mapper; private final NotificationService notifications; private final ObjectMapper json;
-    public CommunityService(CommunityMapper mapper, NotificationService notifications, ObjectMapper json) { this.mapper=mapper; this.notifications=notifications; this.json=json; }
+    private final CommunityMapper mapper; private final NotificationService notifications; private final ObjectMapper json; private final CommunitySearch search;
+    public CommunityService(CommunityMapper mapper, NotificationService notifications, ObjectMapper json, CommunitySearch search) { this.mapper=mapper; this.notifications=notifications; this.json=json; this.search=search; }
 
     @Transactional(readOnly=true)
     public List<PostSummary> posts(MemberPrincipal viewer, String category, String service, String query, String before) {
         if (category != null && !CATEGORIES.contains(category)) throw ApiException.invalidRequest();
         if (before != null && !Inputs.uuid(before)) throw ApiException.invalidRequest();
-        String q = query == null || query.isBlank() ? null : like(Inputs.text(query, 50));
+        String q = query == null || query.isBlank() ? null : Inputs.text(query, 50);
         String s = service == null || service.isBlank() ? null : Inputs.text(service, 60);
-        return mapper.posts(id(viewer), category, s, q, before).stream().map(CommunityService::summary).toList();
+        // 검색어가 있고 검색 서버가 켜져 있으면 검색 서버가 고른 ID를 DB에서 다시 읽음. 검색 서버가 답하지 못하면 아래 DB 검색
+        if (q != null && search.enabled()) {
+            CommunityMapper.IndexRow after = null;
+            if (before != null && (after = mapper.indexRow(before)) == null) return List.of();
+            var ids = search.find(category, s, q, after);
+            if (ids != null) return ids.isEmpty() ? List.of() : mapper.postsByIds(id(viewer), category, s, ids).stream().map(CommunityService::summary).toList();
+        }
+        return mapper.posts(id(viewer), category, s, q == null ? null : like(q), before).stream().map(CommunityService::summary).toList();
     }
     // LIKE의 %·_를 글자 그대로 찾게 함
     private static String like(String value) { return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_"); }
@@ -107,6 +114,7 @@ public class CommunityService {
         if (mapper.insertPost(id, principal.id(), authorName, input.requestKey(), hash, input.category(), title, content, cutDate, service, summary) != 1) throw ApiException.conflict();
         for (int i = 0; i < files.size(); i++)
             if (mapper.insertPhoto(id, i, files.get(i).contentType(), files.get(i).bytes().length, files.get(i).bytes()) != 1) throw ApiException.conflict();
+        search.sync(id);
         return new Created<>(true, detail(mapper.post(id, principal.id()), principal.id()));
     }
 
@@ -119,6 +127,7 @@ public class CommunityService {
         var post = lockedVisible(id);
         if (post.authorId() != principal.id()) throw ApiException.forbidden();
         if (mapper.updatePost(id, principal.id(), title, content) != 1) throw ApiException.conflict();
+        search.sync(id);
         return detail(mapper.post(id, principal.id()), principal.id());
     }
 
@@ -130,6 +139,7 @@ public class CommunityService {
         if (post == null || "DELETED".equals(post.status())) throw ApiException.notFound();
         if (post.authorId() != principal.id()) throw ApiException.forbidden();
         if (mapper.deletePost(id, principal.id()) != 1) throw ApiException.conflict();
+        search.sync(id);
     }
 
     @Transactional(readOnly=true)
@@ -180,6 +190,7 @@ public class CommunityService {
         if (mapper.reportPost(postId, principal.id(), reason[0], reason[1]) != 1) throw ApiException.conflict();
         if (mapper.openPostReports(postId) >= AUTO_HIDE_REPORTS) {
             if (mapper.hidePost(postId) != 1) throw ApiException.conflict();
+            search.sync(postId);
             notifications.create(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, postId, null);
         }
     }

@@ -58,6 +58,9 @@ salu:
   payment:
     client-key: ${SALU_TOSS_CLIENT_KEY:}
     secret-key: ${SALU_TOSS_SECRET_KEY:}
+  search:
+    url: ${SALU_SEARCH_URL:}
+    index: ${SALU_SEARCH_INDEX:salu-community-posts}
   ai:
     base-url: ${SALU_AI_BASE_URL:}
     model: ${SALU_AI_MODEL:qwen3:8b}

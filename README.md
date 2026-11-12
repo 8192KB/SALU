@@ -64,6 +64,10 @@
 
 화면은 `ai-assist.tsx`, 서버는 `ai` 폴더입니다. `AiService`가 질문을 먼저 거르고, `AiRecords`가 내 백업에서 질문과 관련된 기록과 최근 기록을 합쳐 5개까지 고르면 `AiClient`가 모델에 보냅니다. 대화 내용은 저장하지 않습니다.
 
+**커뮤니티 검색**
+
+서버의 `community/CommunitySearch`가 글을 Elasticsearch(한국어 분석기 nori)에 색인하고, 검색어로 글 ID를 찾으면 `CommunityService`가 DB에서 공개 글만 다시 읽어 돌려줍니다. 검색 서버를 켜지 않으면 DB에서 글자 그대로 찾습니다.
+
 **상담 요금 결제**
 
 `payment.tsx`가 토스 결제창을 열고, 결제가 끝나면 서버의 `payment/PaymentService`가 토스에 승인을 요청합니다. 취소·환불도 같은 서비스에서 처리합니다.
@@ -74,6 +78,7 @@
 - 백엔드: Java 17·Spring Boot·MyBatis
 - 설정 도구: Python 3
 - 데이터베이스: MySQL 8.4. 설치된 MySQL을 쓰거나 Docker로 띄웁니다
+- 검색(선택): Elasticsearch 8.15 + nori. 켜지 않아도 나머지 기능은 그대로 됩니다
 
 ## 실행
 
@@ -114,6 +119,8 @@ docker compose up -d --wait db
 ```
 
 `127.0.0.1:3307`에 열리며 `.env` 기본값과 같습니다. 3307을 이미 쓰고 있으면 `.env`의 `SALU_DB_PORT`를 빈 포트로 바꿉니다.
+
+커뮤니티 검색까지 확인하려면 `docker compose --profile search up -d --wait`로 Elasticsearch도 띄우고 `.env`에 `SALU_SEARCH_URL=http://127.0.0.1:9200`을 넣습니다. 메모리를 1GB쯤 더 씁니다.
 
 테이블은 어느 쪽이든 백엔드를 처음 실행할 때 자동으로 만들어집니다.
 

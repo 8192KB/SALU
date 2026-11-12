@@ -11,7 +11,8 @@ Git에 올라간 파일의 용도입니다. 2026-10-19 main 기준.
 | `DESIGN.md` | 화면 디자인 기준(색·글자·배치·공통 패턴·문구) |
 | `PRODUCT.md` | 제품 맥락(사용자·원칙·현재 범위) |
 | `.env.example` | 환경 변수 목록. 실제 `.env`는 `scripts/init-env.py`로 만들고 공유하지 않음 |
-| `compose.yml` | 개발용 MySQL을 Docker로 띄울 때 사용 |
+| `compose.yml` | 개발용 MySQL을 Docker로 띄울 때 사용. `--profile search`를 붙이면 커뮤니티 검색용 Elasticsearch도 띄움 |
+| `search/Dockerfile` | Elasticsearch에 한국어 분석기(nori)를 넣은 이미지 |
 | `.agents/skills/`, `skills-lock.json` | AI 화면 디자인 skill |
 | `.github/workflows/ci.yml` | PR마다 프론트 빌드·형식 검사, 백엔드 jar 빌드 |
 | `.github/CODEOWNERS` | 서버·DB·문서·지침 변경에 저장소 관리자 승인 요구 |

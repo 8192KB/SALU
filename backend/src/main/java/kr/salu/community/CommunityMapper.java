@@ -14,6 +14,7 @@ public interface CommunityMapper {
     record Locked(String id, long authorId, String status) {}
     record CommentRow(long id, String postId, long authorId, String authorName, String clientKey, String content, String status, Instant createdAt) {}
     record Photo(String contentType, byte[] data) {}
+    record IndexRow(String id, String category, String title, String content, String service, String summary, String status, Instant createdAt) {}
     // 수는 반응·댓글 표에서 셈. 열 순서가 PostRow 생성자 순서와 같아야 함
     String POST = "SELECT p.id,p.author_id,p.author_name,p.content_hash,p.category,p.title,p.content,p.cut_date,p.service,p.summary,p.status,p.created_at,p.updated_at,"
         + "(SELECT COUNT(*) FROM community_post_photos f WHERE f.post_id=p.id) AS photo_count,"
@@ -36,6 +37,16 @@ public interface CommunityMapper {
         + "<if test='before != null'> AND (p.created_at,p.id) &lt; (SELECT b.created_at,b.id FROM community_posts b WHERE b.id=#{before})</if>"
         + " ORDER BY p.created_at DESC,p.id DESC LIMIT 30</script>")
     List<PostRow> posts(long viewer, String category, String service, String query, String before);
+    // 검색 서버가 찾은 글 ID 중 지금 공개인 글만 목록과 같은 순서로 읽음(CommunitySearch)
+    @Select("<script>" + POST + "WHERE p.status='VISIBLE' AND p.id IN <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach>"
+        + "<if test='category != null'> AND p.category=#{category}</if>"
+        + "<if test='service != null'> AND p.service=#{service}</if>"
+        + " ORDER BY p.created_at DESC,p.id DESC LIMIT 30</script>")
+    List<PostRow> postsByIds(long viewer, String category, String service, List<String> ids);
+    // 검색 색인에 넣을 열. 열 순서가 IndexRow 생성자 순서와 같아야 함
+    String INDEX_ROW = "SELECT id,category,title,content,service,summary,status,created_at FROM community_posts ";
+    @Select(INDEX_ROW + "WHERE id=#{id}") IndexRow indexRow(String id);
+    @Select(INDEX_ROW + "WHERE status='VISIBLE'") List<IndexRow> indexRows();
     @Select(POST + "WHERE p.author_id=#{viewer} AND p.status<>'DELETED' ORDER BY p.created_at DESC,p.id DESC LIMIT 100") List<PostRow> mine(long viewer);
     @Select(POST + "WHERE p.id=#{id}") PostRow post(String id, long viewer);
     @Select(POST + "WHERE p.author_id=#{viewer} AND p.request_key=#{key}") PostRow byRequestKey(long viewer, String key);

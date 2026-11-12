@@ -19,5 +19,27 @@ services:
       retries: 30
       start_period: 30s
     restart: unless-stopped
+  # 커뮤니티 검색(docs/community-api.md `검색 서버`). 필요할 때만 `docker compose --profile search up -d --wait`
+  search:
+    profiles: ["search"]
+    build: ./search
+    image: salu-search:8.15.0-nori
+    ports:
+      - "127.0.0.1:${SALU_SEARCH_PORT:-9200}:9200"
+    environment:
+      discovery.type: single-node
+      # 로컬 주소에만 열고 앱만 쓰므로 계정·TLS는 끔
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - salu_search_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs 'http://127.0.0.1:9200/_cluster/health?wait_for_status=yellow&timeout=2s' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
 volumes:
   salu_mysql_data:
+  salu_search_data:

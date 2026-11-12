@@ -83,11 +83,14 @@ type Tone = (typeof TONES)[number][0];
 // 상담 요청 칸 아래. 원래 글과 다듬은 글을 함께 보여 주고 `이 글로 바꾸기`를 눌러야 바뀜
 export function RequestDraftHelper({
   text,
+  records,
   disabled,
   label = 'AI로 문장 다듬기',
   onApply,
 }: {
   text: string;
+  // 디자이너에게 함께 보낼 기록 요약. 되물을 질문이 기록에 있는 것을 묻지 않게 함께 보냄
+  records?: string;
   disabled?: boolean;
   label?: string;
   onApply: (value: string) => void;
@@ -95,6 +98,8 @@ export function RequestDraftHelper({
   const enabled = useAiEnabled();
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ from: string; to: string; kept: boolean } | null>(null);
+  // 디자이너가 되물을 만한 질문. 보면서 답을 적을 수 있게 글을 바꿔도 다음 다듬기 전까지 남김
+  const [asks, setAsks] = useState<string[]>([]);
   // 바꾼 뒤 되돌릴 원래 글. 바꾼 글을 더 고치면 되돌리기를 숨김
   const [undo, setUndo] = useState<{ before: string; after: string } | null>(null);
   const [error, setError] = useState('');
@@ -129,15 +134,17 @@ export function RequestDraftHelper({
     setBusy(true);
     setError('');
     setResult(null);
+    setAsks([]);
     try {
-      const response = await directoryRequest<{ text: string; kept?: boolean }>(
+      const response = await directoryRequest<{ text: string; kept?: boolean; asks?: string[] }>(
         '/api/ai/request-draft',
         'POST',
-        { text: from, tone },
+        { text: from, tone, ...(records?.trim() ? { records } : {}) },
         AI_TIMEOUT,
       );
       // 서버는 줄 모양이 깨지거나 내용을 더한 답을 버리고 원래 글을 돌려줌(docs/ai-api.md)
       setResult({ from, to: response?.text ?? from, kept: Boolean(response?.kept) });
+      setAsks(response?.asks ?? []);
     } catch (failure) {
       setError(aiError(failure));
     } finally {
@@ -172,7 +179,10 @@ export function RequestDraftHelper({
             다듬기 전 글로 되돌리기
           </button>
         ) : (
-          <span className="form-note">맞춤법과 말투만 고치고, 적지 않은 내용은 넣지 않아요.</span>
+          <span className="form-note">
+            맞춤법과 말투를 고치고 디자이너가 물어볼 만한 것을 알려 줘요. 적지 않은 내용은 넣지
+            않아요.
+          </span>
         )}
       </div>
       <div className="community-tabs ai-tone" role="group" aria-label="다듬을 말투">
@@ -242,6 +252,17 @@ export function RequestDraftHelper({
               지금 글 그대로 두기
             </button>
           </div>
+        </div>
+      )}
+      {asks.length > 0 && (
+        <div className="ai-suggestion ai-asks">
+          <p className="ai-compare-label">디자이너가 물어볼 수 있어요</p>
+          <ul>
+            {asks.map((ask) => (
+              <li key={ask}>{ask}</li>
+            ))}
+          </ul>
+          <p className="form-note">답을 글에 적어 두면 디자이너가 다시 묻지 않아도 돼요.</p>
         </div>
       )}
     </div>

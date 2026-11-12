@@ -1479,6 +1479,12 @@
   margin: 0;
 }
 /* 지금 글과 다듬은 글을 위아래로. 바뀐 단어는 굵은 강조색 글자로만 */
+.ai-asks ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 20px;
+}
 .ai-compare {
   display: grid;
   gap: 4px;

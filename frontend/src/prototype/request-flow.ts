@@ -1,10 +1,12 @@
 import { getPublicDesigner } from '../directory-cache';
 import { newId } from './ids';
-import { daysAfter } from './dates';
+import { cutTitle, daysAfter } from './dates';
+import { AREAS } from './types';
 import type {
   Area,
   CutRecord,
   Intent,
+  ProgressEntry,
   PrototypeState,
   RecordPhoto,
   RequestDraft,
@@ -196,4 +198,29 @@ export function completeUrl(preview: Pick<RequestPreview, 'id'>) {
 // 사진 설명을 따로 적지 않으면 파일 이름이 들어 있음. 화면에는 파일 이름을 보여 주지 않음
 export function visibleCaption(caption: string) {
   return /\.(jpe?g|png|webp|gif|heic|heif|avif)$/i.test(caption.trim()) ? '' : caption;
+}
+
+// 상담에 첨부하는 좋았던 점·경과를 한 줄씩. 디자이너가 어느 날 어느 부위 이야기인지 알 수 있게 함
+export function materialSummary(
+  cutDate: string,
+  goodNote: string | undefined,
+  progress: ProgressEntry[],
+) {
+  const lines = [
+    ...(goodNote ? [`좋았던 점: ${goodNote}`] : []),
+    ...progress.map((entry) => {
+      const areas = entry.areas.map((area) => AREAS[area]).join('·');
+      const notes = [
+        entry.discomfort && `불편한 점 ${entry.discomfort}`,
+        entry.styling && `손질 ${entry.styling}`,
+        entry.question && `질문 ${entry.question}`,
+      ].filter(Boolean);
+      return `경과 D+${daysAfter(cutDate, entry.observedOn)}${areas ? `(${areas})` : ''}: ${notes.join(' / ') || '사진만 남김'}`;
+    }),
+  ];
+  return (lines.join('\n') || '커트한 날의 기록').slice(0, 2000);
+}
+// AI가 되물을 질문을 고를 때 함께 보는 기록. 디자이너에게 보낼 첨부와 같은 내용(docs/ai-api.md)
+export function recordsForAi(cutDate: string, service: string, summary: string) {
+  return `${cutTitle(cutDate, service)}\n${summary}`.slice(0, 3000);
 }

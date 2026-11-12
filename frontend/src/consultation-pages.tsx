@@ -47,12 +47,14 @@ import {
   isEditDraft,
   latestMaterials,
   materialSource,
+  materialSummary,
   materialUrl,
   newRequest,
   newRequestDraft,
   photoNote,
   photoOrigin,
   previewUrl,
+  recordsForAi,
   requestUrl,
   selectedCount,
 } from './prototype/request-flow';
@@ -1180,6 +1182,17 @@ export function RequestPage() {
           </AnimatedDetails>
           <RequestDraftHelper
             text={draftLines.map((line) => `${line.label}: ${line.value}`).join('\n')}
+            records={recordsForAi(
+              source.cut.cutDate,
+              source.cut.service,
+              materialSummary(
+                source.cut.cutDate,
+                draft.includeGoodNote ? source.cut.goodNote : undefined,
+                source.progress
+                  .filter((entry) => draft.progressIds.includes(entry.id))
+                  .sort((a, b) => a.observedOn.localeCompare(b.observedOn)),
+              ),
+            )}
             label="적은 내용 AI로 다듬기"
             onApply={(value) => {
               // 서버가 줄 수·줄 앞 표시를 지킨 답만 주므로 줄 순서대로 칸에 되돌림(docs/ai-api.md)

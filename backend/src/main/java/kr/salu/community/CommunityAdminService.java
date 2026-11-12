@@ -21,8 +21,8 @@ public class CommunityAdminService {
     public record Report(String reason, String detail, String status, String createdAt) {}
     public record PostReview(CommunityService.Post post, long authorId, List<Report> reports) {}
     public record Sanction(long id, long memberId, String reason, String endsAt, String createdAt, String liftedAt, boolean active) {}
-    private final CommunityAdminMapper mapper; private final CommunityMapper posts; private final NotificationService notifications;
-    public CommunityAdminService(CommunityAdminMapper mapper, CommunityMapper posts, NotificationService notifications) { this.mapper=mapper; this.posts=posts; this.notifications=notifications; }
+    private final CommunityAdminMapper mapper; private final CommunityMapper posts; private final NotificationService notifications; private final CommunitySearch search;
+    public CommunityAdminService(CommunityAdminMapper mapper, CommunityMapper posts, NotificationService notifications, CommunitySearch search) { this.mapper=mapper; this.posts=posts; this.notifications=notifications; this.search=search; }
 
     private static List<String> reasons(String value) { return value == null ? List.of() : List.of(value.split(",")); }
 
@@ -69,6 +69,7 @@ public class CommunityAdminService {
         var post = posts.lockPost(id);
         if (post == null) throw ApiException.notFound();
         if (!"DELETED".equals(post.status()) && mapper.setPostStatus(id, hide ? "HIDDEN" : "VISIBLE") != 1) throw ApiException.conflict();
+        search.sync(id);
         mapper.closePostReports(id, hide ? "ACCEPTED" : "DISMISSED", admin.id());
         if (!hide) mapper.dismissAcceptedPostReports(id, admin.id());
         if (hide && "VISIBLE".equals(post.status())) notifications.create(post.authorId(), NotificationService.COMMUNITY_POST_HIDDEN, id, null);

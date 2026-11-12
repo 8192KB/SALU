@@ -16,10 +16,10 @@ import tools.jackson.databind.ObjectMapper;
 
 @Service
 public class AiService {
-    // tone: plain(해요체, 기본)·polite(합니다체)
-    public record DraftInput(@NotBlank @Size(max=2000) String text, @jakarta.validation.constraints.Pattern(regexp="plain|polite") String tone) {}
-    // kept: 모델 답이 검사에 걸려 버리고 원래 글을 돌려줬는지
-    public record Draft(String text, boolean kept) {}
+    // tone: plain(해요체, 기본)·polite(합니다체). records: 함께 보낼 기록 요약(생략 가능). 되물을 질문을 고를 때만 씀
+    public record DraftInput(@NotBlank @Size(max=2000) String text, @jakarta.validation.constraints.Pattern(regexp="plain|polite") String tone, @Size(max=3000) String records) {}
+    // kept: 모델 답이 검사에 걸려 버리고 원래 글을 돌려줬는지. asks: 디자이너가 되물을 만한 질문(최대 3개)
+    public record Draft(String text, boolean kept, List<String> asks) {}
     public record MatchInput(@NotBlank @Size(max=1000) String concern) {}
     public record Match(String designerId, String name, String quote, String history) {}
     public record Matches(List<Match> items, List<String> basis) {}
@@ -91,7 +91,67 @@ public class AiService {
         if (text.length() > 2000) text = text.substring(0, 2000);
         // 줄 수나 줄 앞 표시가 바뀐 답은 버리고 원래 글을 돌려줌
         boolean ok = sameShape(original, text) && !addsContent(original, text) && keepsQuestions(original, text);
-        return ok ? new Draft(text, false) : new Draft(original, true);
+        String records = input.records() == null ? "" : input.records().strip();
+        return new Draft(ok ? text : original, !ok, asks(original, records));
+    }
+
+    // 고객 글에 넣지 않고 따로 보여 줄 질문이라 다듬기 검사와 별개. 고객이 이 질문의 답을 적어 두면 디자이너가 되묻지 않음
+    private static final String ASK_PROMPT = """
+        너는 커트 뒤 상담 요청을 받는 미용 디자이너다. 고객이 보낼 요청 글을 읽고, 답하기 전에 고객에게 되물을 만한 것을 고른다.
+        - 입력은 [요청 글]이다. 고객이 함께 보낼 기록이 있으면 그 앞에 [함께 보낼 기록]이 붙는다. 디자이너는 둘 다 본다.
+        - 머리 상태를 판단하는 데 필요한데 요청 글과 기록 어디에도 없는 것만 묻는다: 커트하고 언제부터 그랬는지, 어느 부위인지, 어떻게 불편한지, 원하는 길이나 모양, 집에서 어떻게 말리고 손질하는지.
+        - 요청 글이나 기록에 이미 있는 것은 묻지 않는다. 기록에 커트한 날이나 경과(D+일수)가 있으면 언제 잘랐는지, 언제부터 그랬는지 묻지 않는다. 불편한 점만 있고 앞으로 원하는 길이나 모양이 없으면 그것을 묻는다. 필요한 것이 다 있으면 "없음"만 쓴다.
+        - 최대 3개. 한 줄에 하나씩 해요체 질문 한 문장으로 쓰고 물음표로 끝낸다. 번호나 기호를 붙이지 않는다.
+        - 시술·제품·가격을 권하거나 머리 상태를 짐작하지 않는다. 질문만 쓴다.
+
+        예시 1
+        입력:
+        [요청 글]
+        옆머리 뜨는거 어케 해요
+        출력:
+        커트하고 며칠 뒤부터 옆머리가 떴나요?
+        아침에 옆머리를 어떻게 말리세요?
+        옆머리를 차분하게 두고 싶은지, 더 짧게 하고 싶은지 알려 주실래요?
+
+        예시 2
+        입력:
+        [함께 보낼 기록]
+        9월 20일 커트
+        경과 D+9(옆머리): 불편한 점 귀 옆에서 떠요 / 손질 아침에 드라이로 아래로 눌러 말려요
+        [요청 글]
+        어떻게 하면 좋을까요?
+        출력:
+        옆머리를 차분하게 두고 싶은지, 더 짧게 하고 싶은지 알려 주실래요?
+
+        예시 3
+        입력:
+        [요청 글]
+        옆머리(바꾸기): 커트하고 일주일 뒤부터 귀 옆이 떠요. 숱을 좀 쳐 주세요.
+        집에서 손질: 아침에 드라이로 아래로 눌러 말려요.
+        출력:
+        없음""";
+
+    // 다듬은 글은 이미 받았으므로 이 호출이 실패해도 요청 전체를 실패시키지 않음
+    private List<String> asks(String original, String records) {
+        String input = (records.isEmpty() ? "" : "[함께 보낼 기록]\n" + records + "\n") + "[요청 글]\n" + original;
+        try {
+            // 기록에 있는 날짜·D+일수는 질문에 나와도 지어낸 숫자가 아님
+            return parseAsks(original + "\n" + records, client.chat(ASK_PROMPT, input));
+        } catch (ApiException e) {
+            return List.of();
+        }
+    }
+
+    static List<String> parseAsks(String original, String answer) {
+        var asks = new ArrayList<String>();
+        for (String line : answer.split("\\R")) {
+            String ask = line.replaceFirst("^\\s*(?:[-*•]|\\d+[.)])\\s*", "").strip();
+            if (ask.length() < 6 || ask.length() > 80 || !ask.endsWith("?") || asks.contains(ask)) continue;
+            if (newDigits(original, ask) || LEAK.matcher(ask).find() || OUTSIDE.matcher(ask).find()) continue;
+            asks.add(ask);
+            if (asks.size() == 3) break;
+        }
+        return asks;
     }
 
     // 묻는 말이 있던 글이면 다듬은 글도 묻는 말이어야 함. 질문을 빼고 사실만 남기면 뜻이 바뀜
@@ -109,7 +169,11 @@ public class AiService {
 
     // 맞춤법·말투만 고치면 길이가 크게 늘지 않고 없던 숫자가 생기지 않음. 넘으면 내용을 지어낸 것으로 봄
     static boolean addsContent(String original, String text) {
-        if (text.length() > original.length() * 1.6 + 30) return true;
+        return text.length() > original.length() * 1.6 + 30 || newDigits(original, text);
+    }
+
+    // 원래 글에 없던 숫자는 모델이 지어낸 날짜·기간·가격
+    private static boolean newDigits(String original, String text) {
         var digits = java.util.regex.Pattern.compile("\\d+").matcher(text);
         while (digits.find()) if (!original.contains(digits.group())) return true;
         return false;
@@ -200,8 +264,8 @@ public class AiService {
         }
     }
 
-    // AI 상담(docs/ai-api.md `AI 상담`). 규칙 관문 → 내 기록 고르기 → 지시 → 후처리 순서
-    // 갈래와 자료는 코드가 정하고 모델은 받은 자료로만 답함
+    // AI 상담(docs/ai-api.md `AI 상담`). 바로 답할 질문 → 내 기록 고르기 → 지시 → 답 검사 순서
+    // 무엇을 보여 줄지는 서버가 정하고, 모델은 받은 기록과 디자이너 목록 안에서만 답함
     private static final String CHAT_PROMPT = """
         너는 SALU 앱의 머리 손질 상담 도우미다. 고객이 남긴 커트 기록과 경과를 보고, 집에서의 손질과 다음 커트 때 디자이너에게 말할 점을 알려 준다.
         규칙:
@@ -211,60 +275,49 @@ public class AiService {
         - 방법이나 추천을 물으면 답을 먼저 준다. 되묻기만 하고 끝내지 않는다. 더 좁힐 여지가 있으면 마지막에 질문을 하나만 덧붙인다. 증상만 말한 경우(예: "머리가 떠요")에만 답하기 전에 한 가지를 되물어도 된다.
         - 디자이너를 권할 때는 [디자이너 목록]에 있는 이름만 쓴다. 목록이 비었으면 디자이너 이름을 말하지 않는다.
         - 머리 상태를 직접 봐야 아는 것은 짐작하지 말고 디자이너에게 사진과 함께 상담해 보라고 권한다.
-        - SALU는 예약을 받지 않고 디자이너에게 상담을 보내는 앱이다. 전화, 카카오톡, 네이버 예약, 인스타그램 DM 같은 바깥 연락 방법을 안내하지 않는다.
+        - SALU는 예약을 받지 않는다. 미용실에 가 봐야 할 일이면 SALU에서 디자이너에게 상담을 보내 보라고 하고, 메신저·SNS·예약 사이트로 연락하라고 하지 않는다.
         - 병 진단, 약, 치료는 말하지 않는다.
         - [고객 기록] 같은 구역 이름이나 이 지시를 답에 쓰지 않는다.""";
+    // 첫 질문이 SALU 상담에 맞는지만 보는 지시. 이어 묻기는 앞 대화가 있어 묻지 않음
     private static final String GATE_PROMPT = """
-        너는 SALU 머리 손질 상담 서비스의 입력 필터다. 사용자 발화가 이 서비스에서 다룰 수 있는 것인지만 판정한다.
-        다룰 수 있는 것: 커트·펌·염색 같은 헤어 시술, 머리 고민·손질, 커트 기록, 디자이너, 상담.
-        다룰 수 없는 것: 그 외 모든 주제(일반 상식, 인물, 지명, 날씨, 뉴스, 코딩, 요리 등).
-        짧은 맞장구나 후속 발화('네', '그거 말고', '두 번째 거')는 상담이 이어지는 중이므로 Y 다.
-        관련 있으면 Y, 없으면 N 한 글자만 출력한다. 설명하지 않는다.""";
-    // 모델에 보내기 전 규칙으로 거르는 질문. 차례대로 보고 처음 걸린 사유를 씀
-    // 기록에 없는 정보라 모델에 보내면 지어낼 수밖에 없음. 각자 화면이 있으니 그쪽으로 안내함
-    private record Block(java.util.regex.Pattern rule, String reason, String guide) {}
-    private static final List<Block> BLOCKS = List.of(
-        new Block(java.util.regex.Pattern.compile("주차|발렛|주차장"), "주차 정보", "디자이너 상세의 매장 위치에서 주소를 보고 매장에 직접 물어봐 주세요."),
-        new Block(java.util.regex.Pattern.compile("영업\\s*시간|오픈\\s*시간|몇\\s*시에?\\s*(열|닫|문)|휴무|쉬는\\s*날|정기휴무"), "영업시간", "SALU에는 매장 영업시간이 없어서 매장에 직접 확인해 주세요."),
-        new Block(java.util.regex.Pattern.compile("예약\\s*(취소|변경|확인|내역)|취소\\s*하고|환불|결제\\s*취소"), "예약·결제", "상담 요금은 디자이너가 답하기 전에 보낸 상담에서 취소하면 환불돼요."),
-        // "예약하고 싶어"는 상담으로 보내야 하므로 방법을 묻는 형태만 잡음
-        new Block(java.util.regex.Pattern.compile("예약\\s*(방법|절차|어떻게|어디서|어디에서)|예약\\s*(은|는|을|를)\\s*(어떻게|어디서|어디에서)|예약\\s*하려면|예약\\s*하는\\s*(법|방법)|(어떻게|어디서|어디에서)\\s*\\S{0,4}\\s*예약"), "예약 방법", null),
-        new Block(java.util.regex.Pattern.compile("쿠폰|포인트|적립|할인\\s*코드"), "쿠폰·포인트", "SALU에는 쿠폰과 포인트가 없어요."),
-        new Block(java.util.regex.Pattern.compile("탈모\\s*(치료|약|병원)|두피\\s*질환|피부염|알레르기|부작용"), "의학적 판단이 필요한 내용", "두피나 피부 상태는 전문의 상담이 필요해요."),
-        new Block(java.util.regex.Pattern.compile("회원\\s*가입|탈퇴|비밀번호|로그인"), "계정", "내 계정 화면에서 계정 정보를 관리할 수 있어요."));
-    // 예약은 SALU가 상담으로 대신 하므로 "다루지 않아요"로 떠넘기면 그 자체로 오답
+        SALU는 고객이 남긴 커트 기록을 보고 머리 손질과 다음 커트를 함께 고민해 주는 상담 앱이다.
+        고객의 첫 질문이 이 상담에 맞는지만 본다.
+        맞는 것: 머리 모양·손질·커트·펌·염색, 커트 뒤 불편, 내 커트 기록, 디자이너 고르기와 상담.
+        안 맞는 것: 머리와 상관없는 이야기(상식, 날씨, 뉴스, 공부, 코딩, 쿠폰·포인트 등).
+        맞으면 Y, 안 맞으면 N. 다른 말 없이 한 글자만 쓴다.""";
+    // 예약을 물으면 SALU에서 하는 방법(상담 신청)으로 이어 줌
     private static final String BOOKING_ANSWER = "SALU는 예약 대신 디자이너에게 상담을 보내요. 디자이너 찾기에서 디자이너를 골라 상담 신청을 누르고, 보여 줄 커트 기록과 사진을 고르면 돼요.\n\n어떤 디자이너가 맞을지 고민이면 커트 뒤 불편한 점을 말해 주세요. 기록과 함께 봐 드릴게요.";
-    // 기록을 봐야만 답할 수 있는 질문. 기록이 없으면 모델에 보내지 않음
+    private static final String CARRY_ON = "\n\n커트 뒤 불편한 점이나 집에서 손질하는 법이 궁금하면 말해 주세요.";
+    // 모델 없이 바로 답하는 질문. SALU 화면에서 답을 찾을 수 있거나 SALU에 없는 정보라, 모델에 보내면 지어낼 수밖에 없음
+    // 위에서부터 보고 처음 맞는 답을 씀. 환불을 예약보다 먼저 봐야 "예약 취소하면 환불돼요?"가 환불 안내로 감
+    private record Shortcut(java.util.regex.Pattern ask, String answer) {}
+    private static Shortcut shortcut(String ask, String answer) { return new Shortcut(java.util.regex.Pattern.compile(ask), answer); }
+    private static final List<Shortcut> SHORTCUTS = List.of(
+        shortcut("환불|결제\\s*취소", "상담 요금은 디자이너가 답하기 전에 보낸 상담에서 취소하면 환불돼요." + CARRY_ON),
+        // "예약해 둔 날 전에 손질은?"처럼 예약을 말하기만 한 질문은 상담으로 보냄. 예약하는 방법을 물을 때만 잡음
+        shortcut("예약\\s*(은|는|을|를)?\\s*(방법|하려면|하는\\s*법|가능|할\\s*수|돼|되나|어디|어떻게)|(어떻게|어디서)\\s*예약", BOOKING_ANSWER),
+        shortcut("주차|영업\\s*시간|몇\\s*시(에|까지|부터)|휴무|쉬는\\s*날|매장\\s*(전화|번호|연락처)", "주차나 영업시간 같은 매장 정보는 SALU에 없어요. 디자이너 상세의 매장 위치에서 주소를 보고 매장에 직접 물어봐 주세요." + CARRY_ON),
+        shortcut("(탈모|두피|피부)\\S{0,4}\\s*(약|치료|병원|진료|처방)|피부염|알레르기", "두피나 피부 상태, 먹는 약은 SALU AI가 답할 수 없어요. 전문의에게 상담해 주세요." + CARRY_ON),
+        shortcut("회원\\s*가입|탈퇴|비밀번호|로그인", "가입·탈퇴·비밀번호는 내 계정 화면에서 관리할 수 있어요." + CARRY_ON));
+    // 지난 기록을 봐야 답할 수 있는 질문. 계정에 백업한 기록이 없으면 모델에 보내지 않음
     private static final java.util.regex.Pattern NEEDS_RECORDS = java.util.regex.Pattern.compile(
-        "(내가|제가|나|저)\\s*(갔던|다녔던|받았던|받은|잘랐던|자른|했던)|(자주|주로)\\s*(가는|가던|다니는)|단골|(저번|지난번|예전|지난)\\s*에?\\s*(받은|간|갔던|자른|잘랐던|커트|기록)|내\\s*기록");
+        "지난\\s*번|저번\\s*에|예전\\s*에|전에\\s*(자른|받은|했던)|내\\s*기록|(내가|제가)\\s*(자른|잘랐던|받은|받았던|했던|다니던|가던)|단골");
     private static final String NO_RECORDS = "아직 계정에 백업한 커트 기록이 없어서 지난 커트를 볼 수 없어요.\n\n기록 화면에서 커트를 남기고 백업하면 그 기록으로 답해 드릴게요. 지금은 '옆머리가 뜰 때 집에서 어떻게 말려요?'처럼 물어보셔도 돼요.";
     private static final String OUT_OF_DOMAIN = "저는 머리 손질과 커트 상담만 도와드릴 수 있어요.\n\n커트 뒤 불편한 점이나 집에서 손질하는 법, 어떤 디자이너가 맞을지 궁금하면 말해 주세요.";
-    private static final String EMPTY_ANSWER = "답을 정리하지 못했어요. 질문을 조금 더 구체적으로 적어 주시면 다시 찾아볼게요.";
+    private static final String EMPTY_ANSWER = "답을 만들지 못했어요. 어느 부위가 언제부터 어떻게 불편한지 조금 더 적어 주세요.";
     private static final int CHAT_DESIGNERS = 5;
 
-    static String blockedAnswer(String message) {
+    static String shortcutAnswer(String message) {
         String text = message.replaceAll("\\s+", " ");
-        for (var block : BLOCKS) {
-            if (!block.rule().matcher(text).find()) continue;
-            if (block.guide() == null) return BOOKING_ANSWER;
-            return block.reason() + josa(block.reason()) + " 머리 손질 상담에서 다루지 않아요. " + block.guide()
-                + "\n\n커트 뒤 불편한 점이나 집에서 손질하는 법이 궁금하면 말해 주세요.";
-        }
-        return null;
-    }
-
-    // 받침 유무로 은/는을 고름("영업시간는"처럼 나가지 않게)
-    private static String josa(String word) {
-        char last = word.charAt(word.length() - 1);
-        return last >= '가' && last <= '힣' && (last - 0xAC00) % 28 != 0 ? "은" : "는";
+        return SHORTCUTS.stream().filter(s -> s.ask().matcher(text).find()).map(Shortcut::answer).findFirst().orElse(null);
     }
 
     public ChatAnswer chat(long member, ChatInput input) {
         if (!client.enabled()) throw ApiException.aiUnavailable();
         String message = input.message().strip();
         List<Turn> history = input.history() == null ? List.of() : input.history();
-        // 1. 규칙 차단. 모델을 부르지 않으므로 횟수에 넣지 않고 대화에도 남기지 않음(blocked)
-        String blocked = blockedAnswer(message);
+        // 1. 바로 답할 질문. 모델을 부르지 않으므로 횟수에 넣지 않고 대화에도 남기지 않음(blocked)
+        String blocked = shortcutAnswer(message);
         if (blocked != null) return new ChatAnswer(blocked, List.of(), List.of(), true);
         // 자료는 서버가 고름. 기록·목록 읽기는 각각 읽기 transaction으로 끝나고 모델 호출은 그 밖에서 함
         // "다음 커트 때는요?" 같은 이어 묻기도 같은 기록을 보게 앞선 고객 질문까지 묶어 고름
@@ -299,7 +352,7 @@ public class AiService {
         }
         prompt.append("[질문]\n").append(message);
         var turns = history.stream().map(t -> Map.of("role", t.role(), "content", t.text().strip())).toList();
-        // 5. 답 다듬기: Markdown·내부 이야기·바깥 연락 경로를 지우고 길이를 자름
+        // 5. 답 검사: Markdown·구역 이름·바깥 연락 안내를 지우고 길이를 자름
         String answer = clean(client.chat(CHAT_PROMPT, turns, prompt.toString()));
         if (answer.isEmpty()) return new ChatAnswer(EMPTY_ANSWER, List.of(), picked.basis(), false);
         // 6. 답에 이름이 나온 디자이너만 링크. 지어낸 이름은 목록에 없어 빠짐
@@ -307,23 +360,32 @@ public class AiService {
         return new ChatAnswer(answer, named, picked.basis(), false);
     }
 
-    // 프롬프트로 금지해도 모델이 무시하므로 문자열에서 한 번 더 거름(Markdown 기호·내부 말)
-    // 구역 이름·지시를 말한 문장과 바깥 예약 경로를 안내한 문장은 통째로 지움. "전화"는 매장 연락이라 남김
-    private static final java.util.regex.Pattern INTERNAL = java.util.regex.Pattern.compile(
-        "\\[(고객 기록|디자이너 목록|질문)\\]|지시문|프롬프트|카카오|네이버|인스타|왓츠앱|\\bDM\\b", java.util.regex.Pattern.CASE_INSENSITIVE);
+    // 지시문으로 막아도 모델이 가끔 어기므로 답에서 한 번 더 뺌
+    // 서버가 붙인 구역 이름이나 지시를 말한 문장, 메신저·SNS·예약 사이트로 연락하라는 문장은 문장째 뺌
+    // 매장에 직접 물어보라는 말은 SALU 안내와 같아서 남김
+    private static final java.util.regex.Pattern LEAK = java.util.regex.Pattern.compile("\\[(고객 기록|디자이너 목록|질문|함께 보낼 기록|요청 글)\\]|지시문|프롬프트");
+    private static final java.util.regex.Pattern OUTSIDE = java.util.regex.Pattern.compile(
+        "카카오|카톡|네이버\\s*(예약|톡)|인스타|\\bDM\\b|디엠|오픈\\s*채팅|왓츠앱", java.util.regex.Pattern.CASE_INSENSITIVE);
 
     static String clean(String text) {
         String out = text.replaceAll("\\*\\*(.+?)\\*\\*", "$1").replace("**", "").replace("__", "")
             .replaceAll("(?m)^\\s*#{1,6}\\s*", "").replaceAll("(?m)^[ \\t]*[-*•]\\s+", "")
             .replaceAll("\\((질문과 관련|최근 기록)\\)\\s*", "");
-        var lines = new ArrayList<String>();
-        // 줄바꿈은 문단 구분이라 살리고 같은 줄 안에서만 문장을 나눔
-        for (String line : out.split("\n", -1)) {
-            var kept = new ArrayList<String>();
-            for (String sentence : line.split("(?<=[.!?])\\s+")) if (!sentence.isBlank() && !INTERNAL.matcher(sentence).find()) kept.add(sentence.strip());
-            lines.add(String.join(" ", kept));
-        }
-        out = String.join("\n", lines).replaceAll("\\n{3,}", "\n\n").strip();
+        // 문단(줄)은 그대로 두고 줄마다 뺄 문장만 뺌. 줄이 통째로 비면 빈 줄이 겹치지 않게 하나로 줄임
+        var paragraphs = out.lines().map(AiService::withoutBadSentences).toList();
+        out = String.join("\n", paragraphs).replaceAll("\\n{3,}", "\n\n").strip();
         return out.length() > 1200 ? out.substring(0, 1200) : out;
+    }
+
+    // 한국어 문장 경계는 JDK의 BreakIterator로 나눔("1.5cm"처럼 숫자 안의 점에서는 끊지 않음)
+    private static String withoutBadSentences(String paragraph) {
+        var sentences = java.text.BreakIterator.getSentenceInstance(java.util.Locale.KOREAN);
+        sentences.setText(paragraph);
+        var kept = new java.util.StringJoiner(" ");
+        for (int start = sentences.first(), end = sentences.next(); end != java.text.BreakIterator.DONE; start = end, end = sentences.next()) {
+            String sentence = paragraph.substring(start, end).strip();
+            if (!sentence.isEmpty() && !LEAK.matcher(sentence).find() && !OUTSIDE.matcher(sentence).find()) kept.add(sentence);
+        }
+        return kept.toString();
     }
 }

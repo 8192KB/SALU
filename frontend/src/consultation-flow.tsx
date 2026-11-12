@@ -28,8 +28,8 @@ import type {
 } from './consultation-store';
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
-import { cutTitle, daysAfter, displayDate, sentTime } from './prototype/dates';
-import { photoOrigin, previewUrl } from './prototype/request-flow';
+import { cutTitle, displayDate, sentTime } from './prototype/dates';
+import { materialSummary, photoOrigin, previewUrl, recordsForAi } from './prototype/request-flow';
 import { MAX_CONSULTATION_PHOTOS } from './consultation-api';
 import { useAuth } from './auth/context';
 import { useLoginPath } from './auth/pages';
@@ -96,19 +96,7 @@ function attachmentFor(
 }
 // 준비 내용의 좋았던 점·경과를 한 줄씩. 디자이너가 어느 날 어느 부위 이야기인지 알 수 있게 함
 function previewSummary(preview: RequestPreview) {
-  const lines = [
-    ...(preview.goodNote ? [`좋았던 점: ${preview.goodNote}`] : []),
-    ...preview.progress.map((entry) => {
-      const areas = entry.areas.map((area) => AREAS[area]).join('·');
-      const notes = [
-        entry.discomfort && `불편한 점 ${entry.discomfort}`,
-        entry.styling && `손질 ${entry.styling}`,
-        entry.question && `질문 ${entry.question}`,
-      ].filter(Boolean);
-      return `경과 D+${daysAfter(preview.cut.cutDate, entry.observedOn)}${areas ? `(${areas})` : ''}: ${notes.join(' / ') || '사진만 남김'}`;
-    }),
-  ];
-  return (lines.join('\n') || '커트한 날의 기록').slice(0, 2000);
+  return materialSummary(preview.cut.cutDate, preview.goodNote, preview.progress);
 }
 // 준비 내용의 원하는 점·집에서 손질·질문을 한 줄씩. 부위와 방향을 앞에 붙임
 function requestFromPreview(preview: RequestPreview) {
@@ -535,6 +523,12 @@ function ConsultationForm({
     }
   }
   const prepared = preview && attachmentFor(state, preview.cut.id, designer.id, preview);
+  // AI가 되물을 질문을 고를 때 함께 보는 기록. 지금 첨부할 기록과 같음
+  const chosen =
+    prepared || (draft.cutId ? attachmentFor(state, draft.cutId, designer.id) : undefined);
+  const aiRecords = chosen
+    ? recordsForAi(chosen.cutDate, chosen.service, chosen.summary)
+    : undefined;
   // 주소로 바로 왔는데 이 디자이너가 맡은 기록이 없으면 고를 것이 없으므로 자료 고르기로 안내함
   if (!prepared && !state.cuts.some((cut) => cut.designerProfileId === designer.id))
     return (
@@ -633,6 +627,7 @@ function ConsultationForm({
         </label>
         <RequestDraftHelper
           text={draft.request}
+          records={aiRecords}
           disabled={busy}
           onApply={(value) => update({ request: value })}
         />

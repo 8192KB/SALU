@@ -90,6 +90,12 @@ const admin = () => import('./admin-pages');
 const AdminReports = lazy(() => admin().then((module) => ({ default: module.AdminReports })));
 const AdminPost = lazy(() => admin().then((module) => ({ default: module.AdminPost })));
 const AdminMember = lazy(() => admin().then((module) => ({ default: module.AdminMember })));
+const AdminFeedback = lazy(() => admin().then((module) => ({ default: module.AdminFeedback })));
+const feedback = () => import('./feedback-pages');
+const FeedbackWrite = lazy(() => feedback().then((module) => ({ default: module.FeedbackWrite })));
+const FeedbackComplete = lazy(() =>
+  feedback().then((module) => ({ default: module.FeedbackComplete })),
+);
 const MyPosts = lazy(() => community().then((module) => ({ default: module.MyPosts })));
 const ReceivedComplete = lazy(() =>
   import('./received-consultations').then((module) => ({ default: module.ReceivedComplete })),
@@ -432,6 +438,9 @@ function PageRoutes({
           <Route path="admin/reports" element={<AdminReports />} />
           <Route path="admin/posts/:id" element={<AdminPost />} />
           <Route path="admin/members/:id" element={<AdminMember />} />
+          <Route path="admin/feedback" element={<AdminFeedback />} />
+          <Route path="feedback" element={<FeedbackWrite />} />
+          <Route path="feedback/complete" element={<FeedbackComplete />} />
           <Route path="records" element={<RecordList />} />
           <Route path="records/new" element={<CutForm />} />
           <Route path="records/:id/complete" element={<RecordComplete />} />

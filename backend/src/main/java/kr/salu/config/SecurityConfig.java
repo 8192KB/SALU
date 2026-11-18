@@ -32,6 +32,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/community/posts", "/api/community/posts/*", "/api/community/posts/*/comments", "/api/community/posts/*/photos/*").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/signup", "/api/auth/email-check", "/api/auth/password-reset", "/api/auth/password-reset/confirm").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/feedback").permitAll()
                 .anyRequest().authenticated())
             .formLogin(login -> login.loginPage("/api/auth/me").loginProcessingUrl("/api/auth/login")
                 .usernameParameter("email").passwordParameter("password")

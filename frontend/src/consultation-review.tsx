@@ -30,7 +30,7 @@ import {
   saveReview,
 } from './designer-api';
 import type { DesignerReview, DesignerReviews } from './designer-api';
-import { cutTitle, sentTime } from './prototype/dates';
+import { cutTitle, sentTime, shortTime } from './prototype/dates';
 import { useLocalSignal, useOnReactivate } from './realtime';
 import { readTabDraft, writeTabDraft } from './tab-draft';
 
@@ -59,7 +59,9 @@ function ReviewBody({ review }: { review: DesignerReview }) {
     <>
       <div className="review-score">
         <Stars rating={review.rating} />
-        <time dateTime={review.updatedAt}>{sentTime(review.updatedAt)}</time>
+        <time dateTime={review.updatedAt} title={sentTime(review.updatedAt)}>
+          {shortTime(review.updatedAt)}
+        </time>
       </div>
       <p className="consultation-message">{review.content}</p>
     </>
@@ -143,10 +145,10 @@ export function ConsultationReviewPanel({
           <Alert message={error} />
           {review && (
             <div className="review-actions">
-              <Link className="button" to={`/consultations/${id}/review`}>
+              <Link className="text-link" to={`/consultations/${id}/review`}>
                 고치기
               </Link>
-              <button type="button" className="button" onClick={() => setConfirm(true)}>
+              <button type="button" className="text-link" onClick={() => setConfirm(true)}>
                 지우기
               </button>
             </div>
@@ -266,7 +268,9 @@ export function DesignerReviewList({ designerId }: { designerId: string }) {
               <strong>{review.author.displayName}님</strong>
               <div className="review-score">
                 <Stars rating={review.rating} />
-                <time dateTime={review.createdAt}>{sentTime(review.createdAt)}</time>
+                <time dateTime={review.createdAt} title={sentTime(review.createdAt)}>
+                  {shortTime(review.createdAt)}
+                </time>
               </div>
               <p>{review.content}</p>
             </div>

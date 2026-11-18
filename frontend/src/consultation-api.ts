@@ -73,7 +73,8 @@ const sendMessages: Record<string, string> = {
     '사진이 너무 커서 보낼 수 없어요. 준비 고치기에서 사진을 몇 장 빼고 다시 보내 주세요.',
   UNSUPPORTED_MEDIA_TYPE:
     '보낼 수 없는 형식의 사진이 있어요. 준비 고치기에서 그 사진을 빼고 다시 보내 주세요.',
-  PAYMENT_UNAVAILABLE: '지금은 결제할 수 없어 요금이 있는 디자이너에게 보낼 수 없어요.',
+  PAYMENT_UNAVAILABLE:
+    '지금은 결제가 안 돼요. 요금이 있는 디자이너에게는 잠시 후 다시 신청해 주세요.',
 };
 const readMessages: Record<string, string> = {
   AUTHENTICATION_REQUIRED: '로그인 후 상담을 이용할 수 있어요.',

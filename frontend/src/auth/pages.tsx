@@ -37,15 +37,46 @@ export function useLoginPath() {
   return next && next !== '/' ? `/login?next=${encodeURIComponent(next)}` : '/login';
 }
 
+// 머리글 계정 자리(2026-11-17 사용자: 로그아웃은 보통 사이트처럼 더보기 안에 둠)
 export function AccountControls() {
-  const { state, activeMember, pending, logout } = useAuth();
-  const navigate = useNavigate();
+  const { state, activeMember } = useAuth();
   const loginPath = useLoginPath();
+  if (state.status === 'prototype') return <span className="member-label">나의 헤어 기록</span>;
+  // 로그인한 뒤에는 이름·로그아웃 대신 내 계정으로 가는 사람 아이콘 하나(알림 종과 같은 모양)
+  if (state.status === 'authenticated')
+    return (
+      <div className="account-controls" role="group" aria-label="계정">
+        <Link className="notification-button" to="/account" title="내 계정">
+          <Icon name="user" />
+          <span className="sr-only">{state.member.displayName}님 계정</span>
+        </Link>
+      </div>
+    );
+  return (
+    <div className="account-controls" role="group" aria-label="계정">
+      {state.status === 'checking' ? (
+        <span className="muted">계정 확인 중</span>
+      ) : state.status === 'unavailable' && activeMember ? (
+        <span className="muted">{activeMember.displayName}님 계정 연결 확인 중</span>
+      ) : (
+        <Link className="button account-button" to={loginPath}>
+          <Icon name="user" size={16} />
+          {state.status === 'unavailable' ? '계정 확인' : '로그인'}
+        </Link>
+      )}
+    </div>
+  );
+}
+
+// 더보기 계정 묶음의 로그아웃. 평소에는 바로 로그아웃함. 서버에 못 올린 기록이 있거나 기기 저장이 실패했을 때만 창으로 물음
+export function LogoutButton() {
+  const { state, pending, logout } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [unsent, setUnsent] = useState(0);
   const [storageError, setStorageError] = useState('');
   const { storage } = usePrototype();
-  // 평소에는 바로 로그아웃함. 서버에 못 올린 기록이 있거나 기기 저장이 실패했을 때만 창으로 물음
+  if (state.status !== 'authenticated') return null;
   const finish = async () => {
     try {
       await flushPersonalStores();
@@ -58,43 +89,26 @@ export function AccountControls() {
     setOpen(false);
     if (success) navigate('/', { replace: true });
   };
-  if (state.status === 'prototype') return <span className="member-label">나의 헤어 기록</span>;
   return (
-    <div className="account-controls" role="group" aria-label="계정">
-      {state.status === 'authenticated' ? (
-        <>
-          <Link className="account-name" to="/account" title={state.member.displayName}>
-            {state.member.displayName}님
-          </Link>
-          <button
-            type="button"
-            className="button account-button"
-            disabled={pending}
-            onClick={() => {
-              setStorageError('');
-              const waiting = storage
-                ? Object.entries(storage.getItems()).filter(
-                    ([id, item]) => id !== 'new-cut-draft' && (item.dirty || item.conflict),
-                  ).length
-                : 0;
-              setUnsent(waiting);
-              if (waiting > 0) setOpen(true);
-              else void finish();
-            }}
-          >
-            {pending ? '로그아웃 중' : '로그아웃'}
-          </button>
-        </>
-      ) : state.status === 'checking' ? (
-        <span className="muted">계정 확인 중</span>
-      ) : state.status === 'unavailable' && activeMember ? (
-        <span className="muted">{activeMember.displayName}님 계정 연결 확인 중</span>
-      ) : (
-        <Link className="button account-button" to={loginPath}>
-          <Icon name="user" size={16} />
-          {state.status === 'unavailable' ? '계정 확인' : '로그인'}
-        </Link>
-      )}
+    <>
+      <button
+        type="button"
+        className="more-logout"
+        disabled={pending}
+        onClick={() => {
+          setStorageError('');
+          const waiting = storage
+            ? Object.entries(storage.getItems()).filter(
+                ([id, item]) => id !== 'new-cut-draft' && (item.dirty || item.conflict),
+              ).length
+            : 0;
+          setUnsent(waiting);
+          if (waiting > 0) setOpen(true);
+          else void finish();
+        }}
+      >
+        {pending ? '로그아웃 중' : '로그아웃'}
+      </button>
       <Dialog
         open={open}
         title={storageError ? '로그아웃하지 못했어요' : '아직 올리지 못한 기록이 있어요'}
@@ -128,7 +142,7 @@ export function AccountControls() {
           </button>
         </div>
       </Dialog>
-    </div>
+    </>
   );
 }
 

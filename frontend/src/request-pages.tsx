@@ -1,9 +1,9 @@
 import { draftDesigner } from './directory-cache';
 import { useDirectory } from './directory';
 import { Link } from './workspace';
-import { Icon, PageHeading, PhotoThumbnail } from './components';
+import { FloatingAction, Icon, PageHeading, PhotoThumbnail } from './components';
 import { usePrototype } from './prototype/context';
-import { cutTitle, sentTime } from './prototype/dates';
+import { cutTitle, shortTime } from './prototype/dates';
 import { newestPreviews, previewUrl, unfinishedDrafts } from './prototype/request-flow';
 
 export function RequestList() {
@@ -13,20 +13,7 @@ export function RequestList() {
   const previews = newestPreviews(state.previews);
   return (
     <>
-      <PageHeading
-        title="커트 준비"
-        action={
-          // 아직 준비가 없으면 아래 빈 화면의 버튼 하나로만 시작하게 함
-          state.cuts.length > 0 && (previews.length > 0 || drafts.length > 0) ? (
-            <Link className="button primary" to="/requests/materials">
-              <Icon name="plus" />새 커트 준비
-            </Link>
-          ) : undefined
-        }
-      />
-      <Link className="button" to="/designers">
-        디자이너 찾기
-      </Link>
+      <PageHeading title="커트 준비" />
       {drafts.length > 0 && (
         <section className="request-list-section">
           <div className="section-heading">
@@ -65,7 +52,7 @@ export function RequestList() {
       <section className="request-list-section">
         <div className="section-heading">
           <h2>준비한 내용</h2>
-          <span className="count-label">{previews.length}개</span>
+          {previews.length > 0 && <span className="count-label">{previews.length}개</span>}
         </div>
         {previews.length ? (
           <div className="saved-request-grid">
@@ -82,7 +69,7 @@ export function RequestList() {
                 <h3>{cutTitle(preview.cut.cutDate, preview.cut.service)}</h3>
                 <p>{preview.requests[0]?.content}</p>
                 <div className="card-bottom">
-                  <time dateTime={preview.createdAt}>{sentTime(preview.createdAt)}</time>
+                  <time dateTime={preview.createdAt}>{shortTime(preview.createdAt)}</time>
                   <span className="card-action">
                     내용 보기 <Icon name="arrow" size={16} />
                   </span>
@@ -105,6 +92,18 @@ export function RequestList() {
           </section>
         )}
       </section>
+      {/* 준비가 먼저이고 디자이너 찾기는 보조 길이라, 기록 목록의 아래 링크처럼 목록 아래 글자 링크로 둠 */}
+      <div className="journal-links">
+        <Link className="journal-next text-link" to="/designers">
+          디자이너 찾기 <Icon name="arrow" size={16} />
+        </Link>
+      </div>
+      {/* 아직 준비가 없으면 아래 빈 화면의 버튼 하나로만 시작하게 함 */}
+      {state.cuts.length > 0 && (previews.length > 0 || drafts.length > 0) && (
+        <FloatingAction to="/requests/materials">
+          <Icon name="plus" size={20} />새 커트 준비
+        </FloatingAction>
+      )}
     </>
   );
 }

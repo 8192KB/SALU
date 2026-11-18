@@ -11,6 +11,7 @@ import {
   BackLink,
   Icon,
   Missing,
+  FloatingAction,
   PageHeading,
   PhotoThumbnail,
   focusFirstError,
@@ -86,17 +87,10 @@ export function RecordList() {
   return (
     <div className="two-column journal-layout">
       <section>
-        <PageHeading
-          title="나의 커트 기록"
-          action={
-            <Link className="button primary" to="/records/new">
-              <Icon name="plus" />새 기록
-            </Link>
-          }
-        />
+        <PageHeading title="나의 커트 기록" />
         <div className="section-heading">
           <h2>최근 커트</h2>
-          <span className="count-label">{cuts.length}개의 기록</span>
+          {cuts.length > 0 && <span className="count-label">{cuts.length}개의 기록</span>}
         </div>
         <div className="journal-list">
           {cuts.map((cut) => {
@@ -147,6 +141,9 @@ export function RecordList() {
             </Link>
           )}
         </div>
+        <FloatingAction to="/records/new">
+          <Icon name="plus" size={20} />새 기록
+        </FloatingAction>
       </section>
       <aside className="sidebar journal-guide">
         <section className="panel">
@@ -815,6 +812,13 @@ export function RecordDetail() {
   const consultName =
     directory.designers.find((value) => value.id === consultDraft?.designerId)?.name ??
     consultDraft?.designerSnapshot?.name;
+  // 작성 중인 디자이너 상담 신청은 상담을 시작하는 카드(담당 디자이너 카드나 디자이너 상담 구역) 안에서 이어 씀
+  const consultResume = consultDraft && (
+    <Link className="text-link" to={resumeUrl(consultDraft)}>
+      {consultName ? `${consultName} 디자이너 상담 신청 이어쓰기` : '디자이너 상담 신청 이어쓰기'}{' '}
+      <Icon name="arrow" size={16} />
+    </Link>
+  );
   const previews = newestPreviews(state.previews.filter((value) => value.cut.id === id));
   const startPersonalRequest = () => {
     const draft = newRequestDraft(cut.id, undefined, cut.areas[0]);
@@ -926,18 +930,18 @@ export function RecordDetail() {
                 이 기록으로 다음 커트 준비 <Icon name="arrow" />
               </button>
             )}
-            {consultDraft && (
-              <Link className="text-link designer-secondary" to={resumeUrl(consultDraft)}>
-                {consultName
-                  ? `${consultName} 디자이너 상담 신청 이어쓰기`
-                  : '디자이너 상담 신청 이어쓰기'}{' '}
-                <Icon name="arrow" size={16} />
-              </Link>
-            )}
-            <Link className="text-link designer-secondary" to={`/designers?record=${cut.id}`}>
-              디자이너 골라 상담 <Icon name="arrow" size={16} />
-            </Link>
           </section>
+          {/* 이 커트를 해 준 디자이너가 있으면 그 디자이너 카드에서 바로 상담하므로, 디자이너를 고르는 구역은 담당이 없는 기록에만 둠 */}
+          {!recordedDesigner && (
+            <section className="panel record-consult" aria-label="디자이너 상담">
+              <h2>디자이너 상담</h2>
+              <p className="muted">이 기록을 보여 주고 손질 방법이나 다음 커트를 물어보세요.</p>
+              <Link className="button full" to={`/designers?record=${cut.id}`}>
+                디자이너 골라 상담 <Icon name="arrow" size={17} />
+              </Link>
+              {consultResume}
+            </section>
+          )}
         </section>
         <aside className="sidebar">
           {recordedDesigner && (
@@ -954,12 +958,25 @@ export function RecordDetail() {
                 })()}
               </p>
               {/* 주 버튼은 다음 커트 준비 하나. 준비 내용에서 상담해야 고른 자료가 함께 첨부됨 */}
+              {/* 이 커트를 해 준 디자이너에게는 프로필을 거치지 않고 바로 상담 신청. 프로필과 다른 디자이너는 아래 글자 링크로 */}
               <Link
                 className="button full"
-                to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
+                to={`/consultations/new?${new URLSearchParams({ designer: recordedDesigner.id, record: cut.id })}`}
               >
-                프로필 보고 상담 신청 <Icon name="arrow" size={17} />
+                상담 신청 <Icon name="arrow" size={17} />
               </Link>
+              <div className="recorded-designer-links">
+                <Link
+                  className="text-link"
+                  to={`/designers/${recordedDesigner.id}?record=${cut.id}&from=record`}
+                >
+                  프로필 보기
+                </Link>
+                <Link className="text-link" to={`/designers?record=${cut.id}&all=1`}>
+                  다른 디자이너 찾기
+                </Link>
+              </div>
+              {consultResume}
             </section>
           )}
           {previews.length > 0 && (

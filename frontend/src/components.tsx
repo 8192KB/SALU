@@ -190,6 +190,19 @@ export function PageHeading({
   );
 }
 
+// 목록 화면의 새로 만들기(글쓰기·새 기록·새 커트 준비). 엄지가 닿는 오른쪽 아래에 떠 있고,
+// 마지막 항목이 버튼에 가리지 않게 목록 끝에 빈 자리를 둠
+export function FloatingAction({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <>
+      <div className="floating-action-space" aria-hidden="true" />
+      <Link className="button primary floating-action" to={to}>
+        {children}
+      </Link>
+    </>
+  );
+}
+
 // 직전에 보던 화면이 있으면 그 화면으로 돌아감. 단계가 정해진 작성 화면은 trail={false}로 이전 단계 유지
 export function BackLink({
   to,

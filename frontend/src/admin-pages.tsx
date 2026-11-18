@@ -31,6 +31,8 @@ import {
   liftSanction,
   sanction,
 } from './admin-api';
+import { fetchFeedback } from './feedback-api';
+import type { FeedbackItem } from './feedback-api';
 import type {
   Decision,
   PostReview,
@@ -68,7 +70,7 @@ function AdminOnly({
           nested
           kind="denied"
           title="관리자만 볼 수 있어요"
-          message="이 계정에는 신고를 처리할 권한이 없어요."
+          message="이 계정에는 관리자 권한이 없어요."
         />
       ) : state.status === 'unavailable' ? (
         <ErrorState nested kind="offline" message={state.message} />
@@ -755,6 +757,70 @@ export function AdminMember() {
             </button>
           </div>
         </Dialog>
+      </div>
+    </AdminOnly>
+  );
+}
+
+// 받은 이용 의견. 커뮤니티와 따로 받고 관리자만 읽음. 답하기·지우기 없음
+export function AdminFeedback() {
+  const [items, setItems] = useState<FeedbackItem[] | null>(null);
+  const [error, setError] = useState<LoadProblem | null>(null);
+  const { state } = useAuth();
+  const admin = state.status === 'authenticated' && state.member.role === 'ADMIN';
+  const load = useCallback(
+    () =>
+      fetchFeedback().then(
+        (list) => {
+          setItems(list);
+          setError(null);
+        },
+        (failure: unknown) => setError(loadProblem(failure, '의견을 불러오지 못했어요.')),
+      ),
+    [],
+  );
+  useEffect(() => {
+    if (admin) void load();
+  }, [admin, load]);
+  const back = <BackLink to="/more">더보기</BackLink>;
+  return (
+    <AdminOnly title="받은 이용 의견" back={back}>
+      <div className="community-screen">
+        <PageHeading
+          title="받은 이용 의견"
+          description="회원이 더보기에서 보낸 의견이에요. 다른 회원에게는 보이지 않아요."
+          back={back}
+        />
+        {!items ? (
+          error ? (
+            <LoadFailure
+              problem={error}
+              title="의견을 찾을 수 없어요"
+              onRetry={() => void load()}
+            />
+          ) : (
+            <Loading>의견을 불러오고 있어요.</Loading>
+          )
+        ) : items.length ? (
+          <section className="admin-section">
+            <h2>최근 {items.length}개</h2>
+            <ul>
+              {items.map((item) => (
+                <li key={item.id} className="admin-item">
+                  <p className="admin-quote">{item.content}</p>
+                  <p className="community-meta">
+                    <span>{item.authorName ?? '로그인 전 방문자'}</span>
+                    <time dateTime={item.createdAt}>{sentTime(item.createdAt)}</time>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <section className="consultation-soft-panel">
+            <h2>아직 받은 의견이 없어요</h2>
+          </section>
+        )}
       </div>
     </AdminOnly>
   );

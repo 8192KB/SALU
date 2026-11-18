@@ -40,6 +40,7 @@ Git에 올라간 파일의 용도입니다. 2026-10-19 main 기준.
 | `ai-api.md` | AI 도우미(상담 글 다듬기·디자이너 찾기) API와 모델 연결 환경 값 |
 | `payment-api.md` | 상담 요금 결제(토스페이먼츠)·취소·환불 API와 자동 취소 |
 | `community-api.md` | 커뮤니티 글·댓글·도움돼요·신고·관리자 API |
+| `feedback-api.md` | 운영자만 읽는 이용 의견 보내기·관리자 목록 API |
 | `screen-flow.md` | 화면 목록·이동과 새 화면 추가 순서 |
 | `files.md` | 이 문서 |
 
@@ -61,6 +62,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `notification/` | 알림 저장·목록·읽음. 업무 transaction 안에서만 만듦 |
 | `realtime/` | WebSocket·STOMP 연결(`WebSocketConfig`)과 commit 뒤 신호 전송(`RealtimePublisher`) |
 | `community/` | 커뮤니티 글·사진·댓글·도움돼요·신고, 관리자 신고 처리·제재(`CommunityAdmin*`) |
+| `feedback/` | 이용 의견 보내기와 관리자 목록. 커뮤니티와 따로 두고 관리자만 읽음 |
 | `payment/` | 상담 요금 결제. 토스 승인·취소 호출(`TossClient`), 승인·취소·환불·자동 취소(`PaymentService`) |
 | `ai/` | AI 도우미. OpenAI 호환 모델 호출(`AiClient`), 요청 글 다듬기·디자이너 찾기·회원당 요청 제한(`AiService`), 디자이너 찾기에 넣을 내 기록 고르기(`AiRecords`, 계정 백업을 읽기만 함). 자체 테이블 없음 |
 | `auth/StorageContext.java` | 다른 탭에서 계정이 바뀐 뒤의 저장 요청을 막는 헤더 검사 |
@@ -72,7 +74,7 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | 위치 | 용도 |
 |---|---|
 | `resources/application.yml` | 서버 설정(DB·세션·업로드 크기·AI 모델 주소·메일 발송) |
-| `resources/db/migration/V1~V16` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담, V6 회원 역할, V7 알림, V8 상담 메시지, V9 후기·찜·소속 이력, V10 커뮤니티, V11 답변 알림, V12 상담 사진 여러 장, V13 숨김·제재 알림, V14 미용실 위치, V15 비밀번호 찾기 토큰, V16 상담 요금·결제. 적용한 파일은 고치지 않고 새 번호로 추가 |
+| `resources/db/migration/V1~V17` | DB 테이블. V1 회원, V2 백업·소셜, V3 백업 사진, V4 미용실·디자이너, V5 상담, V6 회원 역할, V7 알림, V8 상담 메시지, V9 후기·찜·소속 이력, V10 커뮤니티, V11 답변 알림, V12 상담 사진 여러 장, V13 숨김·제재 알림, V14 미용실 위치, V15 비밀번호 찾기 토큰, V16 상담 요금·결제, V17 이용 의견. 적용한 파일은 고치지 않고 새 번호로 추가 |
 | `resources/personal-backup-schema.json` | 백업 자료 형식. `frontend/scripts/generate-backup-schema.mjs`로 생성 |
 | `pom.xml`, `mvnw`, `Dockerfile` | 빌드·배포 이미지 |
 
@@ -96,7 +98,8 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | `designer-specialties.tsx` | 전문 분야 시술 항목 목록, 고르기 칸, 디자이너 찾기 추천 순서(맞는 항목 수·후기 점수) |
 | `more-page.tsx` | 하단 메뉴 더보기 화면 |
 | `community-pages.tsx`, `community-api.ts` | 커뮤니티 목록·상세·글쓰기·내 글과 API 호출 |
-| `admin-pages.tsx`, `admin-api.ts` | 관리자 신고 처리·회원 제재 화면과 API 호출 |
+| `feedback-pages.tsx`, `feedback-api.ts` | 이용 의견 보내기·완료 화면과 API 호출(관리자 목록 화면은 `admin-pages.tsx`) |
+| `admin-pages.tsx`, `admin-api.ts` | 관리자 신고 처리·회원 제재·받은 이용 의견 화면과 API 호출 |
 | `notifications.tsx` | 머리글 알림 버튼과 알림 목록. 알림 종류별 문구와 이동할 화면 |
 | `consultation-store.tsx` | 상담 자료 저장소. 예시는 메모리, 실제 공간은 서버 |
 | `consultation-api.ts` | 상담 API 호출 |
@@ -135,6 +138,9 @@ Controller는 입력·응답, Service는 업무 규칙·권한·트랜잭션, Ma
 | 파일 | 용도 |
 |---|---|
 | `public/images/` | 예시 체험 사진 |
+| `public/favicon.ico`, `public/icons/` | 브라우저 탭 아이콘과 홈 화면 앱 아이콘(192·512, 아이폰용 180) |
+| `public/manifest.json` | 홈 화면에 추가했을 때의 앱 이름·아이콘·색. 오프라인 동작·푸시는 없음 |
+| `public/og.png` | 카톡·문자에 주소를 붙였을 때 보이는 미리보기 이미지(1200×630). `index.html`의 `og:` 태그가 가리킴 |
 | `scripts/generate-backup-schema.mjs` | 백업 자료 형식을 backend용 JSON schema로 생성 |
-| `nginx.conf`, `Dockerfile` | 배포 이미지의 웹 서버 |
+| `nginx.conf`, `Dockerfile` | 배포 이미지의 웹 서버. `og:image`를 접속한 주소의 절대 주소로 바꿔 줌 |
 | `vite.config.ts`, `tsconfig*.json`, `.prettierrc.json` | 빌드·형식 설정 |

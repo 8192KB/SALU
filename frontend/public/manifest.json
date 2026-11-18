@@ -1,0 +1,14 @@
+{
+  "name": "SALU",
+  "short_name": "SALU",
+  "description": "커트 기록과 이후 변화를 남기고 디자이너에게 상담하는 서비스",
+  "lang": "ko",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e3336",
+  "theme_color": "#f7f9f8",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -37,7 +37,7 @@ import type {
   RequestItem,
 } from './prototype/types';
 import { cutTitle, daysAfter, displayDate, otherYear } from './prototype/dates';
-import { RequestDraftHelper, useAiEnabled } from './ai-assist';
+import { RequestDraftHelper } from './ai-assist';
 import { SpecialtyChoices, isSpecialty, recommend } from './designer-specialties';
 import { chargedFee, won } from './payment';
 import {
@@ -256,7 +256,8 @@ export function DesignerList() {
   const cut = record ? state.cuts.find((value) => value.id === record) : undefined;
   // 이 커트를 해 준 디자이너를 먼저 보여 주고, 다른 디자이너는 원할 때 펼침
   const recorded = directory.designers.find((value) => value.id === cut?.designerProfileId);
-  const [showAll, setShowAll] = useState(false);
+  // `다른 디자이너 찾기`로 왔거나 여기서 눌렀으면 주소에 남겨, 프로필을 보고 돌아와도 펼친 목록을 보여 줌
+  const showAll = search.get('all') === '1';
   const favorites = useFavorites();
   // 더보기의 찜한 디자이너에서 오면 찜한 디자이너만 보여 줌
   const [favoriteOnly, setFavoriteOnly] = useState(() => search.get('favorites') === '1');
@@ -277,7 +278,6 @@ export function DesignerList() {
     else next.delete('tags');
     setSearch(next, { replace: true });
   };
-  const aiEnabled = useAiEnabled();
   const active = useActivePage();
   useEffect(() => {
     if (!active || mode === 'example' || import.meta.env.VITE_SALU_AUTH_MODE === 'prototype')
@@ -295,6 +295,9 @@ export function DesignerList() {
   const others = directory.designers.filter(
     (value) => value !== recorded && !(sourcePreview && value.id === favorites?.ownId),
   );
+  // 이 커트를 해 준 디자이너가 있으면 그 카드를 맨 위에 두고, 시술로 찾기·찜 필터·다른 디자이너는
+  // `다른 디자이너 찾기`를 눌렀거나 시술을 골라 둔 뒤에만 그 아래에 보여 줌
+  const browsing = !recorded || showAll || picked.length > 0;
   // 준비 내용에서 왔으면 디자이너를 고르는 즉시 그 준비 내용으로 상담을 작성함
   const card = (designer: DesignerProfile, matched?: string[]) => (
     <Link
@@ -366,8 +369,29 @@ export function DesignerList() {
         }
         description={sourcePreview ? '준비한 내용을 보낼 디자이너를 골라 주세요.' : undefined}
       />
+      {recorded && !showFavorites && (
+        <section className="designer-recorded" aria-labelledby="designer-recorded-heading">
+          <h2 id="designer-recorded-heading">이 커트를 해 준 디자이너</h2>
+          <div className="designer-grid">
+            {card(recorded, recommend([recorded], picked)[0]?.matched)}
+          </div>
+        </section>
+      )}
+      {!browsing && !showFavorites && others.length > 0 && (
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            const next = new URLSearchParams(search);
+            next.set('all', '1');
+            setSearch(next, { replace: true });
+          }}
+        >
+          다른 디자이너 찾기
+        </button>
+      )}
       {/* 찜한 디자이너만 볼 때는 시술 고르기를 숨김(찜 목록 밖의 사람을 추천하므로) */}
-      {!showFavorites && (
+      {browsing && !showFavorites && (
         <section className="panel designer-pick" aria-label="원하는 시술로 찾기">
           <SpecialtyChoices
             legend="원하는 시술로 찾기"
@@ -375,14 +399,9 @@ export function DesignerList() {
             values={picked}
             onChange={pick}
           />
-          {aiEnabled && (
-            <Link className="text-link" to="/ai">
-              손질 방법이 궁금하면 AI 상담
-            </Link>
-          )}
         </section>
       )}
-      {mode !== 'example' && favorites?.loaded && (
+      {(browsing || showFavorites) && mode !== 'example' && favorites?.loaded && (
         <button
           type="button"
           className="button favorite-filter"
@@ -421,12 +440,8 @@ export function DesignerList() {
       ) : picked.length ? (
         <section aria-labelledby="designer-picked-heading">
           {(() => {
-            const items = recommend(
-              directory.designers.filter(
-                (value) => !(sourcePreview && value.id === favorites?.ownId),
-              ),
-              picked,
-            );
+            // 맨 위에 따로 보여 준 디자이너는 추천 목록에서 뺌
+            const items = recommend(others, picked);
             return items.length ? (
               <>
                 <h2 className="designer-others-heading" id="designer-picked-heading">
@@ -438,7 +453,11 @@ export function DesignerList() {
               </>
             ) : (
               <section className="empty-state">
-                <h2 id="designer-picked-heading">고른 시술을 하는 디자이너가 아직 없어요</h2>
+                <h2 id="designer-picked-heading">
+                  {recorded
+                    ? '고른 시술을 하는 다른 디자이너가 아직 없어요'
+                    : '고른 시술을 하는 디자이너가 아직 없어요'}
+                </h2>
                 <button type="button" className="button" onClick={() => pick([])}>
                   고른 시술 지우기
                 </button>
@@ -447,28 +466,14 @@ export function DesignerList() {
           })()}
         </section>
       ) : (
-        <>
-          {recorded && (
-            <section className="designer-recorded" aria-labelledby="designer-recorded-heading">
-              <h2 id="designer-recorded-heading">이 커트를 해 준 디자이너</h2>
-              <div className="designer-grid">{card(recorded)}</div>
-            </section>
-          )}
-          {recorded && !showAll ? (
-            others.length > 0 && (
-              <button type="button" className="button" onClick={() => setShowAll(true)}>
-                다른 디자이너 찾기
-              </button>
-            )
-          ) : (
-            <section aria-label={recorded ? '다른 디자이너' : undefined}>
-              {recorded && others.length > 0 && (
-                <h2 className="designer-others-heading">다른 디자이너</h2>
-              )}
-              <div className="designer-grid">{others.map((value) => card(value))}</div>
-            </section>
-          )}
-        </>
+        browsing && (
+          <section aria-label={recorded ? '다른 디자이너' : undefined}>
+            {recorded && others.length > 0 && (
+              <h2 className="designer-others-heading">다른 디자이너</h2>
+            )}
+            <div className="designer-grid">{others.map((value) => card(value))}</div>
+          </section>
+        )
       )}
       {mode !== 'example' && (
         <>
@@ -919,7 +924,7 @@ export function MaterialsPage() {
             <p className="selection-count" aria-live="polite">
               <span className="mobile-selection-label">선택 </span>
               {selectedCount(draft)}
-              <small style={{ fontSize: 14, marginLeft: 6 }}>개</small>
+              <small>개</small>
             </p>
             <p className="muted selection-detail">
               메모 {Number(draft.includeGoodNote)}개, 경과 {draft.progressIds.length}개, 사진{' '}
@@ -1398,7 +1403,7 @@ export function PreviewPage() {
             {/* 주 버튼 하나 아래에 보조 길을 같은 모양의 글자 링크로 모음. 목록으로는 위의 뒤로 링크가 맡음 */}
             <div className="preview-secondary-actions">
               {target && (
-                <Link className="text-link" to={`/designers?${designerQuery}`}>
+                <Link className="text-link" to={`/designers?${designerQuery}&all=1`}>
                   다른 디자이너 선택
                 </Link>
               )}
@@ -1613,8 +1618,18 @@ export function ReviewPage() {
 export function CompletePage() {
   const { id } = useParams();
   const { state } = usePrototype();
+  const directory = useDirectory(state);
+  const favorites = useFavorites();
   const preview = state.previews.find((value) => value.id === id);
   if (!preview) return <Missing title="준비한 내용을 찾을 수 없어요" />;
+  // 준비 내용 화면과 같은 순서: 디자이너용으로 준비했으면 그 디자이너, 아니면 이 커트를 해 준 디자이너.
+  // 내 디자이너 프로필에는 신청할 수 없으므로 그때는 디자이너를 고르게 함
+  const cut = state.cuts.find((value) => value.id === preview.cut.id);
+  const target =
+    preview.designer ??
+    directory.designers.find(
+      (value) => value.id === cut?.designerProfileId && value.id !== favorites?.ownId,
+    );
   return (
     <Completion
       // 고친 준비는 고치는 초안의 ID가 준비 ID와 같음
@@ -1624,14 +1639,10 @@ export function CompletePage() {
       primary="준비한 내용 보기"
       to={previewUrl(preview)}
       // 준비와 상담은 다른 기능이지만 마친 자리에서 바로 상담으로 이어짐
-      secondary={
-        preview.designer
-          ? `${preview.designer.name} 디자이너에게 상담 신청`
-          : '디자이너 골라 상담 신청'
-      }
+      secondary={target ? `${target.name} 디자이너에게 상담 신청` : '디자이너 골라 상담 신청'}
       secondaryTo={
-        preview.designer
-          ? `/consultations/new?${new URLSearchParams({ designer: preview.designer.id, preview: preview.id })}`
+        target
+          ? `/consultations/new?${new URLSearchParams({ designer: target.id, preview: preview.id })}`
           : `/designers?${new URLSearchParams({ preview: preview.id })}`
       }
     >

@@ -505,7 +505,9 @@ h2 {
     bottom: calc(69px + env(safe-area-inset-bottom));
     z-index: 20;
   }
+  /* 화면 너비 막대라 양옆 테두리 없이 윗선만 */
   .material-selection-bar .panel {
+    border-width: 1px 0 0;
     border-radius: 0;
     padding-bottom: 14px;
     box-shadow: 0 -3px 12px var(--shadow);
@@ -750,9 +752,34 @@ h2 {
   display: flex;
   width: fit-content;
 }
-.record-next-action .designer-secondary {
-  margin-top: 16px;
-  font-size: 13px;
+.record-consult {
+  margin: -6px 0 30px;
+}
+.record-consult h2 {
+  font-size: 19px;
+  margin: 0 0 8px;
+}
+.record-consult .muted {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-bottom: 18px;
+}
+.record-consult .text-link {
+  display: flex;
+  width: fit-content;
+  margin-top: 12px;
+}
+/* 담당 디자이너 카드: 상담 신청 버튼 아래 보조 링크(프로필 보기, 다른 디자이너 찾기)는 한 줄에 나란히 */
+.recorded-designer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 20px;
+  /* 글자 링크는 누르는 높이가 44px라 카드 아래 여백이 위보다 커 보이지 않게 그만큼 당김 */
+  margin: 8px 0 -10px;
+}
+.recorded-designer > .text-link {
+  display: flex;
+  width: fit-content;
 }
 /* 글자 링크끼리는 누르는 높이 44px가 이미 간격이라 조금만 띄움 */
 .record-next-action .text-link + .text-link {
@@ -924,6 +951,11 @@ h2 {
   }
 }
 @media (max-width: 900px) {
+  /* 한 칸으로 쌓이면 아래 카드와는 배치 간격만 둠. 구역 자체 아래 여백까지 더해져 여기만 크게 벌어지지 않게 함 */
+  .record-next-action:last-child,
+  .record-consult:last-child {
+    margin-bottom: 0;
+  }
   .profile-layout {
     grid-template-areas: 'intro' 'extra' 'action';
   }
@@ -1110,9 +1142,10 @@ html[data-theme='dark'] .social-brand.naver {
   color: var(--muted);
   line-height: 1.7;
 }
+/* 다른 글자 링크처럼 누르는 높이 44px 이상 */
 .auth-switch a {
   display: inline-block;
-  padding: 6px 8px;
+  padding: 9px 8px;
   color: var(--text);
   font-weight: 650;
 }
@@ -1483,15 +1516,13 @@ html:has(.request-screen) {
 .material-toolbar .text-link {
   min-height: 44px;
 }
+/* 다른 선택 카드와 같게: 고르기 전에는 흰 카드, 고르면 진한 테두리 + --soft 배경 */
 .material-choice {
   border: 1px solid var(--line);
   border-radius: 14px;
   margin-top: 12px;
   overflow: hidden;
-}
-.material-choice.selected {
-  border-color: var(--teal);
-  background: var(--soft);
+  background: var(--surface);
 }
 .material-choice-main {
   display: flex;
@@ -1542,6 +1573,10 @@ html:has(.request-screen) {
   width: 80px;
   height: 88px;
   object-fit: cover;
+  border-radius: 10px;
+}
+/* 사진 뒤 배경이 둥근 모서리 밖으로 비치지 않게 버튼도 같은 모서리로 둠 */
+.material-choice-image .photo-open {
   border-radius: 10px;
 }
 .material-choice-image .photo-open-hint {
@@ -1897,9 +1932,11 @@ html {
     border-color 150ms ease,
     background-color 150ms ease;
 }
+/* 테두리 굵기를 바꾸면 안쪽 내용이 1px 밀리므로 안쪽 그림자로 2px처럼 보이게 함 */
 .material-choice.selected {
-  background: var(--surface-subtle);
+  background: var(--soft);
   border-color: var(--teal);
+  box-shadow: inset 0 0 0 1px var(--teal);
 }
 .field-error,
 .field > .field-error {
@@ -2776,6 +2813,10 @@ body {
   flex-shrink: 0;
   min-height: 48px;
 }
+/* 중복 확인 결과가 없을 때 빈 알림 줄이 칸 사이 간격(20px)을 두 번 만들지 않게 배치에서만 뺌. 알림 영역 자체는 남겨 둠 */
+.login-form > [aria-live]:empty {
+  position: absolute;
+}
 .email-result {
   font-size: 13px;
   color: var(--teal);
@@ -2800,6 +2841,15 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+/* 이름이 길면 이름만 줄을 바꾸고 버튼 글자는 한 줄로 둠 */
+.account-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.account-row .button {
+  flex: none;
+  white-space: nowrap;
 }
 .account-row-label {
   color: var(--muted);
@@ -2877,4 +2927,154 @@ body {
 }
 .account-guest .text-link {
   justify-self: start;
+}
+
+/* 목록 화면의 새로 만들기 버튼(FloatingAction). 폰은 하단 메뉴 바로 위 오른쪽, 넓은 화면은 오른쪽 아래.
+   그림자 대신 화면 배경색 테두리로 아래 글과 떼어 놓음 */
+.floating-action {
+  position: fixed;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 24;
+  min-height: 52px;
+  padding: 0 22px;
+  border-radius: 26px;
+  gap: 6px;
+  font-size: 16px;
+  box-shadow: 0 0 0 3px var(--page);
+}
+.floating-action-space {
+  height: 72px;
+}
+@media (max-width: 700px) {
+  .floating-action {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: calc(68px + 16px + env(safe-area-inset-bottom));
+  }
+}
+
+/* 로그인하고 기록이 있는 홈(MyHome). 최근 커트 → 상담 → 다음 할 일. 묶음 모양은 더보기와 같은 흰 판 */
+.my-home {
+  width: min(100%, 620px);
+  margin: 0 auto;
+  padding: 8px 0 24px;
+  word-break: keep-all;
+}
+.my-home h1 {
+  margin: 0 0 20px;
+  font-size: 30px;
+}
+.my-home-card {
+  margin-bottom: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+.my-home-card h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--muted);
+}
+/* 전체 보기는 누르는 높이 44px를 지키되 제목 줄 높이는 다른 판과 같게 위아래를 겹침 */
+.my-home-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.my-home-heading h2 {
+  margin: 0;
+}
+.my-home-heading .text-link {
+  margin: -11px -8px -11px 0;
+  padding: 0 8px;
+  font-size: 14px;
+}
+.my-home-cut {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+  color: var(--text);
+  text-decoration: none;
+}
+.my-home-cut img,
+.my-home-cut .photo-placeholder {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.my-home-cut > span {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+.my-home-cut strong {
+  font-size: 19px;
+}
+.my-home-cut small,
+.my-home-rows small {
+  color: var(--muted);
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-home-cut > svg,
+.my-home-rows svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.my-home-rows {
+  list-style: none;
+  margin: 0 -18px -18px;
+  padding: 0;
+}
+.my-home-rows li {
+  border-top: 1px solid var(--line);
+}
+.my-home-rows a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 12px 18px;
+  color: var(--text);
+  text-decoration: none;
+}
+.my-home-rows a > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.my-home-rows strong {
+  font-size: 16px;
+}
+.my-home-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+.my-home-status.done {
+  color: var(--teal);
+  font-weight: 700;
+}
+.my-home-status b {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--teal);
+  color: var(--surface);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
 }

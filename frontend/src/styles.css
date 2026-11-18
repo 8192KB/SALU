@@ -557,6 +557,8 @@ fieldset {
 }
 legend {
   margin-bottom: 10px;
+  /* 브라우저 기본 좌우 2px을 없애 다른 라벨·본문과 글 시작선을 맞춤 */
+  padding: 0;
 }
 .choice-pills {
   display: flex;
@@ -656,6 +658,10 @@ legend {
   width: 110px;
   height: 100px;
   object-fit: cover;
+  border-radius: 10px;
+}
+/* 사진 뒤 배경이 둥근 모서리 밖으로 비치지 않게 버튼도 같은 모서리로 둠 */
+.photo-list .photo-open {
   border-radius: 10px;
 }
 .photo-list figcaption {
@@ -762,8 +768,11 @@ legend {
   padding: 20px 24px 24px;
   background: var(--surface-subtle);
 }
+/* 좁은 폰에서 제목이 두 줄로 꺾이고 건수·경과 추가가 위아래로 쌓이지 않게, 자리가 모자라면 오른쪽 묶음만 다음 줄로 내림 */
 .record-progress .section-heading {
   margin-top: 0;
+  flex-wrap: wrap;
+  gap: 0 14px;
 }
 .record-progress .section-heading h2 {
   font-size: 20px;
@@ -960,6 +969,10 @@ legend {
   color: var(--teal);
   font-weight: 700;
   margin: 15px 0 5px;
+}
+.selection-count small {
+  margin-left: 6px;
+  font-size: 14px;
 }
 .mobile-selection-label {
   display: none;
@@ -1516,6 +1529,11 @@ legend {
     font-size: 18px;
     margin: 0;
   }
+  /* 한 줄로 `선택 3개`처럼 붙여 읽히게 */
+  .material-selection-bar .selection-count small {
+    margin-left: 1px;
+    font-size: inherit;
+  }
   .mobile-selection-label {
     display: inline;
     font-size: 14px;
@@ -1694,6 +1712,12 @@ legend {
 .login-page {
   max-width: 540px;
   margin: 18px auto 48px;
+}
+/* 폰에서는 뒤로 링크·제목이 다른 화면과 같은 높이에서 시작하게 함 */
+@media (max-width: 700px) {
+  .login-page {
+    margin-top: 0;
+  }
 }
 .login-form {
   display: grid;

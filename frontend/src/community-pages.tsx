@@ -9,6 +9,7 @@ import {
   Icon,
   LoadFailure,
   loadProblem,
+  FloatingAction,
   PageHeading,
   PhotoThumbnail,
   Loading,
@@ -23,7 +24,7 @@ import { useLoginPath } from './auth/pages';
 import { ApiFailure } from './auth/api';
 import type { SessionMember } from './auth/api';
 import { usePrototype } from './prototype/context';
-import { cutTitle, sentTime } from './prototype/dates';
+import { cutTitle, sentTime, shortTime } from './prototype/dates';
 import { newId } from './prototype/ids';
 import { useOnReactivate } from './realtime';
 import { ANY_TARGET, useReadNotifications } from './notifications';
@@ -121,9 +122,15 @@ function PostCard({ post }: { post: CommunityPostSummary }) {
         )}
         <p className="community-meta">
           <span>{post.author.displayName}</span>
-          <time dateTime={post.createdAt}>{sentTime(post.createdAt)}</time>
-          <span>도움돼요 {post.reactionCount}</span>
-          <span>댓글 {post.commentCount}</span>
+          {/* 목록에서는 오늘이면 시각만, 올해면 월·일. 정확한 등록일은 글 상세에 */}
+          <time dateTime={post.createdAt}>{shortTime(post.createdAt)}</time>
+          {/* 0개는 적지 않음. 줄이 넘칠 때 개수 하나만 떨어지지 않게 둘을 묶음 */}
+          {(post.reactionCount > 0 || post.commentCount > 0) && (
+            <span className="community-counts">
+              {post.reactionCount > 0 && <span>도움돼요 {post.reactionCount}</span>}
+              {post.commentCount > 0 && <span>댓글 {post.commentCount}</span>}
+            </span>
+          )}
         </p>
       </div>
       {/* 숨겨진 글의 사진은 공개 주소에서 열리지 않으므로 자리를 두지 않음 */}
@@ -146,7 +153,6 @@ function PostCard({ post }: { post: CommunityPostSummary }) {
 }
 
 export function CommunityList() {
-  const member = useMember();
   const [search, setSearch] = useSearchParams();
   const category = (search.get('category') as PostCategory | null) ?? undefined;
   const service = search.get('service') ?? undefined;
@@ -188,15 +194,7 @@ export function CommunityList() {
   };
   return (
     <div className="community-screen">
-      <PageHeading
-        title="커뮤니티"
-        back={<BackLink to="/more">더보기</BackLink>}
-        action={
-          <Link className="button primary" to="/community/new">
-            글쓰기
-          </Link>
-        }
-      />
+      <PageHeading title="커뮤니티" back={<BackLink to="/more">더보기</BackLink>} />
       <div className="community-tabs" role="group" aria-label="분류">
         {([undefined, 'CASE', 'QUESTION'] as const).map((value) => (
           <button
@@ -225,8 +223,9 @@ export function CommunityList() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <button type="submit" className="button">
-          검색
+        <button type="submit" className="button community-search-button">
+          <Icon name="search" size={20} />
+          <span className="sr-only">검색</span>
         </button>
       </form>
       {service && (
@@ -234,11 +233,6 @@ export function CommunityList() {
           시술: {service} <span aria-hidden="true">×</span>
           <span className="sr-only">조건 지우기</span>
         </button>
-      )}
-      {member && (
-        <Link className="text-link community-mine-link" to="/community/mine">
-          내 글 보기 <Icon name="arrow" size={16} />
-        </Link>
       )}
       <Alert message={error} />
       {!items ? (
@@ -290,6 +284,10 @@ export function CommunityList() {
           {busy ? '불러오는 중' : '더 보기'}
         </button>
       )}
+      <FloatingAction to="/community/new">
+        <Icon name="plus" size={20} />
+        글쓰기
+      </FloatingAction>
     </div>
   );
 }
@@ -535,7 +533,7 @@ function Comments({
               <div className="community-comment-head">
                 <strong>{comment.author.displayName}</strong>
                 {comment.mine && <span className="community-mine">내 댓글</span>}
-                <time dateTime={comment.createdAt}>{sentTime(comment.createdAt)}</time>
+                <time dateTime={comment.createdAt}>{shortTime(comment.createdAt)}</time>
                 {isNew(comment) && <span className="community-new">새 댓글</span>}
                 {comment.hidden && (
                   <span className="community-hidden">숨긴 댓글, 나에게만 보여요</span>
@@ -733,7 +731,7 @@ export function CommunityDetail() {
         <strong>{post.author.displayName}</strong>
         <dl className="community-dates">
           <div>
-            <dt>등록일</dt>
+            <dt className="sr-only">등록일</dt>
             <dd>
               <time dateTime={post.createdAt}>{sentTime(post.createdAt)}</time>
             </dd>
@@ -786,17 +784,18 @@ export function CommunityDetail() {
           </Link>
         )}
         {post.mine ? (
-          <>
+          // 고치기·지우기는 도움돼요와 같은 무게로 두지 않고 오른쪽 글자 버튼으로
+          <span className="community-owner-actions">
             {/* 제한 중에는 고칠 수 없으므로 버튼을 숨김. 지우기는 그대로 됨 */}
             {!suspended && (
-              <Link className="button" to={`/community/${post.id}/edit`}>
+              <Link className="text-link" to={`/community/${post.id}/edit`}>
                 고치기
               </Link>
             )}
-            <button type="button" className="button" onClick={() => setRemoving(true)}>
+            <button type="button" className="text-link" onClick={() => setRemoving(true)}>
               지우기
             </button>
-          </>
+          </span>
         ) : (
           member && (
             <button
@@ -891,12 +890,11 @@ export function CommunityWrite() {
   const notify = useFeedback();
   const { state } = usePrototype();
   const recordParam = search.get('record');
-  const [category, setCategory] = useState<PostCategory>(
+  const [category, setCategory] = useState<PostCategory>(() => {
+    if (recordParam) return 'CASE';
     // 기록이 없으면 사례를 올릴 수 없으므로 고민 질문부터 보여 줌
-    recordParam || (search.get('category') !== 'QUESTION' && state.cuts.length > 0)
-      ? 'CASE'
-      : 'QUESTION',
-  );
+    return search.get('category') !== 'QUESTION' && state.cuts.length > 0 ? 'CASE' : 'QUESTION';
+  });
   const [cutId, setCutId] = useState(
     recordParam && state.cuts.some((cut) => cut.id === recordParam) ? recordParam : '',
   );
@@ -1108,25 +1106,67 @@ export function CommunityWrite() {
       {heading}
       <form className="community-form" onSubmit={submit} noValidate>
         {!editing && (
+          <fieldset className="community-tabs" disabled={busy}>
+            <legend>분류</legend>
+            {(['CASE', 'QUESTION'] as const).map((value) => (
+              <label key={value} className={category === value ? 'on' : ''}>
+                <input
+                  type="radio"
+                  name="category"
+                  checked={category === value}
+                  onChange={() => {
+                    setCategory(value);
+                    setError('');
+                    clearInvalid('record');
+                  }}
+                />
+                {CATEGORY_LABELS[value]}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        <label className="consultation-request-field">
+          <span>제목</span>
+          <input
+            id="community-title"
+            maxLength={100}
+            value={title}
+            disabled={busy}
+            placeholder="예: 옆머리 숱 정리 후기"
+            aria-invalid={Boolean(invalid.title) || undefined}
+            aria-describedby={invalid.title ? 'community-title-error' : undefined}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setError('');
+              clearInvalid('title');
+            }}
+          />
+          {invalid.title && <FieldFeedback id="community-title-error" message={invalid.title} />}
+        </label>
+        <label className="consultation-request-field">
+          <span>내용</span>
+          <textarea
+            id="community-content"
+            maxLength={5000}
+            rows={6}
+            value={content}
+            disabled={busy}
+            placeholder="예: 옆머리가 뜨는 분들 참고하세요. 드라이할 때 아래로 눌러 말리니 덜 떠요."
+            aria-invalid={Boolean(invalid.content) || undefined}
+            aria-describedby={invalid.content ? 'community-content-error' : undefined}
+            onChange={(event) => {
+              setContent(event.target.value);
+              setError('');
+              clearInvalid('content');
+            }}
+          />
+          {invalid.content && (
+            <FieldFeedback id="community-content-error" message={invalid.content} />
+          )}
+        </label>
+        {/* 기록·사진은 제목·내용 아래 첨부 자리. 보통 글쓰기처럼 분류 → 제목 → 내용 → 첨부 순서 */}
+        {!editing && (
           <>
-            <fieldset className="community-tabs" disabled={busy}>
-              <legend>분류</legend>
-              {(['CASE', 'QUESTION'] as const).map((value) => (
-                <label key={value} className={category === value ? 'on' : ''}>
-                  <input
-                    type="radio"
-                    name="category"
-                    checked={category === value}
-                    onChange={() => {
-                      setCategory(value);
-                      setError('');
-                      clearInvalid('record');
-                    }}
-                  />
-                  {CATEGORY_LABELS[value]}
-                </label>
-              ))}
-            </fieldset>
             <fieldset
               id="community-record"
               tabIndex={-1}
@@ -1249,45 +1289,6 @@ export function CommunityWrite() {
             )}
           </>
         )}
-        <label className="consultation-request-field">
-          <span>제목</span>
-          <input
-            id="community-title"
-            maxLength={100}
-            value={title}
-            disabled={busy}
-            placeholder="예: 옆머리 숱 정리 후기"
-            aria-invalid={Boolean(invalid.title) || undefined}
-            aria-describedby={invalid.title ? 'community-title-error' : undefined}
-            onChange={(event) => {
-              setTitle(event.target.value);
-              setError('');
-              clearInvalid('title');
-            }}
-          />
-          {invalid.title && <FieldFeedback id="community-title-error" message={invalid.title} />}
-        </label>
-        <label className="consultation-request-field">
-          <span>내용</span>
-          <textarea
-            id="community-content"
-            maxLength={5000}
-            rows={6}
-            value={content}
-            disabled={busy}
-            placeholder="예: 옆머리가 뜨는 분들 참고하세요. 드라이할 때 아래로 눌러 말리니 덜 떠요."
-            aria-invalid={Boolean(invalid.content) || undefined}
-            aria-describedby={invalid.content ? 'community-content-error' : undefined}
-            onChange={(event) => {
-              setContent(event.target.value);
-              setError('');
-              clearInvalid('content');
-            }}
-          />
-          {invalid.content && (
-            <FieldFeedback id="community-content-error" message={invalid.content} />
-          )}
-        </label>
         <Alert message={error} />
         <div className="consultation-action">
           {!editing && (
@@ -1310,7 +1311,7 @@ export function CommunityWrite() {
 }
 
 // 글쓰기 입력 칸. 화면 위에서 아래 순서
-const WRITE_FIELDS = ['record', 'summary', 'title', 'content'] as const;
+const WRITE_FIELDS = ['title', 'content', 'record', 'summary'] as const;
 type WriteField = (typeof WRITE_FIELDS)[number];
 
 export function CommunityComplete() {

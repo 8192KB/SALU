@@ -23,12 +23,13 @@ import {
   AttachmentCard,
   byLatest,
   LatestTime,
+  requestPreview,
   UnreadBadge,
   useConsultationAccess,
 } from './consultation-flow';
 import { ConsultationConversation } from './consultation-conversation';
 import { ReceivedReview } from './consultation-review';
-import { cutTitle, sentTime } from './prototype/dates';
+import { cutTitle, sentTime, shortTime } from './prototype/dates';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
 import { useReadNotifications } from './notifications';
 import { readTabDraft, writeTabDraft } from './tab-draft';
@@ -122,9 +123,12 @@ export function ReceivedList() {
                   <UnreadBadge count={item.unreadCount} />
                   <Status item={item} />
                 </div>
-                <p>{item.request}</p>
-                <AttachmentCard attachment={threadFrom(item).attachment} compact />
-                <LatestTime sentAt={item.sentAt} lastMessageAt={item.lastMessageAt} />
+                {/* 목록은 메신저처럼 한 줄씩. 요청 전문과 첨부 기록은 상세에서 */}
+                <p>{requestPreview(item.request)}</p>
+                <div className="consultation-history-foot">
+                  <span>{cutTitle(item.attachment.cutDate, item.attachment.service)}</span>
+                  <LatestTime sentAt={item.sentAt} lastMessageAt={item.lastMessageAt} />
+                </div>
               </Link>
             ))}
           </div>
@@ -294,11 +298,13 @@ export function ReceivedDetail() {
       <section className="consultation-soft-panel">
         <h2>받은 요청</h2>
         <p className="consultation-message">{item.request}</p>
-        <time dateTime={item.sentAt}>{sentTime(item.sentAt)}</time>
+        <time dateTime={item.sentAt} title={sentTime(item.sentAt)}>
+          {shortTime(item.sentAt)}
+        </time>
       </section>
       <section className="consultation-soft-panel">
         <h2>첨부한 커트 기록</h2>
-        <AttachmentCard attachment={threadFrom(item).attachment} />
+        <AttachmentCard attachment={threadFrom(item).attachment} zoom />
       </section>
       <ReceivedReview id={item.id} reviewId={item.reviewId} />
       {item.status === 'CANCELED' && (
@@ -321,7 +327,7 @@ export function ReceivedDetail() {
         />
       )}
       {item.canReply && (
-        <form onSubmit={submit} noValidate>
+        <form className="consultation-reply-form" onSubmit={submit} noValidate>
           <label className="consultation-request-field">
             <span>답변</span>
             <textarea
@@ -344,11 +350,6 @@ export function ReceivedDetail() {
           </label>
           <Alert message={error} />
           <div className="consultation-action">
-            <p className="consultation-privacy">
-              보낸 답변은 고칠 수 없어요.
-              <br />
-              답변한 뒤에는 이 화면에서 메시지를 더 주고받을 수 있어요.
-            </p>
             <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
               {busy ? '보내는 중' : '답변 보내기'}
             </button>

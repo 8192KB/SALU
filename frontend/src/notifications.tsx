@@ -275,7 +275,12 @@ export function NotificationList() {
       back={<BackLink to="/">{example ? '내 기록' : '홈'}</BackLink>}
       action={
         inbox && inbox.unreadCount > 0 ? (
-          <button type="button" className="button" disabled={busy} onClick={() => void readAll()}>
+          <button
+            type="button"
+            className="text-link heading-text-action"
+            disabled={busy}
+            onClick={() => void readAll()}
+          >
             모두 읽음
           </button>
         ) : undefined

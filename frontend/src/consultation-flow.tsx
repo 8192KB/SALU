@@ -19,6 +19,7 @@ import {
 } from './components';
 import type { LoadProblem } from './components';
 import { Completion } from './completion';
+import { PhotoButton } from './photo-viewer';
 import { useConsultations } from './consultation-store';
 import type {
   ConsultationAttachment,
@@ -28,7 +29,7 @@ import type {
 } from './consultation-store';
 import { AREAS, INTENTS } from './prototype/types';
 import type { DesignerProfile, PrototypeState, RequestPreview } from './prototype/types';
-import { cutTitle, displayDate, sentTime } from './prototype/dates';
+import { cutTitle, displayDate, sentTime, shortTime } from './prototype/dates';
 import { materialSummary, photoOrigin, previewUrl, recordsForAi } from './prototype/request-flow';
 import { MAX_CONSULTATION_PHOTOS } from './consultation-api';
 import { useAuth } from './auth/context';
@@ -110,27 +111,42 @@ function requestFromPreview(preview: RequestPreview) {
     .join('\n')
     .slice(0, 2000);
 }
+// 목록의 한 줄 미리보기는 메신저처럼 내용만. requestFromPreview가 붙인 `부위(방향): ` 같은 머리말을 뺌
+export function requestPreview(request: string) {
+  return request
+    .split('\n')
+    .map((line) => line.replace(/^(\S+\([^)\n]+\)|집에서 손질|질문): /, '').trim())
+    .filter(Boolean)
+    .join(' ');
+}
 // 사진이 한 장 이하면 옆에, 여러 장이면 글 아래에 어느 때 사진인지와 함께 나란히 보여 줌
 export function AttachmentCard({
   attachment,
   dropped = 0,
   compact = false,
+  zoom = false,
 }: {
   attachment: ConsultationAttachment;
   dropped?: number;
   // 목록 카드는 첫 사진과 장수만 보여 줌
   compact?: boolean;
+  // 상담 상세에서는 작게 잘린 사진을 눌러 원본 비율로 크게 봄
+  zoom?: boolean;
 }) {
   const title = cutTitle(attachment.cutDate, attachment.service);
   const several = !compact && attachment.photos.length > 1;
+  const picture = (photo: ConsultationAttachment['photos'][number]) => {
+    // 제목이 시술 이름으로 끝나 '커트 당일'을 그대로 붙이면 '커트 커트 당일'이 됨
+    const alt = `${title} ${photo.label.replace(/^커트 /, '')} 사진`;
+    return zoom ? (
+      <PhotoButton photo={{ id: photo.id, url: photo.url, caption: alt }} />
+    ) : (
+      <img src={photo.url} alt={alt} />
+    );
+  };
   return (
     <div className={`consultation-attachment${several ? ' several' : ''}`}>
-      {!several &&
-        (attachment.photos[0] ? (
-          <img src={attachment.photos[0].url} alt={`${title} ${attachment.photos[0].label} 사진`} />
-        ) : (
-          <PhotoPlaceholder />
-        ))}
+      {!several && (attachment.photos[0] ? picture(attachment.photos[0]) : <PhotoPlaceholder />)}
       <div>
         <strong>{title}</strong>
         <p className="consultation-attachment-summary">{attachment.summary}</p>
@@ -144,7 +160,7 @@ export function AttachmentCard({
           >
             {attachment.photos.map((photo) => (
               <li key={photo.id}>
-                <img src={photo.url} alt={`${title} ${photo.label} 사진`} />
+                {picture(photo)}
                 <span>{photo.label}</span>
               </li>
             ))}
@@ -649,7 +665,7 @@ function ConsultationForm({
             )}
           </p>
           <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
-            {busy ? '신청하는 중' : '상담 신청하기'}
+            {busy ? '신청하는 중' : fee > 0 ? `${won(fee)} 결제하고 신청하기` : '상담 신청하기'}
           </button>
         </div>
       </form>
@@ -771,7 +787,7 @@ export function ConsultationList() {
       <PageHeading
         title="상담 내역"
         action={
-          <Link className="button" to="/designers">
+          <Link className="text-link heading-text-action" to="/designers">
             디자이너 찾기
           </Link>
         }
@@ -803,9 +819,12 @@ export function ConsultationList() {
                 <UnreadBadge count={thread.unreadCount} />
                 <ConsultationStatus status={thread.status} />
               </div>
-              <p>{thread.request}</p>
-              <AttachmentCard attachment={thread.attachment} compact />
-              <LatestTime sentAt={thread.sentAt} lastMessageAt={thread.lastMessageAt} />
+              {/* 목록은 메신저처럼 한 줄씩. 요청 전문과 첨부 기록은 상세에서 */}
+              <p>{requestPreview(thread.request)}</p>
+              <div className="consultation-history-foot">
+                <span>{cutTitle(thread.attachment.cutDate, thread.attachment.service)}</span>
+                <LatestTime sentAt={thread.sentAt} lastMessageAt={thread.lastMessageAt} />
+              </div>
             </Link>
           ))}
         </div>
@@ -869,7 +888,9 @@ export function ConsultationAnswer({ reply }: { reply?: ConsultationReply }) {
       {reply ? (
         <>
           <p>{reply.content}</p>
-          <time dateTime={reply.repliedAt}>{sentTime(reply.repliedAt)}</time>
+          <time dateTime={reply.repliedAt} title={sentTime(reply.repliedAt)}>
+            {shortTime(reply.repliedAt)}
+          </time>
         </>
       ) : (
         <p>
@@ -891,10 +912,7 @@ export function UnreadBadge({ count }: { count?: number }) {
 export function LatestTime({ sentAt, lastMessageAt }: { sentAt: string; lastMessageAt?: string }) {
   const latest = lastMessageAt ?? sentAt;
   return (
-    <time dateTime={latest}>
-      {latest !== sentAt && '마지막 메시지 '}
-      {sentTime(latest)}
-    </time>
+    <time dateTime={latest}>{shortTime(latest)}</time>
   );
 }
 // 마지막 메시지가 최근인 상담부터. 예시 상담은 메시지가 없어 보낸 시각으로 정렬
@@ -949,11 +967,13 @@ export function ConsultationDetail() {
       <section className="consultation-soft-panel">
         <h2>보낸 요청</h2>
         <p className="consultation-message">{thread.request}</p>
-        <time dateTime={thread.sentAt}>{sentTime(thread.sentAt)}</time>
+        <time dateTime={thread.sentAt} title={sentTime(thread.sentAt)}>
+          {shortTime(thread.sentAt)}
+        </time>
       </section>
       <section className="consultation-soft-panel">
         <h2>첨부한 커트 기록</h2>
-        <AttachmentCard attachment={thread.attachment} />
+        <AttachmentCard attachment={thread.attachment} zoom />
       </section>
       {!open ? null : server && member ? (
         <ConsultationConversation

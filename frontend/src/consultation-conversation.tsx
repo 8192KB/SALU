@@ -8,7 +8,7 @@ import { listMessages, markRead, sendMessage } from './consultation-api';
 import type { ConsultationMessage } from './consultation-api';
 import { newId } from './prototype/ids';
 import { consultationEvent, useLiveRefresh, useLocalSignal } from './realtime';
-import { sentTime, shortTime } from './prototype/dates';
+import { chatTime, sentTime } from './prototype/dates';
 import { useTabDraftText } from './tab-draft';
 
 function merge(current: ConsultationMessage[], next: ConsultationMessage[]) {
@@ -160,7 +160,7 @@ export function ConsultationConversation({
               <span className="sr-only">{message.mine ? '나' : partner}</span>
               <p>{message.content}</p>
               <time dateTime={message.sentAt} title={sentTime(message.sentAt)}>
-                {shortTime(message.sentAt)}
+                {chatTime(message.sentAt)}
               </time>
             </li>
           ))}
@@ -187,9 +187,6 @@ export function ConsultationConversation({
             />
           </label>
           <Alert message={error} />
-          <p className="consultation-privacy">
-            보낸 메시지는 {partner}만 볼 수 있고 고칠 수 없어요.
-          </p>
           <button type="submit" className="button primary full" disabled={busy} aria-busy={busy}>
             {busy ? '보내는 중' : '보내기'}
           </button>

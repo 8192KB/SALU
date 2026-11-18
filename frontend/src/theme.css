@@ -360,6 +360,12 @@ textarea::placeholder {
   padding: 24px;
   margin-top: 32px;
 }
+/* 한 칸으로 쌓이는 폭에서는 위 기록 카드와의 간격을 아래 카드와의 간격(23–24px)에 맞춤 */
+@media (max-width: 900px) {
+  .record-next-action {
+    margin-top: 24px;
+  }
+}
 .profile-description {
   padding-top: 24px;
   margin-top: 24px;
@@ -414,6 +420,7 @@ textarea::placeholder {
 .reference-photo .photo-open {
   width: 76px;
   flex-shrink: 0;
+  border-radius: 9px;
 }
 .profile-layout .profile-banner {
   background: transparent;

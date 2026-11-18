@@ -33,15 +33,19 @@ const clockFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
   timeStyle: 'short',
 });
-// 말풍선·알림처럼 시각이 줄줄이 반복되는 곳. 오늘이면 시각만, 올해면 월·일과 시각, 그 밖은 전체
-export function shortTime(date: string) {
+// 말풍선처럼 시각이 줄줄이 반복되는 곳. 오늘이면 시각만, 올해면 월·일과 시각, 그 밖은 전체
+export function chatTime(date: string) {
+  return shortTime(date, '');
+}
+// 목록·알림·후기처럼 한 번씩 보이는 시각. 시각만 있으면 언제인지 헷갈려 오늘이면 `오늘`을 붙임
+export function shortTime(date: string, todayLabel = '오늘 ') {
   const value = new Date(date);
   if (Number.isNaN(value.getTime())) return date;
   const parts = seoulDateFormatter.formatToParts(value);
   const get = (type: string) => parts.find((p) => p.type === type)!.value;
   const day = `${get('year')}-${get('month')}-${get('day')}`;
   const now = today();
-  if (day === now) return clockFormatter.format(value);
+  if (day === now) return `${todayLabel}${clockFormatter.format(value)}`;
   if (day.slice(0, 4) === now.slice(0, 4))
     return `${Number(get('month'))}월 ${Number(get('day'))}일 ${clockFormatter.format(value)}`;
   return sentFormatter.format(value);

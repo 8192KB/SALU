@@ -911,9 +911,7 @@ export function UnreadBadge({ count }: { count?: number }) {
 // 목록 카드 시각. 정렬(byLatest)과 같은 기준이라 보낸 뒤 메시지가 오갔으면 그 시각을 보여 줌
 export function LatestTime({ sentAt, lastMessageAt }: { sentAt: string; lastMessageAt?: string }) {
   const latest = lastMessageAt ?? sentAt;
-  return (
-    <time dateTime={latest}>{shortTime(latest)}</time>
-  );
+  return <time dateTime={latest}>{shortTime(latest)}</time>;
 }
 // 마지막 메시지가 최근인 상담부터. 예시 상담은 메시지가 없어 보낸 시각으로 정렬
 export const byLatest = <T extends { sentAt: string; lastMessageAt?: string }>(items: T[]) =>
